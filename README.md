@@ -57,12 +57,13 @@ PropRadar/
 ### Локальная среда (кратко)
 
 1. Сеть Docker (один раз): `docker network create propradar`
-2. БД: из `docker/infra` поднять `leads-db`, затем применить `migrations/001_init_leads.sql` и `migrations/002_add_myhome_listing_fields.sql` к БД на `localhost:5433`.
+2. БД: из `docker/infra` поднять `leads-db`, затем применить `migrations/001_init_leads.sql`, `migrations/002_add_myhome_listing_fields.sql` и `migrations/003_add_lead_details.sql` к БД на `localhost:5433`.
 3. Python: `powershell -ExecutionPolicy Bypass -File .\scripts\setup_venv.ps1`, затем из корня с активированным venv: `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`.
 4. Инструменты (опционально): `docker/tools` — n8n **5678**, Metabase **3031**, Evolution **8080**. Не смешивать с чужими проектами; БД проекта только **leads-db**, не `dispatch-db-dev`.
 5. Парсер myhome (точка входа n8n): `python scripts/run_myhome_parser.py` — JSON-отчёт в stdout; интеграционный smoke к API: `MYHOME_INTEGRATION=1 pytest tests/integration/test_myhome_integration.py`.
-6. Metabase: **`docker compose -f docker/tools/docker-compose.yml up -d`**, UI **http://localhost:3031** — см. **[`docs/METABASE_SETUP.md`](docs/METABASE_SETUP.md)**.
-7. Дашборд Metabase через API (после первого входа и подключения БД **«PropRadar Leads»**): `python scripts/setup_metabase_dashboard.py` (переменные **`METABASE_*`** в `.env`).
+6. Обогащение myhome (Playwright, телефон и детали объявления): один раз `python scripts/myhome_login.py` (сохраняет `scripts/myhome_session.json`, файл в `.gitignore`); затем `python scripts/run_myhome_enricher.py` — JSON `enriched` / `failed` / `errors`. Переменные `MYHOME_*` см. `.env.example`.
+7. Metabase: **`docker compose -f docker/tools/docker-compose.yml up -d`**, UI **http://localhost:3031** — см. **[`docs/METABASE_SETUP.md`](docs/METABASE_SETUP.md)**.
+8. Дашборд Metabase через API (после первого входа и подключения БД **«PropRadar Leads»**): `python scripts/setup_metabase_dashboard.py` (переменные **`METABASE_*`** в `.env`).
 
 Проверка compose: `docker compose -f docker/infra/docker-compose.yml config` (аналогично для `docker/tools` и `docker/app`).
 

@@ -27,3 +27,11 @@ class LeadRepository(Repository[Lead], ABC):
     @abstractmethod
     def get_by_source_and_external_id(self, source: str, external_id: str) -> Lead | None:
         ...
+
+    @abstractmethod
+    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        """Кандидаты на обогащение: status=new, phone IS NULL, source совпадает."""
+
+    @abstractmethod
+    def update_enriched_fields(self, entity: Lead) -> Lead:
+        """Обновить поля деталей/телефона по id. Требуется entity.id."""

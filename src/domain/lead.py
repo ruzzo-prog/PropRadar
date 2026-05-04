@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
@@ -19,7 +20,7 @@ class LeadStatus(StrEnum):
 
 
 class Lead(BaseModel):
-    """Доменный контракт лида (Pydantic). Схема БД — migrations/001_*.sql и 002_*.sql."""
+    """Доменный контракт лида (Pydantic). Схема БД — migrations/001–003."""
 
     model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True)
 
@@ -34,3 +35,11 @@ class Lead(BaseModel):
     price_total_usd: int | None = Field(default=None, ge=0)
     price_m2_usd: int | None = Field(default=None, ge=0)
     published_at: datetime | None = None
+    phone: str | None = Field(default=None, max_length=64)
+    address: str | None = None
+    district: str | None = None
+    area_m2: Decimal | None = Field(default=None, ge=0)
+    rooms: int | None = Field(default=None, ge=0)
+    floor: str | None = Field(default=None, max_length=64)
+    description: str | None = None
+    is_owner: bool = False

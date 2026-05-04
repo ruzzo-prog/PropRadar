@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import Field, HttpUrl, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,4 +23,16 @@ class Settings(BaseSettings):
     myhome_api_base_url: HttpUrl = Field(
         default="https://api-statements.tnet.ge",
         validation_alias="MYHOME_API_BASE_URL",
+    )
+    myhome_email: str | None = Field(default=None, validation_alias="MYHOME_EMAIL")
+    myhome_password: str | None = Field(default=None, validation_alias="MYHOME_PASSWORD")
+    myhome_session_path: Path = Field(
+        default=Path("scripts/myhome_session.json"),
+        validation_alias="MYHOME_SESSION_PATH",
+    )
+    myhome_enrich_limit: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        validation_alias="MYHOME_ENRICH_LIMIT",
     )

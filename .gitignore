@@ -53,3 +53,4 @@ logs/
 test-results/
 playwright-report/
 blob-report/
+scripts/myhome_session.json

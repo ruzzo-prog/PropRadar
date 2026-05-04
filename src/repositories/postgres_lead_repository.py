@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import String, func, select, text
+from sqlalchemy import Integer, String, and_, func, select, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
-from sqlalchemy.types import BigInteger, DateTime
+from sqlalchemy.types import BigInteger, Boolean, DateTime, Numeric, Text
 
 from domain.lead import Lead, LeadStatus
 from repositories.base import LeadRepository
@@ -44,6 +45,14 @@ class LeadORM(Base):
     price_total_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     price_m2_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    phone: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    district: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    area_m2: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    rooms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    floor: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    is_owner: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default=text("false"))
 
 
 def _to_domain(row: LeadORM) -> Lead:
@@ -59,6 +68,14 @@ def _to_domain(row: LeadORM) -> Lead:
         price_total_usd=row.price_total_usd,
         price_m2_usd=row.price_m2_usd,
         published_at=row.published_at,
+        phone=row.phone,
+        address=row.address,
+        district=row.district,
+        area_m2=row.area_m2,
+        rooms=row.rooms,
+        floor=row.floor,
+        description=row.description,
+        is_owner=row.is_owner,
     )
 
 
@@ -107,9 +124,57 @@ class PostgresLeadRepository(LeadRepository):
             price_total_usd=entity.price_total_usd,
             price_m2_usd=entity.price_m2_usd,
             published_at=entity.published_at,
+            phone=entity.phone,
+            address=entity.address,
+            district=entity.district,
+            area_m2=entity.area_m2,
+            rooms=entity.rooms,
+            floor=entity.floor,
+            description=entity.description,
+            is_owner=entity.is_owner,
         )
         with self._sessions.factory() as session:
             session.add(row)
+            session.commit()
+            session.refresh(row)
+            return _to_domain(row)
+
+    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        lim = max(1, min(limit, 500))
+        with self._sessions.factory() as session:
+            stmt = (
+                select(LeadORM)
+                .where(
+                    and_(
+                        LeadORM.source == source,
+                        LeadORM.status == LeadStatus.NEW.value,
+                        LeadORM.phone.is_(None),
+                    ),
+                )
+                .order_by(LeadORM.created_at.asc())
+                .limit(lim)
+            )
+            rows = session.scalars(stmt).all()
+            return [_to_domain(r) for r in rows]
+
+    def update_enriched_fields(self, entity: Lead) -> Lead:
+        if entity.id is None:
+            msg = "update_enriched_fields ожидает Lead с id"
+            raise ValueError(msg)
+        with self._sessions.factory() as session:
+            row = session.get(LeadORM, entity.id)
+            if row is None:
+                msg = "лид не найден"
+                raise ValueError(msg)
+            row.phone = entity.phone
+            row.address = entity.address
+            row.district = entity.district
+            row.area_m2 = entity.area_m2
+            row.rooms = entity.rooms
+            row.floor = entity.floor
+            row.description = entity.description
+            row.is_owner = entity.is_owner
+            row.updated_at = datetime.now(UTC)
             session.commit()
             session.refresh(row)
             return _to_domain(row)

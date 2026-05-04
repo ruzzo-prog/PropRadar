@@ -17,6 +17,7 @@ class FakeLeadRepo(LeadRepository):
         self.by_key: dict[tuple[str, str], Lead] = {}
         self.by_id: dict[UUID, Lead] = {}
         self.save_calls = 0
+        self.enrich_updates: list[Lead] = []
 
     def get_by_id(self, entity_id: UUID) -> Lead | None:
         return self.by_id.get(entity_id)
@@ -31,6 +32,13 @@ class FakeLeadRepo(LeadRepository):
         self.by_key[(saved.source, saved.external_id)] = saved
         self.by_id[new_id] = saved
         return saved
+
+    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def update_enriched_fields(self, entity: Lead) -> Lead:
+        self.enrich_updates.append(entity)
+        return entity
 
 
 @pytest.mark.asyncio

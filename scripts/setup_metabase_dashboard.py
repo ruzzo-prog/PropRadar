@@ -136,42 +136,50 @@ def _create_native_card(
     return cid
 
 
-def _add_dashcard(
+def _put_dashboard_dashcards(
     client: httpx.Client,
     dashboard_id: int,
-    card_id: int,
-    row: int,
-    col: int,
-    size_x: int,
-    size_y: int,
+    layout: list[tuple[int, int, int, int, int]],
 ) -> None:
-    payload: dict[str, Any] = {
-        "cardId": card_id,
-        "row": row,
-        "col": col,
-        "sizeX": size_x,
-        "sizeY": size_y,
-        "parameter_mappings": [],
-        "visualization_settings": {},
-    }
-    r = client.post(f"/api/dashboard/{dashboard_id}/cards", json=payload)
-    if r.status_code < 400:
-        return
-    # fallback: альтернативные имена полей (старые/другие сборки)
-    alt = {
-        "card_id": card_id,
-        "row": row,
-        "col": col,
-        "size_x": size_x,
-        "size_y": size_y,
-        "parameter_mappings": [],
-        "visualization_settings": {},
-    }
-    r2 = client.post(f"/api/dashboard/{dashboard_id}/cards", json=alt)
-    if r2.status_code < 400:
-        return
-    _LOGGER.error("POST /api/dashboard/.../cards failed: %s / %s", r.text[:300], r2.text[:300])
-    raise RuntimeError("Не удалось добавить карточку на дашборд (см. логи выше)")
+    """Metabase 0.50+: карточки задаются через PUT /api/dashboard/:id (поле dashcards)."""
+    gr = client.get(f"/api/dashboard/{dashboard_id}")
+    gr.raise_for_status()
+    dash = gr.json()
+    if not isinstance(dash, dict):
+        raise RuntimeError("Ответ GET /api/dashboard не объект JSON")
+    existing = dash.get("dashcards")
+    if not isinstance(existing, list):
+        oc = dash.get("ordered_cards")
+        existing = oc if isinstance(oc, list) else []
+    tab_id: int | None = None
+    tabs = dash.get("tabs")
+    if isinstance(tabs, list) and tabs and isinstance(tabs[0], dict):
+        raw = tabs[0].get("id")
+        if raw is not None:
+            tab_id = int(raw)
+    new_cards: list[dict[str, Any]] = []
+    nid = -1
+    for card_id, row, col, sx, sy in layout:
+        dc: dict[str, Any] = {
+            "id": nid,
+            "card_id": card_id,
+            "row": row,
+            "col": col,
+            "size_x": sx,
+            "size_y": sy,
+            "parameter_mappings": [],
+            "series": [],
+            "visualization_settings": {},
+        }
+        if tab_id is not None:
+            dc["dashboard_tab_id"] = tab_id
+        new_cards.append(dc)
+        nid -= 1
+    dash["dashcards"] = existing + new_cards
+    pr = client.put(f"/api/dashboard/{dashboard_id}", json=dash)
+    if pr.status_code >= 400:
+        _LOGGER.error("PUT /api/dashboard/%s: %s", dashboard_id, pr.text[:500])
+        raise RuntimeError("Не удалось обновить дашборд (dashcards)")
 
 
 def main() -> int:
@@ -254,9 +262,9 @@ def main() -> int:
             ("Лиды по дням", 3, 6, 6, 4),
             ("Последние лиды", 7, 0, 12, 8),
         ]
-        for title, row, col, sx, sy in layout:
-            _add_dashcard(client, dashboard_id, card_ids[title], row, col, sx, sy)
-            _LOGGER.info("На дашборд добавлена «%s» row=%s col=%s", title, row, col)
+        layout_payload = [(card_ids[title], row, col, sx, sy) for title, row, col, sx, sy in layout]
+        _put_dashboard_dashcards(client, dashboard_id, layout_payload)
+        _LOGGER.info("На дашборд добавлено карточек: %s", len(layout_payload))
 
     _LOGGER.info("Готово. Откройте Metabase и проверьте дашборд «%s».", DASHBOARD_NAME)
     return 0
