@@ -1,0 +1,52 @@
+{
+  "prop_radar_metabase_bundle_version": "1.0",
+  "dashboard_title_ru": "PropRadar — мониторинг лидов",
+  "schema_reference": "migrations/001_init_leads.sql + 002_add_myhome_listing_fields.sql (PostgreSQL 15)",
+  "timezone_note": "В SQL ниже даты нормализуются к дате в UTC. При необходимости смените на вашу таймзону в Metabase (Admin → Localization).",
+  "status_note_ru": "В БД хранятся литералы статуса: new, contacted, qualified, rejected, converted. Это не совпадает с абстрактной воронкой contact/sent/deal/lost без отдельной миграции домена.",
+  "import_instructions_ru": "Стандартный OSS Metabase не импортирует этот файл одной кнопкой. Создайте Dashboard вручную и добавьте вопросы типа «Native query» по SQL из полей sql каждой карточки, либо используйте Metabase Serialization/API под вашу версию. Подробности: docs/METABASE_SETUP.md.",
+  "cards": [
+    {
+      "position": 1,
+      "title_ru": "Воронка лидов",
+      "description_ru": "Количество лидов по фактическому полю status (вертикальная диаграмма).",
+      "display": "bar",
+      "sql": "SELECT status,\n       COUNT(*)::bigint AS cnt\nFROM leads\nGROUP BY status\nORDER BY CASE status\n           WHEN 'new' THEN 1\n           WHEN 'contacted' THEN 2\n           WHEN 'qualified' THEN 3\n           WHEN 'converted' THEN 4\n           WHEN 'rejected' THEN 5\n           ELSE 99\n         END,\n         status;"
+    },
+    {
+      "position": 2,
+      "title_ru": "Лиды сегодня",
+      "description_ru": "Число записей, созданных сегодня по UTC.",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads\nWHERE (created_at AT TIME ZONE 'UTC')::date = (timezone('UTC', now()))::date;"
+    },
+    {
+      "position": 3,
+      "title_ru": "Новых за 7 дней",
+      "description_ru": "Число лидов за последние 7 суток от текущего момента (timestamptz).",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads\nWHERE created_at >= (timezone('UTC', now()) - interval '7 days');"
+    },
+    {
+      "position": 4,
+      "title_ru": "Средняя цена объекта (USD)",
+      "description_ru": "Среднее по price_total_usd (NULL не учитываются).",
+      "display": "scalar",
+      "sql": "SELECT ROUND(AVG(price_total_usd)::numeric, 2) AS avg_usd\nFROM leads\nWHERE price_total_usd IS NOT NULL;"
+    },
+    {
+      "position": 5,
+      "title_ru": "Лиды по дням",
+      "description_ru": "Линейный график: число лидов по дням (UTC) за 30 календарных дней.",
+      "display": "line",
+      "sql": "SELECT (created_at AT TIME ZONE 'UTC')::date AS day,\n       COUNT(*)::bigint AS cnt\nFROM leads\nWHERE created_at >= (timezone('UTC', now()))::date - interval '30 days'\nGROUP BY 1\nORDER BY 1 ASC;"
+    },
+    {
+      "position": 6,
+      "title_ru": "Последние лиды",
+      "description_ru": "Таблица: id (UUID), источник, статус, цена USD, время создания.",
+      "display": "table",
+      "sql": "SELECT id,\n       source,\n       status,\n       price_total_usd,\n       created_at\nFROM leads\nORDER BY created_at DESC\nLIMIT 20;"
+    }
+  ]
+}

@@ -61,6 +61,7 @@ PropRadar/
 3. Python: `powershell -ExecutionPolicy Bypass -File .\scripts\setup_venv.ps1`, затем из корня с активированным venv: `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`.
 4. Инструменты (опционально): `docker/tools` — n8n **5678**, Metabase **3031**, Evolution **8080**. Не смешивать с чужими проектами; БД проекта только **leads-db**, не `dispatch-db-dev`.
 5. Парсер myhome (точка входа n8n): `python scripts/run_myhome_parser.py` — JSON-отчёт в stdout; интеграционный smoke к API: `MYHOME_INTEGRATION=1 pytest tests/integration/test_myhome_integration.py`.
+6. Metabase: **`docker compose -f docker/tools/docker-compose.yml up -d`**, UI **http://localhost:3031** — см. **[`docs/METABASE_SETUP.md`](docs/METABASE_SETUP.md)**.
 
 Проверка compose: `docker compose -f docker/infra/docker-compose.yml config` (аналогично для `docker/tools` и `docker/app`).
 

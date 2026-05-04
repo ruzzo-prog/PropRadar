@@ -2,6 +2,14 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-04 — Metabase: дашборд и подключение leads-db
+
+- **Контекст:** наблюдаемость/монетизация — дашборд для агентств и внутреннего мониторинга; Metabase в **`docker/tools`**, порт хоста **3031**, сеть **`propradar`**.
+- **Реализация:** правки **`docker/tools/docker-compose.yml`** (Metabase: `JAVA_TIMEZONE`/`TZ`), **`docker/tools/.env.example`** (блок **`LEADS_DB_*`** для формы в UI), **`metabase/propradar_dashboard.json`** (6 карточек, SQL под PG15 и миграции `001`+`002`), **`docs/METABASE_SETUP.md`** (шаги, DNS, ручная сборка дашборда из JSON). **`docker/infra`**, **`src/`**, **`migrations/`**, **`docs/AI_GOVERNANCE.md`** не менялись.
+- **Проверка:** Scanner PASS (подтверждено человеком). `@tester`: валидность JSON, `docker compose config` для **infra/tools/app** — OK; `ruff`/`mypy`/`pytest` ( регрессия кода) — OK. Ручной smoke: `up tools` и UI **http://localhost:3031** — по **`METABASE_SETUP.md`**.
+- **Документация:** `docs/METABASE_SETUP.md`, `CHANGELOG.md`, этот файл.
+- **Релиз вручную:** поднять infra + tools, подключить БД **leads** в Metabase, собрать дашборд по SQL из JSON.
+
 ## 2026-05-04 — Парсер myhome.ge (HTTP API, leads-db)
 
 - **Контекст:** первый рабочий адаптер домена «Парсинг»; запуск по расписанию n8n, запись только новых объявлений в **leads-db** через **LeadRepository**; телефон/reCAPTCHA вне scope.
