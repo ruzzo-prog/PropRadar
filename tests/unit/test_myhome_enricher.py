@@ -7,9 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from domain.lead import Lead, LeadStatus
-from parsers.exceptions import SessionExpiredError
 from parsers.myhome_enricher import (
-    MyHomeEnricher,
     _parse_phone_response,
     extract_details_from_page_text,
     listing_url,
@@ -41,11 +39,11 @@ def test_extract_details_from_ru_text() -> None:
     assert d["is_owner"] is True
 
 
-def test_parse_phone_401_raises_session_expired() -> None:
+def test_parse_phone_401_raises_unauthorized() -> None:
     resp = MagicMock()
     resp.status = 401
     resp.json.return_value = {}
-    with pytest.raises(SessionExpiredError):
+    with pytest.raises(RuntimeError, match="phone_api_unauthorized"):
         _parse_phone_response(resp)
 
 
@@ -120,11 +118,3 @@ def test_repository_update_receives_phone_and_details() -> None:
     assert out.phone == "500000000"
     assert len(repo.updates) == 1
     assert repo.updates[0].area_m2 == Decimal("55")
-
-
-def test_enricher_missing_session_file_raises(tmp_path) -> None:
-    repo = _MemRepo()
-    missing = tmp_path / "no_session.json"
-    enricher = MyHomeEnricher(repo, session_storage_path=missing)
-    with pytest.raises(SessionExpiredError):
-        enricher.enrich_leads([])

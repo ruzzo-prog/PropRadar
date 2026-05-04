@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Iterable
@@ -10,9 +11,9 @@ from decimal import Decimal
 from pathlib import Path
 
 from playwright.sync_api import Page, Response, sync_playwright
+from playwright.sync_api import TimeoutError as PWTimeoutError
 
 from domain.lead import Lead
-from parsers.exceptions import SessionExpiredError
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,19 @@ logger = logging.getLogger(__name__)
 _LISTING_PATH = "/nedvizhimost/prodazha/kvartira/{external_id}"
 _PHONE_URL_PART = "statements/phone/show"
 _OWNER_MARKERS = ("я собственник", "ვარ მესაკუთრე")
+_TW_MS = 30_000
+_PHONE_BTN_SUB = "flex flex-col items-start md:flex-row md:items-center"
+
+
+def _save_timeout_shot(page: Page, lead: Lead) -> None:
+    name = str(lead.id) if lead.id else lead.external_id
+    out_dir = Path(__file__).resolve().parent.parent.parent / "scripts" / "debug_screenshots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{name}.png"
+    try:
+        page.screenshot(path=str(path), full_page=True, timeout=_TW_MS)
+    except Exception:
+        logger.warning("debug_screenshot_failed ext=%s", lead.external_id)
 
 
 def listing_url(external_id: str, *, locale: str = "ru") -> str:
@@ -92,14 +106,14 @@ def extract_details_from_page_text(text: str) -> dict[str, object]:
 
 def _visible_text(page: Page) -> str:
     try:
-        return page.locator("main").first.inner_text(timeout=25_000)
+        return page.locator("main").first.inner_text(timeout=_TW_MS)
     except Exception:
-        return page.locator("body").inner_text(timeout=25_000)
+        return page.locator("body").inner_text(timeout=_TW_MS)
 
 
 def _parse_phone_response(response: Response) -> str:
     if response.status == 401:
-        raise SessionExpiredError()
+        raise RuntimeError("phone_api_unauthorized")
     if response.status >= 400:
         msg = f"phone_api_http_{response.status}"
         raise RuntimeError(msg)
@@ -116,12 +130,14 @@ def _parse_phone_response(response: Response) -> str:
 
 
 def _click_show_phone(page: Page) -> str:
-    btn = page.get_by_role("button", name=re.compile(r"номер|телефон|ნომერი", re.I))
+    btn = page.locator(f'button[class*="{_PHONE_BTN_SUB}"]').first
+    if btn.count() == 0:
+        btn = page.get_by_role("button", name=re.compile(r"номер|телефон|ნომერი", re.I)).first
     with page.expect_response(
         lambda r: _PHONE_URL_PART in r.url and r.request.method == "POST",
-        timeout=45_000,
+        timeout=_TW_MS,
     ) as resp_wrap:
-        btn.first.click(timeout=20_000)
+        btn.click(timeout=_TW_MS)
     return _parse_phone_response(resp_wrap.value)
 
 
@@ -139,32 +155,33 @@ class MyHomeEnricher:
         self,
         repository: LeadRepository,
         *,
-        session_storage_path: Path,
         locale: str = "ru",
-        headless: bool = True,
+        headless: bool = False,
     ) -> None:
         self._repository = repository
-        self._session_storage_path = session_storage_path
         self._locale = locale
         self._headless = headless
 
-    def _ensure_session_file(self) -> None:
-        if not self._session_storage_path.is_file():
-            raise SessionExpiredError()
-
     def enrich_leads(self, leads: Iterable[Lead]) -> MyHomeEnrichReport:
-        self._ensure_session_file()
         report = MyHomeEnrichReport()
         items = list(leads)
         if not items:
             return report
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=self._headless)
+            if self._headless:
+                logger.info("myhome enricher: headless=True игнорируется (P1 — видимый браузер)")
+            browser = pw.chromium.launch(headless=False)
             try:
+                session_path = Path("scripts/myhome_session.json")
+                storage = (
+                    json.loads(session_path.read_text(encoding="utf-8"))
+                    if session_path.exists()
+                    else None
+                )
                 context = browser.new_context(
-                    storage_state=str(self._session_storage_path),
                     locale=self._locale,
+                    storage_state=storage,
                 )
                 page = context.new_page()
                 for lead in items:
@@ -188,9 +205,8 @@ class MyHomeEnricher:
                 return f"missing_uuid:{lead.external_id}"
 
             url = listing_url(lead.external_id, locale=self._locale)
-            page.goto(url, wait_until="domcontentloaded", timeout=60_000)
-            if _looks_like_login(page):
-                raise SessionExpiredError()
+            page.goto(url, wait_until="domcontentloaded", timeout=_TW_MS)
+            page.wait_for_load_state("networkidle", timeout=_TW_MS)
 
             details = extract_details_from_page_text(_visible_text(page))
             phone = _click_show_phone(page)
@@ -215,19 +231,17 @@ class MyHomeEnricher:
                 },
             )
             self._repository.update_enriched_fields(updated)
-        except SessionExpiredError:
-            logger.warning("myhome session expired (%s)", label)
-            raise
+        except PWTimeoutError:
+            _save_timeout_shot(page, lead)
+            logger.warning("myhome enrich fail %s type=TimeoutError", label)
+            return f"{lead.external_id}:TimeoutError"
         except Exception as exc:
             logger.warning(
                 "myhome enrich fail %s type=%s",
                 label,
                 type(exc).__name__,
             )
+            if type(exc).__name__ == "TimeoutError":
+                _save_timeout_shot(page, lead)
             return f"{lead.external_id}:{type(exc).__name__}"
         return None
-
-
-def _looks_like_login(page: Page) -> bool:
-    u = page.url.lower()
-    return "login" in u or "sign" in u or "auth" in u
