@@ -23,13 +23,15 @@
 
 ## Стек
 
-| Слой | Технология |
-|---|---|
-| Парсинг | Python + Playwright |
-| База данных | PostgreSQL (`leads-db`, порт 5433) |
-| WhatsApp | Evolution API (Docker, self-hosted) |
-| Оркестрация | n8n (self-hosted) |
-| Дашборд | Metabase (Docker, порт 3030) |
+
+| Слой        | Технология                                                     |
+| ----------- | -------------------------------------------------------------- |
+| Парсинг     | Python + Playwright                                            |
+| База данных | PostgreSQL (`leads-db`, порт 5433)                             |
+| WhatsApp    | Evolution API (Docker, self-hosted)                            |
+| Оркестрация | n8n (self-hosted)                                              |
+| Дашборд     | Metabase (Docker, порт **3031** локально — см. `docker/tools`) |
+
 
 ---
 
@@ -38,18 +40,28 @@
 ```
 PropRadar/
 ├── .cursor/                  # AI-агенты и правила
-│   ├── agents/               # @architect, @dispatcher, @review и др.
-│   ├── rules/                # Rules-for-AI.mdc
-│   └── skills/               # Навыки агентов
 ├── docs/                     # Канонические документы
-│   ├── AI_GOVERNANCE.md      # Процесс работы агентов и канон v1.0
-│   ├── INGRESS_ARCHITECTURE.md  # Архитектурные инварианты
-│   └── PropRadar_STATUS.md   # Актуальный статус проекта
-├── CHANGELOG.md              # История изменений
-└── README.md                 # Этот файл
+├── src/                      # Python-пакеты: api, config, domain, parsers, repositories, services
+├── tests/                    # unit / integration / e2e (каркас)
+├── migrations/               # SQL-миграции (leads-db)
+├── scripts/                  # setup_venv.ps1 и др.
+├── docker/
+│   ├── infra/                # PostgreSQL 15 (leads-db, хост-порт 5433)
+│   ├── tools/                # n8n, Metabase:3031, Evolution API:8080
+│   └── app/                  # Каркас parsers + FastAPI API:8000
+├── pyproject.toml
+├── CHANGELOG.md
+└── README.md
 ```
 
-> Код (src/, tests/, docker/) появится по мере реализации этапов.
+### Локальная среда (кратко)
+
+1. Сеть Docker (один раз): `docker network create propradar`
+2. БД: из `docker/infra` поднять `leads-db`, затем применить `migrations/001_init_leads.sql` к БД на `localhost:5433`.
+3. Python: `powershell -ExecutionPolicy Bypass -File .\scripts\setup_venv.ps1`, затем из корня с активированным venv: `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`.
+4. Инструменты (опционально): `docker/tools` — n8n **5678**, Metabase **3031**, Evolution **8080**. Не смешивать с чужими проектами; БД проекта только **leads-db**, не `dispatch-db-dev`.
+
+Проверка compose: `docker compose -f docker/infra/docker-compose.yml config` (аналогично для `docker/tools` и `docker/app`).
 
 ---
 
@@ -65,14 +77,15 @@ PropRadar/
 Все изменения — только через цепочку AI-агентов по `docs/AI_GOVERNANCE.md`.
 
 Три точки контроля человека:
+
 1. Одобрение Fix Plan
 2. Деплой
 3. Smoke-тест
 
-Подробнее: [`docs/AI_GOVERNANCE.md`](docs/AI_GOVERNANCE.md)
+Подробнее: `[docs/AI_GOVERNANCE.md](docs/AI_GOVERNANCE.md)`
 
 ---
 
 ## Статус
 
-Актуальный статус проекта: [`docs/PropRadar_STATUS.md`](docs/PropRadar_STATUS.md)
+Актуальный статус проекта: `[docs/PropRadar_STATUS.md](docs/PropRadar_STATUS.md)`

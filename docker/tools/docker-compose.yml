@@ -1,0 +1,52 @@
+# n8n, Metabase (хост 3031 → контейнер 3000), Evolution API.
+# Требуется сеть:  docker network create propradar
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    restart: unless-stopped
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - propradar
+
+  metabase:
+    image: metabase/metabase:latest
+    restart: unless-stopped
+    environment:
+      MB_SITE_NAME: ${MB_SITE_NAME:-PropRadar}
+    ports:
+      - "3031:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    networks:
+      - propradar
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    restart: unless-stopped
+    environment:
+      SERVER_URL: ${SERVER_URL:-http://localhost:8080}
+      AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - propradar
+
+volumes:
+  n8n_data:
+  metabase_data:
+  evolution_instances:
+
+networks:
+  propradar:
+    external: true
