@@ -2,6 +2,14 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-04 — Metabase: скрипт API для дашборда «PropRadar — Лиды»
+
+- **Контекст:** автоматическая настройка дашборда через **Metabase HTTP API** без ручной расстановки шести карточек; идемпотентность при уже созданном дашборде.
+- **Реализация:** **`scripts/setup_metabase_dashboard.py`** (сессия, поиск БД **`LEADS_DATABASE_NAME`** / «PropRadar Leads», **`POST /api/card`**, **`POST /api/dashboard`**, раскладка **`POST .../cards`**), **`pyproject.toml`** (**`ruff`** включает **`scripts/`**), корневой **`.env.example`** (закомментированные **`METABASE_*`**). **`docs/METABASE_SETUP.md`** — раздел про автоматизацию. Остальные запреты scope (без правок **`src/`**, **`migrations/`**, **`docker/infra`**) соблюдены.
+- **Проверка:** Scanner PASS (подтверждено человеком). `@tester`: **`ruff check src tests scripts`**, **`mypy src`**, **`pytest -m "not integration"`** — OK; **`docker compose config`** (infra/tools/app) — OK. Smoke против живого Metabase — вручную (**`METABASE_*`**).
+- **Документация:** **`docs/METABASE_SETUP.md`**, **`CHANGELOG.md`**, **`README.md`**, этот файл.
+- **Релиз вручную:** один прогон скрипта после настройки админа и подключения БД в UI.
+
 ## 2026-05-04 — Metabase: дашборд и подключение leads-db
 
 - **Контекст:** наблюдаемость/монетизация — дашборд для агентств и внутреннего мониторинга; Metabase в **`docker/tools`**, порт хоста **3031**, сеть **`propradar`**.

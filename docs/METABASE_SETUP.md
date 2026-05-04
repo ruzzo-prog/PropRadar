@@ -83,6 +83,17 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 В таблице **`leads.status`** хранятся строковые литералы домена (например **`new`**, **`contacted`**, **`qualified`**, **`rejected`**, **`converted`**). Это **не** набор `contact/sent/deal/lost` из продуктовой воронки без отдельной миграции — карточка 1 показывает **фактическое распределение**.
 
+## Автоматизация дашборда (Metabase API)
+
+После первого входа администратора и **подключения БД «PropRadar Leads»** в UI можно собрать дашборд **«PropRadar — Лиды»** без ручной расстановки карточек:
+
+1. Задайте в окружении (см. корневой `.env.example`): **`METABASE_URL`**, **`METABASE_USER`**, **`METABASE_PASSWORD`**; при необходимости **`LEADS_DATABASE_NAME`** (по умолчанию совпадает с именем подключения в Metabase).
+2. Из корня репозитория с установленными зависимостями (`pip install -e .`):  
+   `python scripts/setup_metabase_dashboard.py`
+3. Повторный запуск при уже существующем дашборде с этим именем завершится с **предупреждением** и **кодом 0** (дубль не создаётся).
+
+Карточки и SQL берутся из **`metabase/propradar_dashboard.json`**. Версия Metabase должна поддерживать используемые эндпоинты (`/api/session`, `/api/card`, `/api/dashboard`, …).
+
 ## Критерии готовности
 
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.
