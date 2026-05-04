@@ -19,7 +19,7 @@ class LeadStatus(StrEnum):
 
 
 class Lead(BaseModel):
-    """Доменный контракт лида (Pydantic). Схема БД — migrations/001_init_leads.sql."""
+    """Доменный контракт лида (Pydantic). Схема БД — migrations/001_*.sql и 002_*.sql."""
 
     model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True)
 
@@ -30,3 +30,7 @@ class Lead(BaseModel):
     score: Score = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    source_listing_uuid: UUID | None = None
+    price_total_usd: int | None = Field(default=None, ge=0)
+    price_m2_usd: int | None = Field(default=None, ge=0)
+    published_at: datetime | None = None

@@ -7,6 +7,7 @@
 ### Added
 
 - Стартовый скелет приложения: `src/` (parsers, domain, repositories, services, api, config), `tests/`, `migrations/001_init_leads.sql`, `scripts/setup_venv.ps1`, Docker (`docker/infra`, `docker/tools`, `docker/app`), корневые `pyproject.toml`, `.env.example`, `.gitignore`, `.python-version`.
+- Парсер **myhome.ge**: `src/parsers/myhome.py`, `PostgresLeadRepository`, `migrations/002_add_myhome_listing_fields.sql`, `scripts/run_myhome_parser.py`, unit- и integration-тесты (`MYHOME_INTEGRATION=1` для live API); настройка `MYHOME_API_BASE_URL`.
 - Минимальный unit-тест `tests/unit/test_api_health.py` для `GET /health`.
 
 ### Changed

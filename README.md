@@ -57,9 +57,10 @@ PropRadar/
 ### Локальная среда (кратко)
 
 1. Сеть Docker (один раз): `docker network create propradar`
-2. БД: из `docker/infra` поднять `leads-db`, затем применить `migrations/001_init_leads.sql` к БД на `localhost:5433`.
+2. БД: из `docker/infra` поднять `leads-db`, затем применить `migrations/001_init_leads.sql` и `migrations/002_add_myhome_listing_fields.sql` к БД на `localhost:5433`.
 3. Python: `powershell -ExecutionPolicy Bypass -File .\scripts\setup_venv.ps1`, затем из корня с активированным venv: `uvicorn api.main:app --reload --host 127.0.0.1 --port 8000`.
 4. Инструменты (опционально): `docker/tools` — n8n **5678**, Metabase **3031**, Evolution **8080**. Не смешивать с чужими проектами; БД проекта только **leads-db**, не `dispatch-db-dev`.
+5. Парсер myhome (точка входа n8n): `python scripts/run_myhome_parser.py` — JSON-отчёт в stdout; интеграционный smoke к API: `MYHOME_INTEGRATION=1 pytest tests/integration/test_myhome_integration.py`.
 
 Проверка compose: `docker compose -f docker/infra/docker-compose.yml config` (аналогично для `docker/tools` и `docker/app`).
 

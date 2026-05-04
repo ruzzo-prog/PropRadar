@@ -35,6 +35,9 @@ where = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["src"]
+markers = [
+    "integration: сеть и/или внешнее HTTP API myhome",
+]
 
 [tool.ruff]
 target-version = "py311"

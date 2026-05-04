@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import Field, PostgresDsn
+from pydantic import Field, HttpUrl, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,4 +17,8 @@ class Settings(BaseSettings):
     database_url: PostgresDsn = Field(
         default="postgresql://leads:changeme@localhost:5433/leads",
         validation_alias="DATABASE_URL",
+    )
+    myhome_api_base_url: HttpUrl = Field(
+        default="https://api-statements.tnet.ge",
+        validation_alias="MYHOME_API_BASE_URL",
     )
