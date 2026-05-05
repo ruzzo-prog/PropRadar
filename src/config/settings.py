@@ -36,3 +36,11 @@ class Settings(BaseSettings):
         le=500,
         validation_alias="MYHOME_ENRICH_LIMIT",
     )
+    myhome_pdf_output_dir: Path = Field(
+        default=Path("data/myhome_pdf"),
+        validation_alias="MYHOME_PDF_OUTPUT_DIR",
+    )
+    myhome_pdf_public_base_url: str | None = Field(
+        default=None,
+        validation_alias="MYHOME_PDF_PUBLIC_BASE_URL",
+    )

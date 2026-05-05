@@ -128,7 +128,13 @@ class _MemRepo(LeadRepository):
     def get_by_source_and_external_id(self, source: str, external_id: str) -> Lead | None:
         return None
 
-    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+    def list_pending_detail_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         return []
 
     def update_enriched_fields(self, entity: Lead) -> Lead:

@@ -26,8 +26,16 @@ class LeadRepository(Repository[Lead], ABC):
     def get_by_source_and_external_id(self, source: str, external_id: str) -> Lead | None: ...
 
     @abstractmethod
-    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
-        """Кандидаты на обогащение: status=new, phone пустой (NULL или ''), source совпадает."""
+    def list_pending_detail_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        """Очередь детализации (API): status=new, source, address IS NULL."""
+
+    @abstractmethod
+    def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        """Очередь телефона (Playwright): status=new, source, phone пустой (NULL или '')."""
+
+    @abstractmethod
+    def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        """PDF карточки: status=new, source, pdf_url IS NULL, address уже заполнен."""
 
     @abstractmethod
     def update_enriched_fields(self, entity: Lead) -> Lead:

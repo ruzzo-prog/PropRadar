@@ -33,7 +33,13 @@ class FakeLeadRepo(LeadRepository):
         self.by_id[new_id] = saved
         return saved
 
-    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+    def list_pending_detail_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         return []
 
     def update_enriched_fields(self, entity: Lead) -> Lead:
@@ -47,7 +53,10 @@ async def test_parse_lead_extracts_fields() -> None:
     raw = {
         "id": 24552178,
         "uuid": "81046b0a-d3bb-47b6-b885-ceab47c69446",
-        "price": {"1": {"price_total": 255626, "price_square": 3652}},
+        "price": {
+            "1": {"price_total": 689000, "price_square": 9850},
+            "2": {"price_total": 255626, "price_square": 3652},
+        },
         "created_at": "2025-01-15T10:00:00+00:00",
     }
     lead = await parser.parse_lead(raw)
@@ -55,7 +64,8 @@ async def test_parse_lead_extracts_fields() -> None:
     assert lead.external_id == "24552178"
     assert lead.source == "myhome"
     assert lead.source_listing_uuid == UUID("81046b0a-d3bb-47b6-b885-ceab47c69446")
-    assert lead.price_total_usd == 255626
+    assert lead.price_gel == 689000
+    assert lead.price_usd == 255626
     assert lead.price_m2_usd == 3652
     assert lead.published_at is not None
     assert lead.status == LeadStatus.NEW
@@ -89,10 +99,18 @@ async def test_run_dedup_single_save() -> None:
     item = {
         "id": 42,
         "uuid": "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee",
-        "price": {"1": {"price_total": 100, "price_square": 10}},
+        "price": {
+            "1": {"price_total": 280, "price_square": 28},
+            "2": {"price_total": 100, "price_square": 10},
+        },
     }
-    parser = MyHomeParser(MagicMock(spec=httpx.AsyncClient), repo)
-    parser.fetch_raw_batch = AsyncMock(return_value=[item, item])
+    payload = {"result": True, "data": {"data": [item, item]}}
+    response = MagicMock()
+    response.json.return_value = payload
+    response.raise_for_status = MagicMock()
+    client = MagicMock(spec=httpx.AsyncClient)
+    client.get = AsyncMock(return_value=response)
+    parser = MyHomeParser(client, repo)
     report = await parser.run()
     assert report.parsed == 2
     assert report.new == 1

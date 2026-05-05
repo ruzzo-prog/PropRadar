@@ -43,3 +43,43 @@ async def test_myhome_live_list_endpoint() -> None:
     items = data.get("data")
     assert isinstance(items, list)
     assert len(items) > 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_myhome_live_detail_endpoint() -> None:
+    if os.environ.get("MYHOME_INTEGRATION") != "1":
+        pytest.skip("MYHOME_INTEGRATION!=1 (см. .env.example)")
+    base = "https://api-statements.tnet.ge"
+    params = {
+        "deal_types": 1,
+        "real_estate_types": 1,
+        "currency_id": 1,
+        "cities": 1,
+        "owner_type": "physical",
+        "page": 1,
+        "sort": "date_desc",
+    }
+    headers = {
+        "X-Website-Key": "myhome",
+        "Accept": "application/json",
+        "Origin": "https://www.myhome.ge",
+        "Referer": "https://www.myhome.ge/",
+        "User-Agent": _DEFAULT_UA,
+    }
+    async with httpx.AsyncClient() as client:
+        lst = await client.get(
+            f"{base}/v1/statements/",
+            params=params,
+            headers=headers,
+            timeout=60.0,
+        )
+        lst.raise_for_status()
+        first = lst.json()["data"]["data"][0]
+        eid = first["id"]
+        detail = await client.get(f"{base}/v1/statements/{eid}", headers=headers, timeout=60.0)
+        detail.raise_for_status()
+        payload = detail.json()
+    assert payload.get("result") is True
+    stmt = payload["data"]["statement"]
+    assert stmt["id"] == eid
