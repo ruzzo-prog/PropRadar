@@ -28,6 +28,7 @@
 
 ### Added
 
+- **Проекция `leads_client`:** таблица денормализованного представления **`leads`** для клиентских выборок; миграция **`migrations/007_create_leads_client_table.sql`** (после **006**): функция **`sync_leads_client_from_lead`**, триггер **`trg_leads_sync_client`** на **`leads`** (**INSERT**/**UPDATE**), индексы на **`external_id`** и **`district_name`**, начальное заполнение из **`leads`** (Scanner **PASS**, @tester **PASS**).
 - **`scripts/backfill_price_gel.py`** — backfill **`price_gel`** для myhome: только **`status=new`** и **`price_gel IS NULL`**, тот же HTTP-путь, что у enricher (**`GET /v1/statements/{id}`**), параметр **`--limit`** (Scanner **PASS**, @tester **PASS**).
 - Myhome **API-first** и enricher: канон полей **`src/parsers/adapters/myhome/myhome_api_schema.csv`**; пакет **`src/parsers/adapters/myhome/`** (`parser.py`, `schema.py`, `enricher.py` с HTTP-деталями, `phone.py`, `pdf.py`, извлечение полей, локаль страницы, разбор даты публикации); фасады **`src/parsers/myhome.py`**, **`src/parsers/myhome_enricher.py`** (реэкспорт публичного API); миграция **`005_myhome_api_first.sql`**; очереди **`list_pending_detail_enrichment`** / **`list_pending_phone_enrichment`** / **`list_pending_pdf_enrichment`**; колонки **`geo_lat`**, **`geo_lng`**, **`listing_views`**, **`myhome_statement_json`**, **`pdf_url`**.
 - Миграция `migrations/004_add_text_lang_columns.sql`: колонки `address_lang`, `district_lang`, `description_lang` в `leads`.

@@ -2,6 +2,26 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — Проекция `leads_client` (миграция 007)
+
+- **Контекст:** клиентские выборки и отчёты (Metabase/UI) удобнее вести по денормализованной проекции **`leads`**, без дублирования логики в приложении.
+- **Реализация:** **`migrations/007_create_leads_client_table.sql`** (после **006**) — таблица **`leads_client`** (PK **`lead_id`**, 1:1 с **`leads`**, UNIQUE **`(source, external_id)`**); поля ядра из **`leads`** + фрагмент из **`myhome_statement_json`** (**`district_name`**, **`dynamic_title`**, **`urban_name`**, **`images`** при JSON-массиве); триггер **`trg_leads_sync_client`** — **`AFTER INSERT OR UPDATE`** на **`leads`** → **`sync_leads_client_from_lead`**, **ON CONFLICT DO UPDATE**; индексы **`idx_leads_client_external_id`**, **`idx_leads_client_district_name`**; initial fill из **`leads`** до включения триггера.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
+- **Документация:** `CHANGELOG.md`, `README.md` (список миграций), этот файл.
+- **Релиз вручную:** применить **007** к **leads-db** сразу после **006**.
+
+| Показатель | Статус |
+|------------|--------|
+| Scanner | ✅ PASS |
+| Unit / регрессия | 🧪 PASS (`@tester`) |
+| Документация | 📜 обновлена |
+
+```mermaid
+flowchart LR
+  L[(leads)] --> T[INSERT/UPDATE\ntrigger]
+  T --> LC[(leads_client\nпроекция)]
+```
+
 ## 2026-05-05 — Закрытие задачи: Smoke PASS, контрольная точка 3
 
 - **Контекст:** финальная проверка после цикла **006** / цены / очередь detail и backfill **`price_gel`**.
