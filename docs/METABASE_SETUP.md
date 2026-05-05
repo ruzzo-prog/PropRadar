@@ -75,6 +75,10 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 Подписи карточек на русском — поля **`title_ru`** / **`description_ru`** в JSON (и заголовки вопросов в Metabase).
 
+### Схема `leads` и цены (миграция 006)
+
+После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
+
 ### Таймзона
 
 В SQL используется **`AT TIME ZONE 'UTC'`** и **`timezone('UTC', now())`** для сопоставимости с `TIMESTAMPTZ`. При смене локали в Metabase перепроверьте карточки «сегодня» и «по дням».
