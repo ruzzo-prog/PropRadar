@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Integer, String, and_, func, select, text
+from sqlalchemy import Integer, String, and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -157,7 +157,10 @@ class PostgresLeadRepository(LeadRepository):
                     and_(
                         LeadORM.source == source,
                         LeadORM.status == LeadStatus.NEW.value,
-                        LeadORM.phone.is_(None),
+                        or_(
+                            LeadORM.phone.is_(None),
+                            LeadORM.phone == "",
+                        ),
                     ),
                 )
                 .order_by(LeadORM.created_at.asc())

@@ -27,7 +27,7 @@ class LeadRepository(Repository[Lead], ABC):
 
     @abstractmethod
     def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
-        """Кандидаты на обогащение: status=new, phone IS NULL, source совпадает."""
+        """Кандидаты на обогащение: status=new, phone пустой (NULL или ''), source совпадает."""
 
     @abstractmethod
     def update_enriched_fields(self, entity: Lead) -> Lead:
