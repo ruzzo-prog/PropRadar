@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows / `zoneinfo`:** добавлена зависимость **`tzdata`** в **`pyproject.toml`**, чтобы **`ZoneInfo("Asia/Tbilisi")`** и пайплайн даты публикации myhome не падали на Windows без системной IANA-базы; проверено: **`ZoneInfo`** OK и **`scripts/run_myhome_enricher.py`** без ошибки (@tester PASS).
+
 ### Added
 
 - Myhome enricher — адаптерный пакет `src/parsers/adapters/myhome/` (извлечение полей, локаль страницы, разбор даты публикации); точка входа `src/parsers/myhome_enricher.py` реэкспортирует публичный API.

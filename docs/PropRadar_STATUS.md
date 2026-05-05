@@ -2,6 +2,23 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — P1 hotfix: `tzdata` для `ZoneInfo` на Windows (Asia/Tbilisi)
+
+- **Контекст:** emergency-path — при локальном запуске на **Windows** падала работа с часовыми поясами для обогащения myhome (**Asia/Tbilisi → UTC**).
+- **Симптом:** ошибка при создании **`ZoneInfo("Asia/Tbilisi")`** / связанная трассировка из цепочки **`published_at`** (нет данных зоны в окружении).
+- **Root cause:** в сборках Python под Windows полная IANA-база для **`zoneinfo`** не гарантирована «из коробки»; для переносимости нужен пакет **`tzdata`** (PEP 615).
+- **Реализация (минимальный scope):** только **`pyproject.toml`** — добавлена зависимость **`tzdata`** в `[project].dependencies`. Код и миграции не менялись.
+- **Проверка:** `@tester` — **PASS**. Валидация сценария: **`ZoneInfo("Asia/Tbilisi")`** успешно; **`python scripts/run_myhome_enricher.py`** завершается без ошибки (при прочих выполненных условиях среды).
+- **Документация:** этот файл, **`CHANGELOG.md`**, **`README.md`** (кратко про Windows).
+- **Релиз вручную:** после `git pull` — переустановить зависимости окружения (`pip install -e .` / эквивалент), чтобы подтянулся **`tzdata`**.
+
+```mermaid
+flowchart LR
+  W[Windows Python] --> Z[zoneinfo.ZoneInfo]
+  Z --> T["tzdata (IANA)"]
+  T --> L["Asia/Tbilisi → UTC"]
+```
+
 ## 2026-05-05 — myhome enricher: адаптеры, `*_lang`, `published_at` (Asia/Tbilisi → UTC), миграция 004
 
 - **Контекст:** домен [1] ПАРСИНГ — уточнение обогащения myhome: вынесен адаптерный пакет, языковые метки текстовых полей, единые правила даты публикации с грузинской локалью, идемпотентные обновления в репозитории.
