@@ -29,8 +29,8 @@
     },
     {
       "position": 4,
-      "title_ru": "Средняя цена (USD)",
-      "description_ru": "ROUND(AVG(price_usd), 2) по leads_client (NULL не учитываются).",
+      "title_ru": "Средняя цена объекта (USD)",
+      "description_ru": "Средняя цена в USD: ROUND(AVG(price_usd), 2) по leads_client (NULL не учитываются).",
       "display": "scalar",
       "sql": "SELECT ROUND(AVG(price_usd)::numeric, 2) AS avg_usd\nFROM leads_client\nWHERE price_usd IS NOT NULL;"
     },
