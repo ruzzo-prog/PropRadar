@@ -2,6 +2,34 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — P1 hotfix: `description` без HTML, `price_gel` / `price_usd`, миграция 006
+
+- **Контекст:** после API-first — в **`description`** попадали HTML-фрагменты (например **`<br />`**); цены нужно хранить явно в **двух валютах** с переименованием устаревшей колонки.
+- **Симптомы:** «грязный» текст описания в БД; путаница в именовании **`price_total_usd`** при фактической семантике USD из API.
+- **Реализация:** очистка HTML при маппинге **`description`** из ответа API; колонка **`price_gel`** (GEL из **`price.1`**), **`price_usd`** (USD из **`price.2`**, ранее **`price_total_usd`**); миграция **`migrations/006_add_price_gel_rename_price_usd.sql`** (после **005**).
+- **Проверка:** `@tester` — **PASS** (unit); интеграция к live API — **SKIP** по умолчанию (**`MYHOME_INTEGRATION=1`** — вручную при необходимости).
+- **Документация:** `CHANGELOG.md`, `README.md` (список миграций), `docs/METABASE_SETUP.md` (заметка про SQL), этот файл.
+- **Риски:** сохранённые в Metabase и прочие SQL, где фигурирует **`price_total_usd`**, нужно перевести на **`price_usd`**; при отчётах по цене в лари добавить **`price_gel`**.
+- **Релиз вручную:** применить **006** к **leads-db** сразу после **005**; при уже развёрнутом дашборде — проверить native-вопросы (см. Metabase-док).
+
+| Показатель | Статус |
+|------------|--------|
+| Unit | ✅ PASS |
+| Integration | ⏭️ SKIP (по умолчанию) |
+| Документация | 📜 обновлена |
+
+```mermaid
+flowchart LR
+  API["Statements API\nprice.1 / price.2"] --> M[Маппинг]
+  M --> G["price_gel"]
+  M --> U["price_usd\n(было price_total_usd)"]
+  HTML["HTML в тексте"] --> C[Очистка]
+  C --> D["description"]
+  G --> DB[(leads-db)]
+  U --> DB
+  D --> DB
+```
+
 ## 2026-05-05 — myhome.ge: API-first адаптер, очереди detail/phone/pdf, миграция 005
 
 - **Контекст:** домен [1] ПАРСИНГ — список и карточка **myhome** через **api-statements.tnet.ge**; телефон и PDF остаются на Playwright.
