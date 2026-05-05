@@ -12,8 +12,18 @@
 - **Pending enrichment / `phone`:** `list_pending_enrichment` для лидов **new** учитывает **`phone IS NULL OR phone = ''`**, чтобы пустая строка не исключала запись из очереди и enricher не завершался с **`enriched=0`** при наличии кандидатов; реализация — коммит **`8d347ce`** (@tester: `pytest`/`ruff` PASS, интеграция skipped).
 - **Windows / `zoneinfo`:** добавлена зависимость **`tzdata`** в **`pyproject.toml`**, чтобы **`ZoneInfo("Asia/Tbilisi")`** и пайплайн даты публикации myhome не падали на Windows без системной IANA-базы; проверено: **`ZoneInfo`** OK и **`scripts/run_myhome_enricher.py`** без ошибки (@tester PASS).
 
+### Changed
+
+- **Myhome / detail-очередь:** `list_pending_detail_enrichment` для **`source=myhome`**, **`status=new`** — условие **`address IS NULL OR price_gel IS NULL`**, чтобы после миграции **006** снова обрабатывались лиды без **`price_gel`** (Scanner **PASS**, @tester **PASS**).
+- **Myhome обогащение (архитектура):** поля карточки снимаются с **Statements API** (**`GET /v1/statements/{id}`**, см. **`myhome_api_schema.csv`**); телефон (**`phone/show`**) и PDF (**`page.pdf()`**) остаются на Playwright; очереди в БД разделены на **detail** / **phone** / **pdf** (миграция **`005_myhome_api_first.sql`**).
+- Enricher и репозиторий: идемпотентные обновления при повторном обогащении (не перезаписывать уже совпадающие значения).
+- Разбор `published_at` с текста страницы: интерпретация в **Asia/Tbilisi**, хранение **UTC** (`parse_published_at_from_text`).
+- Парсер списка myhome (`published_at` из API): нормализация к **UTC** для согласованности с enricher.
+- Выравнивание конфигурации Cursor (`.cursor/rules`, `.cursor/agents`, `.cursor/skills`) под канон PropRadar (`Docs/AI_GOVERNANCE.md`): единые пути `Docs/PropRadar_STATUS.md`, `Docs/INGRESS_ARCHITECTURE.md`, `Docs/AI_GOVERNANCE.md`; удалены отсылки к чужому репозиторию `dispatch-backend`.
+
 ### Added
 
+- **`scripts/backfill_price_gel.py`** — backfill **`price_gel`** для myhome: только **`status=new`** и **`price_gel IS NULL`**, тот же HTTP-путь, что у enricher (**`GET /v1/statements/{id}`**), параметр **`--limit`** (Scanner **PASS**, @tester **PASS**).
 - Myhome **API-first** и enricher: канон полей **`src/parsers/adapters/myhome/myhome_api_schema.csv`**; пакет **`src/parsers/adapters/myhome/`** (`parser.py`, `schema.py`, `enricher.py` с HTTP-деталями, `phone.py`, `pdf.py`, извлечение полей, локаль страницы, разбор даты публикации); фасады **`src/parsers/myhome.py`**, **`src/parsers/myhome_enricher.py`** (реэкспорт публичного API); миграция **`005_myhome_api_first.sql`**; очереди **`list_pending_detail_enrichment`** / **`list_pending_phone_enrichment`** / **`list_pending_pdf_enrichment`**; колонки **`geo_lat`**, **`geo_lng`**, **`listing_views`**, **`myhome_statement_json`**, **`pdf_url`**.
 - Миграция `migrations/004_add_text_lang_columns.sql`: колонки `address_lang`, `district_lang`, `description_lang` в `leads`.
 - Стартовый скелет приложения: `src/` (parsers, domain, repositories, services, api, config), `tests/`, `migrations/001_init_leads.sql`, `scripts/setup_venv.ps1`, Docker (`docker/infra`, `docker/tools`, `docker/app`), корневые `pyproject.toml`, `.env.example`, `.gitignore`, `.python-version`.
@@ -21,11 +31,3 @@
 - Парсер **myhome.ge**: `src/parsers/myhome.py`, `PostgresLeadRepository`, `migrations/002_add_myhome_listing_fields.sql`, `scripts/run_myhome_parser.py`, unit- и integration-тесты (`MYHOME_INTEGRATION=1` для live API); настройка `MYHOME_API_BASE_URL`.
 - Обогащение **myhome.ge**: `migrations/003_add_lead_details.sql`, `src/parsers/myhome_enricher.py`, `src/parsers/exceptions.py`, расширение `Lead` и `LeadRepository`, `scripts/myhome_login.py`, `scripts/run_myhome_enricher.py`, unit-тесты `tests/unit/test_myhome_enricher.py`; сессия Playwright в `scripts/myhome_session.json` (в `.gitignore`).
 - Минимальный unit-тест `tests/unit/test_api_health.py` для `GET /health`.
-
-### Changed
-
-- **Myhome обогащение (архитектура):** поля карточки снимаются с **Statements API** (**`GET /v1/statements/{id}`**, см. **`myhome_api_schema.csv`**); телефон (**`phone/show`**) и PDF (**`page.pdf()`**) остаются на Playwright; очереди в БД разделены на **detail** / **phone** / **pdf** (миграция **`005_myhome_api_first.sql`**).
-- Enricher и репозиторий: идемпотентные обновления при повторном обогащении (не перезаписывать уже совпадающие значения).
-- Разбор `published_at` с текста страницы: интерпретация в **Asia/Tbilisi**, хранение **UTC** (`parse_published_at_from_text`).
-- Парсер списка myhome (`published_at` из API): нормализация к **UTC** для согласованности с enricher.
-- Выравнивание конфигурации Cursor (`.cursor/rules`, `.cursor/agents`, `.cursor/skills`) под канон PropRadar (`Docs/AI_GOVERNANCE.md`): единые пути `Docs/PropRadar_STATUS.md`, `Docs/INGRESS_ARCHITECTURE.md`, `Docs/AI_GOVERNANCE.md`; удалены отсылки к чужому репозиторию `dispatch-backend`.

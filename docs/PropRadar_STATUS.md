@@ -2,6 +2,29 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — Backfill `price_gel` и очередь detail после миграции 006
+
+- **Контекст:** после **`migrations/006_add_price_gel_rename_price_usd.sql`** в **leads-db** часть строк остаётся с **`price_gel = NULL`**; обогащение деталями должно снова подхватывать такие записи наряду с пустым адресом.
+- **Сделано:** **`list_pending_detail_enrichment`** для **`source=myhome`**, **`status=new`**: **`address IS NULL OR price_gel IS NULL`**; скрипт **`scripts/backfill_price_gel.py`** — выборка только **`new`** с **`price_gel IS NULL`**, заполнение через тот же путь, что **Statements API** в enricher (**`--limit`**, 1–500).
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
+- **Документация:** `CHANGELOG.md`, `README.md`, этот файл.
+- **Релиз вручную:** после **006** при необходимости — `python scripts/backfill_price_gel.py` (доступны **DATABASE_URL** и API; PII не логировать).
+
+| Показатель | Статус |
+|------------|--------|
+| Scanner | ✅ PASS |
+| Unit / регрессия | 🧪 PASS (`@tester`) |
+| Документация | 📜 обновлена |
+
+```mermaid
+flowchart LR
+  M006[Миграция 006\nprice_gel / price_usd] --> Q[Detail-очередь\naddress NULL ∨ price_gel NULL]
+  M006 --> B[backfill_price_gel.py\nnew + price_gel NULL]
+  Q --> E[Enricher API detail]
+  B --> E
+  E --> DB[(leads-db)]
+```
+
 ## 2026-05-05 — Ретро-фикс (закрытие замечаний Diff Check, P1 hotfix)
 
 - **Контекст:** после **Diff Check** по горячему фиксу цен/описания оставались расхождения между артефактами репозитория и фактической схемой **`price_gel`** / **`price_usd`**.
