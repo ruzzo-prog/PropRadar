@@ -37,9 +37,12 @@ class Lead(BaseModel):
     published_at: datetime | None = None
     phone: str | None = Field(default=None, max_length=64)
     address: str | None = None
+    address_lang: str | None = Field(default=None, max_length=8)
     district: str | None = None
+    district_lang: str | None = Field(default=None, max_length=8)
     area_m2: Decimal | None = Field(default=None, ge=0)
     rooms: int | None = Field(default=None, ge=0)
     floor: str | None = Field(default=None, max_length=64)
     description: str | None = None
+    description_lang: str | None = Field(default=None, max_length=8)
     is_owner: bool = False

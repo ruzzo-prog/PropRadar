@@ -47,11 +47,14 @@ class LeadORM(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     phone: Mapped[str | None] = mapped_column(Text(), nullable=True)
     address: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    address_lang: Mapped[str | None] = mapped_column(String(8), nullable=True)
     district: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    district_lang: Mapped[str | None] = mapped_column(String(8), nullable=True)
     area_m2: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     rooms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     floor: Mapped[str | None] = mapped_column(String(64), nullable=True)
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    description_lang: Mapped[str | None] = mapped_column(String(8), nullable=True)
     is_owner: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default=text("false"))
 
 
@@ -70,11 +73,14 @@ def _to_domain(row: LeadORM) -> Lead:
         published_at=row.published_at,
         phone=row.phone,
         address=row.address,
+        address_lang=row.address_lang,
         district=row.district,
+        district_lang=row.district_lang,
         area_m2=row.area_m2,
         rooms=row.rooms,
         floor=row.floor,
         description=row.description,
+        description_lang=row.description_lang,
         is_owner=row.is_owner,
     )
 
@@ -126,11 +132,14 @@ class PostgresLeadRepository(LeadRepository):
             published_at=entity.published_at,
             phone=entity.phone,
             address=entity.address,
+            address_lang=entity.address_lang,
             district=entity.district,
+            district_lang=entity.district_lang,
             area_m2=entity.area_m2,
             rooms=entity.rooms,
             floor=entity.floor,
             description=entity.description,
+            description_lang=entity.description_lang,
             is_owner=entity.is_owner,
         )
         with self._sessions.factory() as session:
@@ -166,14 +175,30 @@ class PostgresLeadRepository(LeadRepository):
             if row is None:
                 msg = "лид не найден"
                 raise ValueError(msg)
-            row.phone = entity.phone
-            row.address = entity.address
-            row.district = entity.district
-            row.area_m2 = entity.area_m2
-            row.rooms = entity.rooms
-            row.floor = entity.floor
-            row.description = entity.description
-            row.is_owner = entity.is_owner
+            if entity.phone is not None:
+                row.phone = entity.phone
+            if entity.address is not None:
+                row.address = entity.address
+            if entity.address_lang is not None:
+                row.address_lang = entity.address_lang
+            if entity.district is not None:
+                row.district = entity.district
+            if entity.district_lang is not None:
+                row.district_lang = entity.district_lang
+            if entity.area_m2 is not None:
+                row.area_m2 = entity.area_m2
+            if entity.rooms is not None:
+                row.rooms = entity.rooms
+            if entity.floor is not None:
+                row.floor = entity.floor
+            if entity.description is not None:
+                row.description = entity.description
+            if entity.description_lang is not None:
+                row.description_lang = entity.description_lang
+            if entity.published_at is not None:
+                row.published_at = entity.published_at
+            if entity.is_owner is True:
+                row.is_owner = True
             row.updated_at = datetime.now(UTC)
             session.commit()
             session.refresh(row)
