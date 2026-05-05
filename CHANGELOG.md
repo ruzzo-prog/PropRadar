@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Verified
+
+- **Myhome / цены (закрытие цикла):** контрольная точка **3** — **PASS**; **Smoke** подтверждён человеком; для **20** лидов **`price_usd`** и **`price_gel`** совпадают с ожиданием; задача закрыта.
+
 ### Fixed
 
 - **Ретро после P1 hotfix (Diff Check):** в **`metabase/propradar_dashboard.json`** SQL переведены с **`price_total_usd`** на **`price_usd`**; **`data/myhome_pdf/`** в **`.gitignore`** (PDF enricher не коммитятся); **`src/parsers/adapters/myhome/myhome_api_schema.csv`** согласован с **`price_gel`** / **`price_usd`** (@tester **PASS**).
