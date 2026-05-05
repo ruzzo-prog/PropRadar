@@ -13,20 +13,17 @@ class Repository(ABC, Generic[T]):
     """Базовый репозиторий (доступ к персистентности). Конкретные реализации — отдельные классы."""
 
     @abstractmethod
-    def get_by_id(self, entity_id: UUID) -> T | None:
-        ...
+    def get_by_id(self, entity_id: UUID) -> T | None: ...
 
     @abstractmethod
-    def save(self, entity: T) -> T:
-        ...
+    def save(self, entity: T) -> T: ...
 
 
 class LeadRepository(Repository[Lead], ABC):
     """Порт хранения лидов."""
 
     @abstractmethod
-    def get_by_source_and_external_id(self, source: str, external_id: str) -> Lead | None:
-        ...
+    def get_by_source_and_external_id(self, source: str, external_id: str) -> Lead | None: ...
 
     @abstractmethod
     def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:

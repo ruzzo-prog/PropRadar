@@ -59,8 +59,9 @@ def parse_published_at_from_text(
 
     if today_m:
         h, mi = int(today_m.group(1)), int(today_m.group(2))
-        candidates.append(datetime(
-            base_date.year, base_date.month, base_date.day, h, mi, 0, tzinfo=TBILISI))
+        candidates.append(
+            datetime(base_date.year, base_date.month, base_date.day, h, mi, 0, tzinfo=TBILISI)
+        )
     if yesterday_m:
         h, mi = int(yesterday_m.group(1)), int(yesterday_m.group(2))
         yd = base_date - timedelta(days=1)
