@@ -2,6 +2,41 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-06 — P1 hotfix: `setup_metabase_dashboard.py` создаёт все 10 карточек
+
+- **Контекст:** скрипт подключал к дашборду только **6** карточек по фиксированным заголовкам; карточки sync (**8–10**) и **«Средняя цена (GEL)»** не создавались.
+- **Реализация:** итерация по полному массиву **`cards`** из bundle, сортировка по **`position`**, логирование шага для каждой карточки, явная сетка **`_LAYOUT_BY_POSITION`** для позиций **1–10**. Файл: **`scripts/setup_metabase_dashboard.py`** только.
+- **Проверка:** импорт модуля и assert: **10** карточек в bundle, ключи layout **1–10**; **ruff** — OK.
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Hotfix scope | `setup_metabase_dashboard.py` |
+| Регресс bundle JSON | не менялся |
+
+## 2026-05-06 — Myhome: n8n-синхронизация, `status_reason`, CLI (Scanner PASS, цепочка до release-check)
+
+- **Контекст:** автоматизированное расписание парсинга myhome через n8n; сверка «исчезнувших» с API; фиксация причины в БД; WhatsApp из n8n (Evolution), не из Python.
+- **Реализация:** миграция **010** (колонка `status_reason`); `scripts/fetch_myhome_ids.py`, `scripts/sync_myhome_status.py` (подкоманды `discover` / `mark-rejected`); флаг `--ingest-ids-json` в `scripts/run_myhome_parser.py`; модули `list_ids`, `ingest_detail`; расширение репозитория и домена `Lead`; `docs/n8n_myhome_workflow.md`; `README.md` — порядок миграций включает **010**. Без правок `src/parsers/base.py`, `docker/`, governance вне scope.
+- **Проверка:** **Scanner** — **PASS** (подтверждение человека); **`pytest tests`** — **30 passed**, **2 skipped** (live myhome); ретесты после hotfix (**ingest** / **`sync_myhome_status`**) включены.
+- **Документация:** `CHANGELOG.md`, `docs/n8n_myhome_workflow.md`, этот файл.
+- **Условия перед деплоем:** применить `migrations/010_add_status_reason_to_leads.sql` на leads-db; настроить узлы n8n по `docs/n8n_myhome_workflow.md`; smoke WhatsApp вручную.
+
+| Показатель | Статус |
+|------------|--------|
+| Scanner | ✅ PASS |
+| QA (`pytest`) | 🧪 30 passed, 2 skipped |
+| Документация | 📜 обновлена |
+| Готовность к деплою | PASS WITH CONDITIONS (см. `@release-check`) |
+
+```mermaid
+flowchart LR
+  F[fetch_myhome_ids] --> P[run_myhome_parser / ingest]
+  F --> D[sync discover]
+  D --> W[Evolution WhatsApp]
+  W --> M[mark-rejected]
+```
+
 ## 2026-05-06 — Финализация myhome/leads_client: КТ3 PASS, smoke подтверждён
 
 - **Контекст:** после миграций **008/009** и серии P1 hotfix по Metabase карточке **7** зафиксирован итоговый рабочий контур клиентской выдачи.

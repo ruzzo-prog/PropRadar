@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 
 import httpx
 
 from config.settings import Settings
+from parsers.adapters.myhome.ingest_detail import ingest_new_leads_by_detail_ids
 from parsers.myhome import MyHomeParser
 from repositories.postgres_lead_repository import (
     PostgresLeadRepository,
@@ -27,14 +30,30 @@ def _ping_db(sessions: PostgresSessionFactory) -> None:
         conn.execute(text("SELECT 1"))
 
 
-async def _async_main() -> None:
+async def _async_main(*, ingest_ids_json: Path | None) -> None:
     settings = Settings()
     sessions = PostgresSessionFactory.from_database_url(str(settings.database_url))
     _ping_db(sessions)
     repo = PostgresLeadRepository(sessions)
+    base_url = str(settings.myhome_api_base_url)
     async with httpx.AsyncClient() as client:
-        parser = MyHomeParser(client, repo, base_url=str(settings.myhome_api_base_url))
-        report = await parser.run()
+        if ingest_ids_json is not None:
+            raw = ingest_ids_json.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            if not isinstance(data, list):
+                msg = "--ingest-ids-json: ожидается JSON-массив"
+                raise ValueError(msg)
+            ids = [str(x).strip() for x in data if x is not None]
+            ids = [x for x in ids if x]
+            report = await ingest_new_leads_by_detail_ids(
+                client,
+                repo,
+                base_url=base_url,
+                external_ids=ids,
+            )
+        else:
+            parser = MyHomeParser(client, repo, base_url=base_url)
+            report = await parser.run()
     print(
         json.dumps(
             {"parsed": report.parsed, "new": report.new, "errors": report.errors},
@@ -44,8 +63,16 @@ async def _async_main() -> None:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="Парсер myhome для n8n.")
+    ap.add_argument(
+        "--ingest-ids-json",
+        type=Path,
+        default=None,
+        help="JSON-массив external_id: ингест только этих ID через GET /v1/statements/{id}.",
+    )
+    cli = ap.parse_args()
     try:
-        asyncio.run(_async_main())
+        asyncio.run(_async_main(ingest_ids_json=cli.ingest_ids_json))
     except httpx.HTTPError:
         print(
             json.dumps({"parsed": 0, "new": 0, "errors": ["http_error"]}, ensure_ascii=False),

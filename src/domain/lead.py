@@ -28,6 +28,7 @@ class Lead(BaseModel):
     source: str = Field(..., min_length=1, max_length=64)
     external_id: str = Field(..., min_length=1, max_length=256)
     status: LeadStatus = LeadStatus.NEW
+    status_reason: str | None = Field(default=None, max_length=128)
     score: Score = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None

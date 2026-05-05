@@ -23,6 +23,20 @@ import httpx
 DASHBOARD_NAME = "PropRadar — Лиды"
 _LOGGER = logging.getLogger("setup_metabase_dashboard")
 
+# Сетка дашборда (row, col, size_x, size_y), 12 колонок; ключ — position из propradar_dashboard.json
+_LAYOUT_BY_POSITION: dict[int, tuple[int, int, int, int]] = {
+    1: (3, 0, 6, 4),  # Воронка лидов (bar)
+    2: (0, 0, 4, 3),  # Лиды сегодня
+    3: (0, 4, 4, 3),  # Новых за 7 дней
+    4: (0, 8, 4, 3),  # Средняя цена USD
+    5: (1, 0, 4, 3),  # Средняя цена GEL
+    6: (3, 6, 6, 4),  # Лиды по дням (line)
+    7: (7, 0, 12, 8),  # Последние лиды (table)
+    8: (15, 0, 4, 3),  # Исчезнувшие (scalar)
+    9: (16, 0, 12, 4),  # Причины отклонения (bar)
+    10: (15, 4, 4, 3),  # Последний запуск синхронизации (scalar)
+}
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -96,12 +110,21 @@ def _find_database_id(client: httpx.Client, name: str) -> int:
     raise RuntimeError(msg)
 
 
-def _card_by_title(bundle: dict[str, Any], title: str) -> dict[str, Any]:
-    for c in bundle.get("cards", []):
-        if isinstance(c, dict) and c.get("title_ru") == title:
-            return c
-    msg = f"В propradar_dashboard.json нет карточки «{title}»"
-    raise KeyError(msg)
+def _sorted_bundle_cards(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = bundle.get("cards", [])
+    if not isinstance(raw, list):
+        return []
+    items: list[tuple[int, dict[str, Any]]] = []
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        try:
+            pos = int(c.get("position", 0))
+        except (TypeError, ValueError):
+            continue
+        items.append((pos, c))
+    items.sort(key=lambda t: t[0])
+    return [c for _, c in items]
 
 
 def _create_native_card(
@@ -218,17 +241,18 @@ def main() -> int:
         database_id = _find_database_id(client, db_name)
         _LOGGER.info("Используется база Metabase id=%s name=%s", database_id, db_name)
 
-        titles_order = [
-            "Лиды сегодня",
-            "Новых за 7 дней",
-            "Средняя цена объекта (USD)",
-            "Воронка лидов",
-            "Лиды по дням",
-            "Последние лиды",
-        ]
-        card_ids: dict[str, int] = {}
-        for title in titles_order:
-            spec = _card_by_title(bundle, title)
+        card_specs = _sorted_bundle_cards(bundle)
+        _LOGGER.info("В bundle загружено карточек: %s", len(card_specs))
+
+        card_ids_by_position: dict[int, int] = {}
+        for spec in card_specs:
+            try:
+                pos = int(spec["position"])
+            except (KeyError, TypeError, ValueError) as exc:
+                _LOGGER.error("Карточка без корректного position: %s", exc)
+                raise RuntimeError("bundle: невалидное поле position") from exc
+            title = str(spec.get("title_ru", f"position_{pos}"))
+            _LOGGER.info("Processing card %s %s", pos, title)
             sql_text = str(spec["sql"])
             display = str(spec.get("display", "table"))
             desc = str(spec.get("description_ru", ""))
@@ -240,8 +264,8 @@ def main() -> int:
                 sql_text=sql_text,
                 display=display,
             )
-            card_ids[title] = cid
-            _LOGGER.info("Создана карточка «%s» id=%s", title, cid)
+            card_ids_by_position[pos] = cid
+            _LOGGER.info("Создана карточка «%s» (position=%s) id=%s", title, pos, cid)
 
         dash_body = {"name": DASHBOARD_NAME, "parameters": []}
         dr = client.post("/api/dashboard", json=dash_body)
@@ -254,15 +278,15 @@ def main() -> int:
             return 1
         _LOGGER.info("Создан дашборд «%s» id=%s", DASHBOARD_NAME, dashboard_id)
 
-        layout: list[tuple[str, int, int, int, int]] = [
-            ("Лиды сегодня", 0, 0, 4, 3),
-            ("Новых за 7 дней", 0, 4, 4, 3),
-            ("Средняя цена объекта (USD)", 0, 8, 4, 3),
-            ("Воронка лидов", 3, 0, 6, 4),
-            ("Лиды по дням", 3, 6, 6, 4),
-            ("Последние лиды", 7, 0, 12, 8),
-        ]
-        layout_payload = [(card_ids[title], row, col, sx, sy) for title, row, col, sx, sy in layout]
+        layout_payload: list[tuple[int, int, int, int, int]] = []
+        for pos in sorted(card_ids_by_position.keys()):
+            geom = _LAYOUT_BY_POSITION.get(pos)
+            if geom is None:
+                _LOGGER.error("Нет layout для position=%s — добавьте в _LAYOUT_BY_POSITION", pos)
+                raise RuntimeError(f"Нет раскладки для карточки position={pos}")
+            row, col, sx, sy = geom
+            cid = card_ids_by_position[pos]
+            layout_payload.append((cid, row, col, sx, sy))
         _put_dashboard_dashcards(client, dashboard_id, layout_payload)
         _LOGGER.info("На дашборд добавлено карточек: %s", len(layout_payload))
 

@@ -1,7 +1,7 @@
 {
   "prop_radar_metabase_bundle_version": "1.0",
   "dashboard_title_ru": "PropRadar — мониторинг лидов",
-  "schema_reference": "migrations/008_recreate_leads_client_v2.sql + migrations/009_add_city_name_to_leads_client.sql (PostgreSQL 15): leads_client — проекция leads; PK (source, external_id); 28 столбцов: source, external_id, synced_at, status, score, phone, address, city_name (myhome_statement_json->>'city_name'), owner_name (->>'owner_name'), district_name, area_m2, rooms, bedrooms, floor, total_floors, comment (из leads.description), is_owner, price_gel, price_usd, price_m2_usd, published_at, geo_lat, geo_lng, listing_views, pdf_url, dynamic_title, urban_name, images (JSONB). city_name/owner_name не из leads.city_name. Нет lead_id / source_listing_uuid / языковых *_lang. Даты для срезов — COALESCE(published_at, synced_at).",
+  "schema_reference": "migrations/008_recreate_leads_client_v2.sql + migrations/009_add_city_name_to_leads_client.sql + migrations/010_add_status_reason_to_leads.sql (PostgreSQL 15). Проекция leads_client (карточки 1–7): PK (source, external_id); 28 столбцов: source, external_id, synced_at, status, score, phone, address, city_name (myhome_statement_json->>'city_name'), owner_name (->>'owner_name'), district_name, area_m2, rooms, bedrooms, floor, total_floors, comment (из leads.description), is_owner, price_gel, price_usd, price_m2_usd, published_at, geo_lat, geo_lng, listing_views, pdf_url, dynamic_title, urban_name, images (JSONB). city_name/owner_name не из leads.city_name. Нет lead_id / source_listing_uuid / языковых *_lang. Даты для срезов — COALESCE(published_at, synced_at). Таблица leads (карточки 8–10): добавлено поле status_reason (VARCHAR, machine-readable причина статуса, напр. disappeared_from_api); нативный SQL идёт напрямую к leads, не к leads_client.",
   "timezone_note": "В SQL ниже даты нормализуются к дате в UTC. При необходимости смените на вашу таймзону в Metabase (Admin → Localization).",
   "status_note_ru": "В БД хранятся литералы статуса: new, contacted, qualified, rejected, converted. Это не совпадает с абстрактной воронкой contact/sent/deal/lost без отдельной миграции домена.",
   "import_instructions_ru": "Стандартный OSS Metabase не импортирует этот файл одной кнопкой. Создайте Dashboard вручную и добавьте вопросы типа «Native query» по SQL из полей sql каждой карточки, либо используйте Metabase Serialization/API под вашу версию. Подробности: docs/METABASE_SETUP.md.",
@@ -55,6 +55,27 @@
       "display": "table",
       "operator_instructions_ru": "Регулируемая высота и прокрутка таблицы задаются в интерфейсе Metabase, а не в этом JSON: на дашборде растяните карточку по высоте за край; в настройках вопроса/визуализации таблицы проверьте опции отображения (зависят от версии Metabase, OSS может ограничивать «внутренний» scroll). Для фиксированной области с overflow используйте визуализацию с поддержкой scroll при вашей сборке или ограничивайте LIMIT в SQL.",
       "sql": "SELECT external_id AS \"ID\",\n       source AS \"Источник\",\n       status AS \"Статус\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       city_name AS \"Город\",\n       owner_name AS \"Имя владельца\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты\",\n       floor AS \"Этаж\",\n       total_floors AS \"Этажность\",\n       LEFT(comment, 200) AS \"Комментарий\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
+    },
+    {
+      "position": 8,
+      "title_ru": "Исчезнувшие объявления (неделя)",
+      "description_ru": "Число лидов myhome, переведённых в rejected с причиной disappeared_from_api за последние 7 суток по updated_at (таблица leads).",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected'\n  AND status_reason = 'disappeared_from_api'\n  AND updated_at >= (now() - interval '7 days');"
+    },
+    {
+      "position": 9,
+      "title_ru": "Причины отклонения лидов",
+      "description_ru": "Распределение status_reason для отклонённых лидов myhome (таблица leads). NULL не включаются.",
+      "display": "bar",
+      "sql": "SELECT status_reason,\n       COUNT(*)::bigint AS cnt\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected'\n  AND status_reason IS NOT NULL\nGROUP BY status_reason\nORDER BY cnt DESC;"
+    },
+    {
+      "position": 10,
+      "title_ru": "Последний запуск синхронизации",
+      "description_ru": "MAX(updated_at) по отклонённым лидам myhome (прокси «последней пометки rejected»); не журнал n8n. При отсутствии строк может быть пусто.",
+      "display": "scalar",
+      "sql": "SELECT MAX(updated_at) AS last_sync\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected';"
     }
   ]
 }

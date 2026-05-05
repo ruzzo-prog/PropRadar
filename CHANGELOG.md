@@ -6,6 +6,7 @@
 
 ### Verified
 
+- **Myhome / n8n-синхронизация (список ID, discover, ingest по detail):** **Scanner** — **PASS**; **`pytest tests`** — **30 passed**, **2 skipped** (интеграция myhome); цепочка до **`@release-check`** завершена в сессии 2026-05-06.
 - **Leads client / migration 009:** контрольная точка **3** — **PASS**; smoke подтверждён человеком; `city_name` и `owner_name` синхронизируются из statement JSON, Metabase карточка 7 использует их в клиентской выдаче.
 - **Leads client v2 / миграция 008:** пересоздание **`leads_client`** под контракт **v2**; **Scanner** — **PASS**; **`@tester`** — **PASS**.
 - **Myhome / цены (закрытие цикла):** контрольная точка **3** — **PASS**; **Smoke** подтверждён человеком; для **20** лидов **`price_usd`** и **`price_gel`** совпадают с ожиданием; задача закрыта.
@@ -14,6 +15,9 @@
 
 ### Fixed
 
+- **P1 / `scripts/setup_metabase_dashboard.py`:** дашборд собирался только из жёсткого списка из **6** заголовков — игнорировались **«Средняя цена (GEL)»** и карточки **8–10** из **`metabase/propradar_dashboard.json`**. Исправление: чтение **всех** элементов **`cards`**, сортировка по **`position`**, лог **`Processing card {position} {title_ru}`**, раскладка **`_LAYOUT_BY_POSITION`** для позиций **1–10** (@tester: проверка загрузки bundle и ключей layout).
+- **`sync_myhome_status.py`:** ошибки CLI (**`parser.error`**, **`SystemExit`**) не перехватывались как **`Exception`** → при неверных аргументах выводится JSON ошибки и код выхода **2** вместо traceback; в **`cmd_discover`** для пустого источника API — **`ValueError`**; интеграционная проверка — **`tests/unit/test_sync_myhome_status_cli.py`** (@tester **PASS**).
+- **`ingest_detail`:** в БД сохраняется тот же **`external_id`**, что в запросе к **`GET /v1/statements/{id}`**; при расхождении с **`statement.id`** — запись без save и код **`detail_id_mismatch`** (@tester **PASS**).
 - **P1 / Metabase (карточка 7, колонки города и владельца):** в **`metabase/propradar_dashboard.json`** для позиции **7** колонка **«Город»** переведена на **`city_name`** (вместо **`urban_name`**); добавлен **`owner_name`** (**«Имя владельца»**) (@tester **PASS**).
 - **P1 / Metabase (карточка 7 «Последние лиды»):** в **`metabase/propradar_dashboard.json`** SQL позиции **7** выводит только **клиентские** столбцы **`leads_client`**; убраны **`lead_id`** и служебные/технические поля из представления таблицы (@tester **PASS**).
 - **P1 / Metabase (KeyError):** **`title_ru`** скаляра USD в **`metabase/propradar_dashboard.json`** синхронизирован со скриптом **`scripts/setup_metabase_dashboard.py`** (**`Средняя цена объекта (USD)`**); устранено падение при автосборке дашборда (@tester **PASS**).
@@ -36,6 +40,9 @@
 
 ### Added
 
+- **Myhome / оркестрация n8n:** **`scripts/fetch_myhome_ids.py`** (полный список ID или окно **`--since-days`**); **`scripts/sync_myhome_status.py`** (подкоманды **`discover`**, **`mark-rejected`**); **`docs/n8n_myhome_workflow.md`** — сценарий Schedule → fetch → парсер → discover → Evolution API → mark-rejected. Без секретов Evolution в репозитории.
+- **Миграция `migrations/010_add_status_reason_to_leads.sql`:** колонка **`status_reason`** в **`leads`** (код причины, например **`disappeared_from_api`**). Домен **`Lead.status_reason`**; репозиторий: **`list_external_ids_by_source_and_status`**, **`mark_leads_by_external_ids`** (только из **`status=new`**).
+- **Пакеты myhome:** **`src/parsers/adapters/myhome/list_ids.py`** (постраничный список API), **`ingest_detail.py`** (ингест по detail ID). **`scripts/run_myhome_parser.py`:** опция **`--ingest-ids-json`**. Unit-тесты: **`tests/unit/test_myhome_list_ids.py`**, **`tests/unit/test_ingest_detail.py`**, **`tests/unit/test_sync_myhome_status_cli.py`**.
 - **`leads_client` / миграция 009:** колонки **`city_name`** и **`owner_name`** в проекции; backfill и синхронизация из **`leads.myhome_statement_json`** по ключам **`city_name`** / **`owner_name`** (соединение **`(source, external_id)`**); **`sync_leads_client_from_lead`** — маппинг в **INSERT** и **ON CONFLICT DO UPDATE**; источник — только JSON statement (**не** **`leads.city_name`**). Файл: **`migrations/009_add_city_name_to_leads_client.sql`** (после **008**).
 
 - **Проекция `leads_client`:** таблица денормализованного представления **`leads`** для клиентских выборок; миграция **`migrations/007_create_leads_client_table.sql`** (после **006**): функция **`sync_leads_client_from_lead`**, триггер **`trg_leads_sync_client`** на **`leads`** (**INSERT**/**UPDATE**), индексы на **`external_id`** и **`district_name`**, начальное заполнение из **`leads`** (Scanner **PASS**, @tester **PASS**).

@@ -46,6 +46,38 @@ class FakeLeadRepo(LeadRepository):
         self.enrich_updates.append(entity)
         return entity
 
+    def list_external_ids_by_source_and_status(
+        self,
+        source: str,
+        status: LeadStatus,
+    ) -> list[str]:
+        return [
+            ext
+            for (src, ext), lead in self.by_key.items()
+            if src == source and lead.status == status
+        ]
+
+    def mark_leads_by_external_ids(
+        self,
+        source: str,
+        external_ids: list[str],
+        *,
+        status: LeadStatus,
+        status_reason: str | None = None,
+    ) -> int:
+        n = 0
+        for ext in external_ids:
+            key = (source, ext)
+            lead = self.by_key.get(key)
+            if lead is None or lead.status != LeadStatus.NEW:
+                continue
+            upd = lead.model_copy(update={"status": status, "status_reason": status_reason})
+            self.by_key[key] = upd
+            if lead.id is not None:
+                self.by_id[lead.id] = upd
+            n += 1
+        return n
+
 
 @pytest.mark.asyncio
 async def test_parse_lead_extracts_fields() -> None:

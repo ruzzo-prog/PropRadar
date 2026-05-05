@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Integer, String, and_, func, or_, select, text
+from sqlalchemy import Integer, String, and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Engine
@@ -31,6 +31,7 @@ class LeadORM(Base):
     source: Mapped[str] = mapped_column(String(64))
     external_id: Mapped[str] = mapped_column(String(256))
     status: Mapped[str] = mapped_column(String(32))
+    status_reason: Mapped[str | None] = mapped_column(String(128), nullable=True)
     score: Mapped[int] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -71,6 +72,7 @@ def _to_domain(row: LeadORM) -> Lead:
         source=row.source,
         external_id=row.external_id,
         status=LeadStatus(row.status),
+        status_reason=row.status_reason,
         score=row.score,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -140,6 +142,7 @@ class PostgresLeadRepository(LeadRepository):
             source=entity.source,
             external_id=entity.external_id,
             status=entity.status.value,
+            status_reason=entity.status_reason,
             score=entity.score,
             source_listing_uuid=entity.source_listing_uuid,
             price_gel=entity.price_gel,
@@ -289,3 +292,43 @@ class PostgresLeadRepository(LeadRepository):
             session.commit()
             session.refresh(row)
             return _to_domain(row)
+
+    def list_external_ids_by_source_and_status(
+        self,
+        source: str,
+        status: LeadStatus,
+    ) -> list[str]:
+        with self._sessions.factory() as session:
+            stmt = select(LeadORM.external_id).where(
+                LeadORM.source == source,
+                LeadORM.status == status.value,
+            )
+            return list(session.scalars(stmt).all())
+
+    def mark_leads_by_external_ids(
+        self,
+        source: str,
+        external_ids: list[str],
+        *,
+        status: LeadStatus,
+        status_reason: str | None = None,
+    ) -> int:
+        if not external_ids:
+            return 0
+        with self._sessions.factory() as session:
+            stmt = (
+                update(LeadORM)
+                .where(
+                    LeadORM.source == source,
+                    LeadORM.external_id.in_(external_ids),
+                    LeadORM.status == LeadStatus.NEW.value,
+                )
+                .values(
+                    status=status.value,
+                    status_reason=status_reason,
+                    updated_at=datetime.now(UTC),
+                )
+            )
+            result = session.execute(stmt)
+            session.commit()
+            return int(result.rowcount or 0)
