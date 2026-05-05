@@ -81,7 +81,7 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 ### Проекция `leads_client` (миграция 007) и bundle дашборда
 
-Таблица **`leads_client`** — денормализованная проекция **`leads`** (синхронизация триггером). Текущий **`metabase/propradar_dashboard.json`**: все карточки читают **`FROM leads_client`**; средние цены — **`AVG(price_usd)`** / **`AVG(price_gel)`**; временные срезы — по **`COALESCE(published_at, synced_at)`** (в проекции нет **`created_at`**). Карточка **«Последние лиды»** — таблица с **`LIMIT 20`**.
+Таблица **`leads_client`** — денормализованная проекция **`leads`** (синхронизация триггером). Текущий **`metabase/propradar_dashboard.json`**: все карточки читают **`FROM leads_client`**; средние цены — **`AVG(price_usd)`** / **`AVG(price_gel)`**; временные срезы — по **`COALESCE(published_at, synced_at)`** (в проекции нет **`created_at`**). Карточка **«Последние лиды»** (**`position` 7** в массиве **`cards`**) — таблица с **`LIMIT 20`**; после P1 hotfix в SQL **нет** **`lead_id`** и нет служебных/технических колонок — только поля, предназначенные для клиентского просмотра (точный список — поле **`sql`** у этой карточки в JSON).
 
 **Высота карточки и прокрутка таблицы:** задаются в UI Metabase (растянуть плитку на дашборде; опции визуализации зависят от версии; OSS может не давать «внутренний» scroll). Подробнее — поле **`operator_instructions_ru`** у соответствующей карточки в JSON.
 

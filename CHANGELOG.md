@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- **P1 / Metabase (карточка 7 «Последние лиды»):** в **`metabase/propradar_dashboard.json`** SQL позиции **7** выводит только **клиентские** столбцы **`leads_client`**; убраны **`lead_id`** и служебные/технические поля из представления таблицы (@tester **PASS**).
 - **P1 / Metabase (KeyError):** **`title_ru`** скаляра USD в **`metabase/propradar_dashboard.json`** синхронизирован со скриптом **`scripts/setup_metabase_dashboard.py`** (**`Средняя цена объекта (USD)`**); устранено падение при автосборке дашборда (@tester **PASS**).
 - **Ретро после P1 hotfix (Diff Check):** в **`metabase/propradar_dashboard.json`** SQL переведены с **`price_total_usd`** на **`price_usd`**; **`data/myhome_pdf/`** в **`.gitignore`** (PDF enricher не коммитятся); **`src/parsers/adapters/myhome/myhome_api_schema.csv`** согласован с **`price_gel`** / **`price_usd`** (@tester **PASS**).
 - **Myhome / `description`:** при маппинге из API удаляются HTML-теги (в т.ч. **`<br />`**), чтобы в **leads-db** сохранялся обычный текст (@tester: unit **PASS**, интеграция **SKIP**).
