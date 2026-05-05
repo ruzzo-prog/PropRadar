@@ -1,7 +1,7 @@
 {
   "prop_radar_metabase_bundle_version": "1.0",
   "dashboard_title_ru": "PropRadar — мониторинг лидов",
-  "schema_reference": "migrations/007_create_leads_client_table.sql (PostgreSQL 15): таблица leads_client — денормализованная проекция (PK lead_id). Ключевые столбцы: source, external_id, status, score, district_name, urban_name, area_m2, rooms, price_gel, price_usd, price_m2_usd, published_at, synced_at, geo_lat, geo_lng, listing_views, pdf_url, images (JSONB). Временные ряды и «сегодня» — по COALESCE(published_at, synced_at), не по created_at (его нет в проекции).",
+  "schema_reference": "migrations/008_recreate_leads_client_v2.sql (PostgreSQL 15): leads_client — проекция leads; PK (source, external_id); 26 столбцов: source, external_id, synced_at, status, score, phone, address, district_name, area_m2, rooms, bedrooms, floor, total_floors, comment (из leads.description), is_owner, price_gel, price_usd, price_m2_usd, published_at, geo_lat, geo_lng, listing_views, pdf_url, dynamic_title, urban_name, images (JSONB). Нет lead_id / source_listing_uuid / языковых *_lang. Даты для срезов — COALESCE(published_at, synced_at).",
   "timezone_note": "В SQL ниже даты нормализуются к дате в UTC. При необходимости смените на вашу таймзону в Metabase (Admin → Localization).",
   "status_note_ru": "В БД хранятся литералы статуса: new, contacted, qualified, rejected, converted. Это не совпадает с абстрактной воронкой contact/sent/deal/lost без отдельной миграции домена.",
   "import_instructions_ru": "Стандартный OSS Metabase не импортирует этот файл одной кнопкой. Создайте Dashboard вручную и добавьте вопросы типа «Native query» по SQL из полей sql каждой карточки, либо используйте Metabase Serialization/API под вашу версию. Подробности: docs/METABASE_SETUP.md.",
@@ -51,10 +51,10 @@
     {
       "position": 7,
       "title_ru": "Последние лиды",
-      "description_ru": "Таблица: lead_id, источник, статус, город (urban_name), площадь (area_m2), цена USD, время (published_at при отсутствии — synced_at). Сортировка по времени убыв.",
+      "description_ru": "Таблица: ID (external_id), источник (source), адрес и район, город (urban_name), контакт, цены, площадь, комнаты (rooms + bedrooms из JSON), этаж/этажность, комментарий (comment). Время — COALESCE(published_at, synced_at). Сортировка по времени убыв.",
       "display": "table",
       "operator_instructions_ru": "Регулируемая высота и прокрутка таблицы задаются в интерфейсе Metabase, а не в этом JSON: на дашборде растяните карточку по высоте за край; в настройках вопроса/визуализации таблицы проверьте опции отображения (зависят от версии Metabase, OSS может ограничивать «внутренний» scroll). Для фиксированной области с overflow используйте визуализацию с поддержкой scroll при вашей сборке или ограничивайте LIMIT в SQL.",
-      "sql": "SELECT external_id AS \"ID\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       urban_name AS \"Город\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
+      "sql": "SELECT external_id AS \"ID\",\n       source AS \"Источник\",\n       status AS \"Статус\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       urban_name AS \"Город\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты (ядро)\",\n       bedrooms AS \"Комнаты (JSON)\",\n       floor AS \"Этаж\",\n       total_floors AS \"Этажность\",\n       LEFT(comment, 200) AS \"Комментарий\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
     }
   ]
 }
