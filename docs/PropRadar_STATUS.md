@@ -2,6 +2,25 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — myhome.ge: API-first адаптер, очереди detail/phone/pdf, миграция 005
+
+- **Контекст:** домен [1] ПАРСИНГ — список и карточка **myhome** через **api-statements.tnet.ge**; телефон и PDF остаются на Playwright.
+- **Реализация:** `src/parsers/adapters/myhome/myhome_api_schema.csv` (SoT полей); `parser.py`, `schema.py`, `enricher.py` (GET `/v1/statements/{id}`), `phone.py`, `pdf.py`; фасады `src/parsers/myhome.py`, `src/parsers/myhome_enricher.py`; `migrations/005_myhome_api_first.sql`; разделение очередей в `LeadRepository`; настройки PDF в `Settings` / `.env.example`; `scripts/run_myhome_enricher.py` (три фазы). Без правок `src/parsers/base.py`, `docker/`, `.cursor/`, governance кроме этого файла.
+- **Проверка:** `@tester` — **PASS** (`ruff`, `mypy src`, `pytest` unit); интеграция к live API — **SKIP** без **`MYHOME_INTEGRATION=1`**; при **`MYHOME_INTEGRATION=1`** — smoke list + detail (см. README).
+- **Документация:** `README.md`, `CHANGELOG.md`, этот файл.
+- **Риски:** доступность и контракт **Statements API**; для телефона нужны валидная Playwright-сессия и обход **reCAPTCHA**; PDF пишется на диск под **`MYHOME_PDF_OUTPUT_DIR`** — контроль места и прав; без миграции **005** возможны ошибки из‑за расхождения кода enricher и схемы **leads-db**.
+- **Релиз вручную:** применить **005** к **leads-db** после **004**; smoke `python scripts/run_myhome_enricher.py` при доступной БД и сети (PII не логировать); при необходимости live-проверки — `MYHOME_INTEGRATION=1 pytest tests/integration/test_myhome_integration.py`.
+
+```mermaid
+flowchart LR
+  API["Statements API\nGET /v1/statements/{id}"] --> D[Очередь detail]
+  D --> DB[(leads-db)]
+  PW[Playwright] --> P[Очередь phone]
+  PW --> F[Очередь pdf]
+  P --> DB
+  F --> DB
+```
+
 ## 2026-05-05 — P1 hotfix: pending enrichment — учёт `phone=''`
 
 - **Контекст:** emergency-path — enricher отдавал **`enriched=0`**, хотя в БД были лиды **new** без телефона.

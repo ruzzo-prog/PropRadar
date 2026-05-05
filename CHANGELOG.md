@@ -11,7 +11,7 @@
 
 ### Added
 
-- Myhome enricher — адаптерный пакет `src/parsers/adapters/myhome/` (извлечение полей, локаль страницы, разбор даты публикации); точка входа `src/parsers/myhome_enricher.py` реэкспортирует публичный API.
+- Myhome **API-first** и enricher: канон полей **`src/parsers/adapters/myhome/myhome_api_schema.csv`**; пакет **`src/parsers/adapters/myhome/`** (`parser.py`, `schema.py`, `enricher.py` с HTTP-деталями, `phone.py`, `pdf.py`, извлечение полей, локаль страницы, разбор даты публикации); фасады **`src/parsers/myhome.py`**, **`src/parsers/myhome_enricher.py`** (реэкспорт публичного API); миграция **`005_myhome_api_first.sql`**; очереди **`list_pending_detail_enrichment`** / **`list_pending_phone_enrichment`** / **`list_pending_pdf_enrichment`**; колонки **`geo_lat`**, **`geo_lng`**, **`listing_views`**, **`myhome_statement_json`**, **`pdf_url`**.
 - Миграция `migrations/004_add_text_lang_columns.sql`: колонки `address_lang`, `district_lang`, `description_lang` в `leads`.
 - Стартовый скелет приложения: `src/` (parsers, domain, repositories, services, api, config), `tests/`, `migrations/001_init_leads.sql`, `scripts/setup_venv.ps1`, Docker (`docker/infra`, `docker/tools`, `docker/app`), корневые `pyproject.toml`, `.env.example`, `.gitignore`, `.python-version`.
 - Metabase: **`docker/tools`** (таймзона UTC), **`metabase/propradar_dashboard.json`**, **`docs/METABASE_SETUP.md`**, переменные **`LEADS_DB_*`** в **`docker/tools/.env.example`**; скрипт **`scripts/setup_metabase_dashboard.py`** (API: дашборд «PropRadar — Лиды», идемпотентность); **`ruff`** охватывает **`scripts/`**.
@@ -21,6 +21,7 @@
 
 ### Changed
 
+- **Myhome обогащение (архитектура):** поля карточки снимаются с **Statements API** (**`GET /v1/statements/{id}`**, см. **`myhome_api_schema.csv`**); телефон (**`phone/show`**) и PDF (**`page.pdf()`**) остаются на Playwright; очереди в БД разделены на **detail** / **phone** / **pdf** (миграция **`005_myhome_api_first.sql`**).
 - Enricher и репозиторий: идемпотентные обновления при повторном обогащении (не перезаписывать уже совпадающие значения).
 - Разбор `published_at` с текста страницы: интерпретация в **Asia/Tbilisi**, хранение **UTC** (`parse_published_at_from_text`).
 - Парсер списка myhome (`published_at` из API): нормализация к **UTC** для согласованности с enricher.
