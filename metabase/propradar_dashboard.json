@@ -54,7 +54,7 @@
       "description_ru": "Таблица: lead_id, источник, статус, город (urban_name), площадь (area_m2), цена USD, время (published_at при отсутствии — synced_at). Сортировка по времени убыв.",
       "display": "table",
       "operator_instructions_ru": "Регулируемая высота и прокрутка таблицы задаются в интерфейсе Metabase, а не в этом JSON: на дашборде растяните карточку по высоте за край; в настройках вопроса/визуализации таблицы проверьте опции отображения (зависят от версии Metabase, OSS может ограничивать «внутренний» scroll). Для фиксированной области с overflow используйте визуализацию с поддержкой scroll при вашей сборке или ограничивайте LIMIT в SQL.",
-      "sql": "SELECT lead_id,\n       source,\n       status,\n       urban_name,\n       area_m2,\n       price_usd,\n       COALESCE(published_at, synced_at) AS listed_or_synced_at\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
+      "sql": "SELECT external_id AS \"ID\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       urban_name AS \"Город\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
     }
   ]
 }
