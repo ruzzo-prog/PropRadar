@@ -75,7 +75,7 @@ PropRadar/
 
 - **Список и карточка:** REST `**api-statements.tnet.ge`**, заголовок `**X-Website-Key: myhome**`; обогащение деталями по `**GET /v1/statements/{id}**` (очередь в БД: `**status=new**`, `**address` пустой**).
 - **Телефон:** Playwright, `**phone/show`** (очередь: `**phone` IS NULL или `''**`); сессия — `**MYHOME_SESSION_PATH**` / `**scripts/myhome_login.py**`.
-- **PDF:** Playwright `**page.pdf()`** в `**MYHOME_PDF_OUTPUT_DIR**` (очередь: `**pdf_url` пустой**, адрес уже есть).
+- **PDF:** Playwright `**page.pdf()`** в `**MYHOME_PDF_OUTPUT_DIR**` (очередь: `**pdf_url` пустой**, адрес уже есть); типичный каталог **`data/myhome_pdf/`** перечислен в **`.gitignore`**.
 - Канон имён полей ответа API — `**src/parsers/adapters/myhome/myhome_api_schema.csv`**; переменные `**MYHOME_***` — в `**.env.example**`.
 
 ```mermaid

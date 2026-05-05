@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- **Ретро после P1 hotfix (Diff Check):** в **`metabase/propradar_dashboard.json`** SQL переведены с **`price_total_usd`** на **`price_usd`**; **`data/myhome_pdf/`** в **`.gitignore`** (PDF enricher не коммитятся); **`src/parsers/adapters/myhome/myhome_api_schema.csv`** согласован с **`price_gel`** / **`price_usd`** (@tester **PASS**).
 - **Myhome / `description`:** при маппинге из API удаляются HTML-теги (в т.ч. **`<br />`**), чтобы в **leads-db** сохранялся обычный текст (@tester: unit **PASS**, интеграция **SKIP**).
 - **Leads / цены:** добавлена колонка **`price_gel`**, колонка **`price_total_usd`** переименована в **`price_usd`**; миграция **`migrations/006_add_price_gel_rename_price_usd.sql`** (применять после **005**). В Metabase и сохранённых SQL заменить обращения к **`price_total_usd`** на **`price_usd`**.
 - **Pending enrichment / `phone`:** `list_pending_enrichment` для лидов **new** учитывает **`phone IS NULL OR phone = ''`**, чтобы пустая строка не исключала запись из очереди и enricher не завершался с **`enriched=0`** при наличии кандидатов; реализация — коммит **`8d347ce`** (@tester: `pytest`/`ruff` PASS, интеграция skipped).

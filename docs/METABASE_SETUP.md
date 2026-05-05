@@ -77,7 +77,7 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 ### Схема `leads` и цены (миграция 006)
 
-После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
+После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Файл **`metabase/propradar_dashboard.json`** в репозитории уже использует **`price_usd`** (ретро-закрытие замечаний **Diff Check** после P1 hotfix). Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория, созданные до этого, всё ещё нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
 
 ### Таймзона
 

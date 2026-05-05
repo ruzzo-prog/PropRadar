@@ -2,6 +2,28 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — Ретро-фикс (закрытие замечаний Diff Check, P1 hotfix)
+
+- **Контекст:** после **Diff Check** по горячему фиксу цен/описания оставались расхождения между артефактами репозитория и фактической схемой **`price_gel`** / **`price_usd`**.
+- **Сделано:** в **`metabase/propradar_dashboard.json`** во всех SQL заменено **`price_total_usd`** → **`price_usd`**; в **`.gitignore`** добавлен игнор каталога **`data/myhome_pdf/`** (выгрузки PDF enricher не попадают в git); **`myhome_api_schema.csv`** выровнен под канон имён **`price_gel`** / **`price_usd`**.
+- **Проверка:** `@tester` — **PASS** (подтверждено перед документированием); дальше — **@process-guard (Diff Check)** на полный diff.
+- **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, при необходимости `README.md`, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Unit | 🧪 PASS (по отчёту тестера) |
+| Документация | 📜 обновлена |
+
+```mermaid
+flowchart LR
+  DC[Diff Check замечания] --> M[Metabase JSON\nprice_usd]
+  DC --> G[.gitignore\ndata/myhome_pdf/]
+  DC --> C[CSV schema\nprice_gel / price_usd]
+  M --> OK[Согласовано с БД 006]
+  G --> OK
+  C --> OK
+```
+
 ## 2026-05-05 — P1 hotfix: `description` без HTML, `price_gel` / `price_usd`, миграция 006
 
 - **Контекст:** после API-first — в **`description`** попадали HTML-фрагменты (например **`<br />`**); цены нужно хранить явно в **двух валютах** с переименованием устаревшей колонки.
