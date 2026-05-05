@@ -1,7 +1,7 @@
 {
   "prop_radar_metabase_bundle_version": "1.0",
   "dashboard_title_ru": "PropRadar — мониторинг лидов",
-  "schema_reference": "migrations/001_init_leads.sql + 002_add_myhome_listing_fields.sql (PostgreSQL 15)",
+  "schema_reference": "migrations/001-007 (PostgreSQL 15): leads + leads_client (denormalized projection). Columns: price_usd, price_m2, geo_lat, geo_lng, listing_views, myhome_statement_json, images, pdf_url.",
   "timezone_note": "В SQL ниже даты нормализуются к дате в UTC. При необходимости смените на вашу таймзону в Metabase (Admin → Localization).",
   "status_note_ru": "В БД хранятся литералы статуса: new, contacted, qualified, rejected, converted. Это не совпадает с абстрактной воронкой contact/sent/deal/lost без отдельной миграции домена.",
   "import_instructions_ru": "Стандартный OSS Metabase не импортирует этот файл одной кнопкой. Создайте Dashboard вручную и добавьте вопросы типа «Native query» по SQL из полей sql каждой карточки, либо используйте Metabase Serialization/API под вашу версию. Подробности: docs/METABASE_SETUP.md.",
