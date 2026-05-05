@@ -6,6 +6,7 @@
 
 ### Verified
 
+- **Leads client / migration 009:** контрольная точка **3** — **PASS**; smoke подтверждён человеком; `city_name` и `owner_name` синхронизируются из statement JSON, Metabase карточка 7 использует их в клиентской выдаче.
 - **Leads client v2 / миграция 008:** пересоздание **`leads_client`** под контракт **v2**; **Scanner** — **PASS**; **`@tester`** — **PASS**.
 - **Myhome / цены (закрытие цикла):** контрольная точка **3** — **PASS**; **Smoke** подтверждён человеком; для **20** лидов **`price_usd`** и **`price_gel`** совпадают с ожиданием; задача закрыта.
 - **Chain completion:** финальный `@release-check` — **PASS**; ручной smoke после деплоя подтверждён человеком.

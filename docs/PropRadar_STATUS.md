@@ -2,15 +2,39 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-06 — Финализация myhome/leads_client: КТ3 PASS, smoke подтверждён
+
+- **Контекст:** после миграций **008/009** и серии P1 hotfix по Metabase карточке **7** зафиксирован итоговый рабочий контур клиентской выдачи.
+- **Проверка:** контрольная точка **3** — **PASS**; smoke подтверждён человеком; в `leads_client` используются `city_name` и `owner_name`, карточка **«Последние лиды»** показывает клиентские поля.
+- **Финальный вердикт:** `@release-check` — **PASS**.
+- **Статус:** задача по финализации адаптера/проекции **закрыта**.
+- **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| КТ3 | ✅ PASS |
+| Smoke (ручной) | ✅ PASS |
+| Release-check | ✅ PASS |
+| Документация | 📜 обновлена |
+
+```mermaid
+flowchart LR
+  M[Миграции 008/009] --> C7[Metabase карточка 7\ncity_name + owner_name]
+  C7 --> KT3[КТ3 PASS]
+  KT3 --> R[Release-check PASS]
+  R --> X[Финализация закрыта]
+```
+
 ## 2026-05-06 — Проекция `leads_client`: `city_name` / `owner_name` из statement (миграция 009)
 
 - **Контекст:** поля **`city_name`** и **`owner_name`** в клиентской проекции должны отражать данные из **`myhome_statement_json`**, без опоры на колонку **`leads.city_name`**.
 - **Реализация:** **`migrations/009_add_city_name_to_leads_client.sql`** (после **008**) — **`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`** для обоих полей, backfill через **`UPDATE ... FROM leads`** по **`(source, external_id)`**, **`CREATE OR REPLACE FUNCTION sync_leads_client_from_lead`** с заполнением и **ON CONFLICT** для **`city_name`** / **`owner_name`**. **`metabase/propradar_dashboard.json`**: обновлён **`schema_reference`** (28 столбцов, ссылка на **009**). **`README.md`**, **`CHANGELOG.md`** — порядок миграций и запись в журнале.
-- **Проверка:** ожидается **Scanner** после применения миграций в среде CI.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
 
 | Показатель        | Статус           |
 | ----------------- | ---------------- |
-| Scanner           | ⏳ ожидается    |
+| Scanner           | ✅ PASS         |
+| QA (`@tester`)    | 🧪 PASS         |
 | Документация      | 📜 обновлена     |
 
 ```mermaid

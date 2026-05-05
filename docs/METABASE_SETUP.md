@@ -61,7 +61,7 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 ## Дашборд и SQL
 
-Файл **`metabase/propradar_dashboard.json`** — валидный JSON с **семью** карточками и готовым **SQL под PostgreSQL 15**. Запросы в репозитории ориентированы на проекцию **`leads_client`**: сначала **`007_create_leads_client_table.sql`**, затем обязательно **`008_recreate_leads_client_v2.sql`** (контракт **v2**: **PK `(source, external_id)`**, **26** столбцов, без **`lead_id`** и служебных полей из старой проекции). Поле **`schema_reference`** в JSON кратко фиксирует контракт столбцов и правило дат **`COALESCE(published_at, synced_at)`**.
+Файл **`metabase/propradar_dashboard.json`** — валидный JSON с **семью** карточками и готовым **SQL под PostgreSQL 15**. Запросы в репозитории ориентированы на проекцию **`leads_client`**: сначала **`007_create_leads_client_table.sql`**, затем **`008_recreate_leads_client_v2.sql`**, затем **`009_add_city_name_to_leads_client.sql`** (контракт после 009: **PK `(source, external_id)`**, **28** столбцов, включая **`city_name`** и **`owner_name`**, без **`lead_id`** и служебных полей старой проекции). Поле **`schema_reference`** в JSON фиксирует актуальный контракт и правило дат **`COALESCE(published_at, synced_at)`**.
 
 В Community/OSS обычно **нет** одного пункта меню «Импорт этого JSON целиком». Рекомендуемый порядок:
 
@@ -79,9 +79,9 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория, созданные до этого, всё ещё нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
 
-### Проекция `leads_client` (миграции 007 → 008 v2) и bundle дашборда
+### Проекция `leads_client` (миграции 007 → 008 v2 → 009) и bundle дашборда
 
-Таблица **`leads_client`** — денормализованная проекция **`leads`** (синхронизация триггером после **008**). **007** создаёт первую версию; **008** пересоздаёт таблицу под **v2**: **PK `(source, external_id)`**, **26** клиентских столбцов, без **`lead_id`** / **`source_listing_uuid`** / языковых **`*_lang`** (см. **`migrations/008_recreate_leads_client_v2.sql`** и **`schema_reference`** в JSON). Текущий **`metabase/propradar_dashboard.json`**: все карточки читают **`FROM leads_client`**; средние цены — **`AVG(price_usd)`** / **`AVG(price_gel)`**; временные срезы — по **`COALESCE(published_at, synced_at)`** (в проекции нет **`created_at`**). Карточка **«Последние лиды»** (**`position` 7** в массиве **`cards`**) — таблица с **`LIMIT 20`**; **«Город»** — **`city_name`** (не **`urban_name`**), **«Имя владельца»** — **`owner_name`** (актуально вместе с миграцией **009** и полем **`schema_reference`** в JSON). Полный SELECT — поле **`sql`** у этой карточки.
+Таблица **`leads_client`** — денормализованная проекция **`leads`** (синхронизация триггером после **008/009**). **007** создаёт первую версию; **008** пересоздаёт таблицу под **v2**; **009** добавляет **`city_name`** и **`owner_name`** из **`myhome_statement_json`**. Итоговый контракт: **PK `(source, external_id)`**, **28** клиентских столбцов, без **`lead_id`** / **`source_listing_uuid`** / языковых **`*_lang`** (см. **`migrations/008_recreate_leads_client_v2.sql`**, **`migrations/009_add_city_name_to_leads_client.sql`** и **`schema_reference`** в JSON). Текущий **`metabase/propradar_dashboard.json`**: все карточки читают **`FROM leads_client`**; средние цены — **`AVG(price_usd)`** / **`AVG(price_gel)`**; временные срезы — по **`COALESCE(published_at, synced_at)`** (в проекции нет **`created_at`**). Карточка **«Последние лиды»** (**`position` 7** в массиве **`cards`**) — таблица с **`LIMIT 20`**; **«Город»** — **`city_name`** (не **`urban_name`**), **«Имя владельца»** — **`owner_name`**. Полный SELECT — поле **`sql`** у этой карточки.
 
 **Высота карточки и прокрутка таблицы:** задаются в UI Metabase (растянуть плитку на дашборде; опции визуализации зависят от версии; OSS может не давать «внутренний» scroll). Подробнее — поле **`operator_instructions_ru`** у соответствующей карточки в JSON.
 
@@ -113,7 +113,7 @@ docker compose -f docker/tools/docker-compose.yml up -d
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.
 - **http://localhost:3031** открывается.
 - База **leads** подключена, тест соединения **успешен**.
-- На дашборде отображаются **семь** карточек (по bundle); запросы выполняются без ошибки PostgreSQL (ожидаются миграции **007** и **008** для **`leads_client`** в версии **v2**).
+- На дашборде отображаются **семь** карточек (по bundle); запросы выполняются без ошибки PostgreSQL (ожидаются миграции **007**, **008** и **009** для актуального контракта **`leads_client`**).
 
 ## Остановка (опционально)
 
