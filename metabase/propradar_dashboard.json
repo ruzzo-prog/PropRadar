@@ -30,9 +30,9 @@
     {
       "position": 4,
       "title_ru": "Средняя цена объекта (USD)",
-      "description_ru": "Среднее по price_total_usd (NULL не учитываются).",
+      "description_ru": "Среднее по price_usd (NULL не учитываются).",
       "display": "scalar",
-      "sql": "SELECT ROUND(AVG(price_total_usd)::numeric, 2) AS avg_usd\nFROM leads\nWHERE price_total_usd IS NOT NULL;"
+      "sql": "SELECT ROUND(AVG(price_usd)::numeric, 2) AS avg_usd\nFROM leads\nWHERE price_usd IS NOT NULL;"
     },
     {
       "position": 5,
@@ -46,7 +46,7 @@
       "title_ru": "Последние лиды",
       "description_ru": "Таблица: id (UUID), источник, статус, цена USD, время создания.",
       "display": "table",
-      "sql": "SELECT id,\n       source,\n       status,\n       price_total_usd,\n       created_at\nFROM leads\nORDER BY created_at DESC\nLIMIT 20;"
+      "sql": "SELECT id,\n       source,\n       status,\n       price_usd,\n       created_at\nFROM leads\nORDER BY created_at DESC\nLIMIT 20;"
     }
   ]
 }

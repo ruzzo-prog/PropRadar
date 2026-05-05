@@ -48,6 +48,7 @@ Thumbs.db
 # Logs / local data
 *.log
 logs/
+data/myhome_pdf/
 
 # Playwright
 test-results/
