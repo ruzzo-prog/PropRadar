@@ -2,6 +2,29 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — P1 hotfix Metabase: KeyError на `title_ru` карточки USD
+
+- **Контекст:** при запуске **`scripts/setup_metabase_dashboard.py`** падение с **KeyError**: **`title_ru`** скалярной карточки **USD** в **`metabase/propradar_dashboard.json`** не совпадал с литералом в скрипте (сопоставление карточек по **точному** **`title_ru`**).
+- **Исправление:** в bundle выровнен заголовок USD на **`Средняя цена объекта (USD)`**; карточки **USD/GEL** по-прежнему на **`leads_client`**.
+- **Проверка:** **`@tester`** — **PASS**.
+- **Документация:** **`CHANGELOG.md`**, **`Docs/METABASE_SETUP.md`**, этот файл.
+
+
+| Показатель        | Статус        |
+| ----------------- | ------------- |
+| QA (`@tester`)    | 🧪 PASS       |
+| Документация      | 📜 обновлена  |
+
+
+```mermaid
+flowchart LR
+  J[propradar_dashboard.json\ntitle_ru USD] --> S[setup_metabase_dashboard.py\nточное совпадение]
+  S --> OK[импорт без KeyError]
+```
+
+
+[▓▓▓▓▓▓▓▓▓▓] 100%
+
 ## 2026-05-05 — Metabase: дашборд на `leads_client` (bundle JSON)
 
 - **Контекст:** после миграции **007** клиентская проекция **`leads_client`** — основной источник для карточек в **`metabase/propradar_dashboard.json`**.

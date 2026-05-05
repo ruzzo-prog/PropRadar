@@ -104,6 +104,10 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 Карточки и SQL берутся из **`metabase/propradar_dashboard.json`**. Версия Metabase должна поддерживать используемые эндпоинты (`/api/session`, `/api/card`, `/api/dashboard`, …).
 
+### Соответствие `title_ru` скрипту автосборки
+
+Скрипт **`scripts/setup_metabase_dashboard.py`** находит элементы массива **`cards`** по **строгому совпадению** **`title_ru`** с литералами в коде. Если переименовать подпись в JSON без синхронного изменения скрипта, при запуске возможен **KeyError**. Канон для скаляра средней цены в USD: **`Средняя цена объекта (USD)`**.
+
 ## Критерии готовности
 
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.
