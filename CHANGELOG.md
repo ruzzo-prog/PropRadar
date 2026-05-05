@@ -20,6 +20,7 @@
 
 ### Changed
 
+- **Metabase / bundle `metabase/propradar_dashboard.json`:** все native-SQL карточки переведены на таблицу **`leads_client`**; обновлены **«Последние лиды»** (столбцы и сортировка по **`COALESCE(published_at, synced_at)`**); добавлены/уточнены скаляры **средней цены USD** и **GEL** (`ROUND(AVG(...), 2)` по **`price_usd`** / **`price_gel`**); в JSON — **`schema_reference`** (контракт проекции, миграция **007**) и **`operator_instructions_ru`** для высоты карточки и прокрутки таблицы в UI Metabase (Scanner **PASS**, `@tester` **PASS**).
 - **Myhome / detail-очередь:** `list_pending_detail_enrichment` для **`source=myhome`**, **`status=new`** — условие **`address IS NULL OR price_gel IS NULL`**, чтобы после миграции **006** снова обрабатывались лиды без **`price_gel`** (Scanner **PASS**, @tester **PASS**).
 - **Myhome обогащение (архитектура):** поля карточки снимаются с **Statements API** (**`GET /v1/statements/{id}`**, см. **`myhome_api_schema.csv`**); телефон (**`phone/show`**) и PDF (**`page.pdf()`**) остаются на Playwright; очереди в БД разделены на **detail** / **phone** / **pdf** (миграция **`005_myhome_api_first.sql`**).
 - Enricher и репозиторий: идемпотентные обновления при повторном обогащении (не перезаписывать уже совпадающие значения).

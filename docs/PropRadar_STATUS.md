@@ -2,6 +2,30 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — Metabase: дашборд на `leads_client` (bundle JSON)
+
+- **Контекст:** после миграции **007** клиентская проекция **`leads_client`** — основной источник для карточек в **`metabase/propradar_dashboard.json`**.
+- **Сделано:** все SQL в bundle переведены на **`leads_client`**; карточки **«Средняя цена (USD)»** и **«Средняя цена (GEL)»** (ROUND AVG **`price_usd`** / **`price_gel`**); таблица **«Последние лиды»** с колонками **`lead_id`**, **`source`**, **`status`**, **`urban_name`**, **`area_m2`**, **`price_usd`**, **`listed_or_synced_at`** (LIMIT 20); в JSON добавлены **`schema_reference`** (ссылка на **007** и ключевые столбцы) и **`operator_instructions_ru`** для высоты карточки/прокрутки таблицы в UI Metabase.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
+- **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, при необходимости `README.md`, этот файл.
+
+
+| Показатель        | Статус              |
+| ----------------- | ------------------- |
+| Scanner           | ✅ PASS              |
+| QA (`@tester`)    | 🧪 PASS              |
+| Документация      | 📜 обновлена        |
+
+
+```mermaid
+flowchart LR
+  LC[(leads_client)] --> J[propradar_dashboard.json]
+  J --> M[Metabase cards\nnative SQL]
+```
+
+
+[▓▓▓▓▓▓▓▓▓▓] 100%
+
 ## 2026-05-05 — Закрытие задачи `leads_client`: Smoke PASS, КТ3 PASS
 
 - **Контекст:** финальная проверка после миграции **007** и синхронизации проекции через trigger.

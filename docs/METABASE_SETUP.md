@@ -55,13 +55,13 @@ docker compose -f docker/tools/docker-compose.yml up -d
    - **Username**: `leads`
    - **Password**: как в **`docker/infra`** для `POSTGRES_PASSWORD`.
 3. Сохраните. Нажмите **Test connection**. Должно быть успешно.
-4. Сканирование: схема **`public`**, таблица **`leads`** (см. миграции **`001_init_leads.sql`** и **`002_add_myhome_listing_fields.sql`**).
+4. Сканирование: схема **`public`**, таблица **`leads`** (см. миграции **`001_init_leads.sql`** и **`002_add_myhome_listing_fields.sql`**). После миграции **007** в той же БД доступна **`leads_client`** — её использует bundle дашборда в репозитории.
 
 Никакие чужие базы (в т.ч. `dispatch-db-dev`) не подключать.
 
 ## Дашборд и SQL
 
-Файл **`metabase/propradar_dashboard.json`** — валидный JSON с шестью карточками и готовым **SQL под PostgreSQL 15** и фактической схемой `leads`.
+Файл **`metabase/propradar_dashboard.json`** — валидный JSON с **семью** карточками и готовым **SQL под PostgreSQL 15**. Запросы в репозитории ориентированы на проекцию **`leads_client`** (миграция **`007_create_leads_client_table.sql`**); поле **`schema_reference`** в JSON кратко фиксирует контракт столбцов и правило дат **`COALESCE(published_at, synced_at)`**.
 
 В Community/OSS обычно **нет** одного пункта меню «Импорт этого JSON целиком». Рекомендуемый порядок:
 
@@ -77,7 +77,13 @@ docker compose -f docker/tools/docker-compose.yml up -d
 
 ### Схема `leads` и цены (миграция 006)
 
-После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Файл **`metabase/propradar_dashboard.json`** в репозитории уже использует **`price_usd`** (ретро-закрытие замечаний **Diff Check** после P1 hotfix). Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория, созданные до этого, всё ещё нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
+После **`migrations/006_add_price_gel_rename_price_usd.sql`** в таблице **`leads`**: **`price_gel`** (лари) и **`price_usd`** (доллары). Колонка **`price_total_usd`** переименована в **`price_usd`**. Уже сохранённые **Native query** в Metabase и копии SQL вне репозитория, созданные до этого, всё ещё нужно обновить: заменить **`price_total_usd`** → **`price_usd`**, при необходимости выбрать **`price_gel`** для отчётов в GEL.
+
+### Проекция `leads_client` (миграция 007) и bundle дашборда
+
+Таблица **`leads_client`** — денормализованная проекция **`leads`** (синхронизация триггером). Текущий **`metabase/propradar_dashboard.json`**: все карточки читают **`FROM leads_client`**; средние цены — **`AVG(price_usd)`** / **`AVG(price_gel)`**; временные срезы — по **`COALESCE(published_at, synced_at)`** (в проекции нет **`created_at`**). Карточка **«Последние лиды»** — таблица с **`LIMIT 20`**.
+
+**Высота карточки и прокрутка таблицы:** задаются в UI Metabase (растянуть плитку на дашборде; опции визуализации зависят от версии; OSS может не давать «внутренний» scroll). Подробнее — поле **`operator_instructions_ru`** у соответствующей карточки в JSON.
 
 ### Таймзона
 
@@ -103,7 +109,7 @@ docker compose -f docker/tools/docker-compose.yml up -d
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.
 - **http://localhost:3031** открывается.
 - База **leads** подключена, тест соединения **успешен**.
-- На дашборде отображаются шесть карточек; запросы выполняются без ошибки PostgreSQL.
+- На дашборде отображаются **семь** карточек (по bundle); запросы выполняются без ошибки PostgreSQL (ожидается применённая миграция **007** для **`leads_client`**).
 
 ## Остановка (опционально)
 
