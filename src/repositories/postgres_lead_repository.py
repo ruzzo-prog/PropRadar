@@ -6,6 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import Integer, String, and_, func, or_, select, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -42,7 +43,8 @@ class LeadORM(Base):
         nullable=False,
     )
     source_listing_uuid: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
-    price_total_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    price_gel: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    price_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     price_m2_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     phone: Mapped[str | None] = mapped_column(Text(), nullable=True)
@@ -56,6 +58,11 @@ class LeadORM(Base):
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
     description_lang: Mapped[str | None] = mapped_column(String(8), nullable=True)
     is_owner: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default=text("false"))
+    geo_lat: Mapped[Decimal | None] = mapped_column(Numeric(12, 8), nullable=True)
+    geo_lng: Mapped[Decimal | None] = mapped_column(Numeric(12, 8), nullable=True)
+    listing_views: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    myhome_statement_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    pdf_url: Mapped[str | None] = mapped_column(Text(), nullable=True)
 
 
 def _to_domain(row: LeadORM) -> Lead:
@@ -68,7 +75,8 @@ def _to_domain(row: LeadORM) -> Lead:
         created_at=row.created_at,
         updated_at=row.updated_at,
         source_listing_uuid=row.source_listing_uuid,
-        price_total_usd=row.price_total_usd,
+        price_gel=row.price_gel,
+        price_usd=row.price_usd,
         price_m2_usd=row.price_m2_usd,
         published_at=row.published_at,
         phone=row.phone,
@@ -82,6 +90,13 @@ def _to_domain(row: LeadORM) -> Lead:
         description=row.description,
         description_lang=row.description_lang,
         is_owner=row.is_owner,
+        geo_lat=row.geo_lat,
+        geo_lng=row.geo_lng,
+        listing_views=row.listing_views,
+        myhome_statement_json=(
+            dict(row.myhome_statement_json) if row.myhome_statement_json else None
+        ),
+        pdf_url=row.pdf_url,
     )
 
 
@@ -127,7 +142,8 @@ class PostgresLeadRepository(LeadRepository):
             status=entity.status.value,
             score=entity.score,
             source_listing_uuid=entity.source_listing_uuid,
-            price_total_usd=entity.price_total_usd,
+            price_gel=entity.price_gel,
+            price_usd=entity.price_usd,
             price_m2_usd=entity.price_m2_usd,
             published_at=entity.published_at,
             phone=entity.phone,
@@ -141,6 +157,11 @@ class PostgresLeadRepository(LeadRepository):
             description=entity.description,
             description_lang=entity.description_lang,
             is_owner=entity.is_owner,
+            geo_lat=entity.geo_lat,
+            geo_lng=entity.geo_lng,
+            listing_views=entity.listing_views,
+            myhome_statement_json=entity.myhome_statement_json,
+            pdf_url=entity.pdf_url,
         )
         with self._sessions.factory() as session:
             session.add(row)
@@ -148,7 +169,28 @@ class PostgresLeadRepository(LeadRepository):
             session.refresh(row)
             return _to_domain(row)
 
-    def list_pending_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+    def list_pending_detail_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        lim = max(1, min(limit, 500))
+        with self._sessions.factory() as session:
+            stmt = (
+                select(LeadORM)
+                .where(
+                    and_(
+                        LeadORM.source == source,
+                        LeadORM.status == LeadStatus.NEW.value,
+                        or_(
+                            LeadORM.address.is_(None),
+                            LeadORM.price_gel.is_(None),
+                        ),
+                    ),
+                )
+                .order_by(LeadORM.created_at.asc())
+                .limit(lim)
+            )
+            rows = session.scalars(stmt).all()
+            return [_to_domain(r) for r in rows]
+
+    def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         lim = max(1, min(limit, 500))
         with self._sessions.factory() as session:
             stmt = (
@@ -169,6 +211,29 @@ class PostgresLeadRepository(LeadRepository):
             rows = session.scalars(stmt).all()
             return [_to_domain(r) for r in rows]
 
+    def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        lim = max(1, min(limit, 500))
+        with self._sessions.factory() as session:
+            stmt = (
+                select(LeadORM)
+                .where(
+                    and_(
+                        LeadORM.source == source,
+                        LeadORM.status == LeadStatus.NEW.value,
+                        LeadORM.address.isnot(None),
+                        LeadORM.address != "",
+                        or_(
+                            LeadORM.pdf_url.is_(None),
+                            LeadORM.pdf_url == "",
+                        ),
+                    ),
+                )
+                .order_by(LeadORM.created_at.asc())
+                .limit(lim)
+            )
+            rows = session.scalars(stmt).all()
+            return [_to_domain(r) for r in rows]
+
     def update_enriched_fields(self, entity: Lead) -> Lead:
         if entity.id is None:
             msg = "update_enriched_fields ожидает Lead с id"
@@ -180,6 +245,14 @@ class PostgresLeadRepository(LeadRepository):
                 raise ValueError(msg)
             if entity.phone is not None:
                 row.phone = entity.phone
+            if entity.price_gel is not None:
+                row.price_gel = entity.price_gel
+            if entity.price_usd is not None:
+                row.price_usd = entity.price_usd
+            if entity.price_m2_usd is not None:
+                row.price_m2_usd = entity.price_m2_usd
+            if entity.source_listing_uuid is not None:
+                row.source_listing_uuid = entity.source_listing_uuid
             if entity.address is not None:
                 row.address = entity.address
             if entity.address_lang is not None:
@@ -202,6 +275,16 @@ class PostgresLeadRepository(LeadRepository):
                 row.published_at = entity.published_at
             if entity.is_owner is True:
                 row.is_owner = True
+            if entity.geo_lat is not None:
+                row.geo_lat = entity.geo_lat
+            if entity.geo_lng is not None:
+                row.geo_lng = entity.geo_lng
+            if entity.listing_views is not None:
+                row.listing_views = entity.listing_views
+            if entity.myhome_statement_json is not None:
+                row.myhome_statement_json = entity.myhome_statement_json
+            if entity.pdf_url is not None:
+                row.pdf_url = entity.pdf_url
             row.updated_at = datetime.now(UTC)
             session.commit()
             session.refresh(row)
