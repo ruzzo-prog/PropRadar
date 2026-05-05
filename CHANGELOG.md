@@ -6,6 +6,7 @@
 
 ### Fixed
 
+- **Pending enrichment / `phone`:** `list_pending_enrichment` для лидов **new** учитывает **`phone IS NULL OR phone = ''`**, чтобы пустая строка не исключала запись из очереди и enricher не завершался с **`enriched=0`** при наличии кандидатов; реализация — коммит **`8d347ce`** (@tester: `pytest`/`ruff` PASS, интеграция skipped).
 - **Windows / `zoneinfo`:** добавлена зависимость **`tzdata`** в **`pyproject.toml`**, чтобы **`ZoneInfo("Asia/Tbilisi")`** и пайплайн даты публикации myhome не падали на Windows без системной IANA-базы; проверено: **`ZoneInfo`** OK и **`scripts/run_myhome_enricher.py`** без ошибки (@tester PASS).
 
 ### Added

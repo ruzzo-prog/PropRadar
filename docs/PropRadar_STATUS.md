@@ -2,6 +2,23 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-05 — P1 hotfix: pending enrichment — учёт `phone=''`
+
+- **Контекст:** emergency-path — enricher отдавал **`enriched=0`**, хотя в БД были лиды **new** без телефона.
+- **Симптом:** очередь обогащения пустая при непустом наборе «новых» лидов.
+- **Root cause:** отбор **pending enrichment** не учитывал **`phone`** как **пустую строку** (`''`), только **`NULL`**.
+- **Фикс:** `list_pending_enrichment` для **new** выбирает **`phone IS NULL OR phone = ''`** (см. коммит **`8d347ce`**).
+- **Scope:** код — коммит **`8d347ce`** (репозиторий/тесты); документация этой записи — **3** файла `.md`: **`docs/PropRadar_STATUS.md`**, **`CHANGELOG.md`**, **`README.md`**.
+- **Проверка:** `@tester` — **PASS** (`pytest`, **`ruff`**); интеграция — **SKIP**; **`mypy`**: известный baseline в **`settings.py`** — **вне scope**.
+- **Риски:** расширение выборки (лиды с намеренно пустым `phone` попадут в очередь чаще); семантика совпадает с «телефон ещё не получен».
+
+```mermaid
+flowchart LR
+  N[Lead status=new] --> P{phone NULL или ''?}
+  P -->|да| Q[pending enrichment]
+  Q --> E[Enricher]
+```
+
 ## 2026-05-05 — P1 hotfix: `tzdata` для `ZoneInfo` на Windows (Asia/Tbilisi)
 
 - **Контекст:** emergency-path — при локальном запуске на **Windows** падала работа с часовыми поясами для обогащения myhome (**Asia/Tbilisi → UTC**).
