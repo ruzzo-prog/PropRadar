@@ -12,7 +12,7 @@ alwaysApply: true
 
 2. ПОРЯДОК ЗАПУСКА:
    - Если пользователь дает задачу (код, эндпоинт, фикс) — отвечать может ТОЛЬКО `@dispatcher`.
-   - @dispatcher ЗАПРЕЩЕНО писать код. Он только создает ТЗ для @architect.
+   - @dispatcher ЗАПРЕЩЕНО писать код. Он создает ТЗ и немедленно передаёт управление @architect — без паузы, без ожидания пользователя.
    - @architect ЗАПРЕЩЕНО писать код. Он только создает Fix Plan (readonly).
    - Изменять файлы разрешено ТОЛЬКО агенту `@review` и только после одобрения плана.
 
@@ -38,7 +38,8 @@ alwaysApply: true
 | @dispatcher            | ТЗ готово              | @architect             |
 | @architect             | Fix Plan PASS          | Показать человеку → ждать одобрения |
 | Человек                | одобряю                | @process-guard (Plan Check) |
-| @architect             | Fix Plan FAIL          | @architect (доработка, до 2 раз) |
+| @architect             | Fix Plan FAIL (1/2)    | @architect (доработка)         |
+| @architect             | Fix Plan FAIL (2/2)    | СТОП → человек                 |
 | @process-guard         | Plan Check PASS        | @review                |
 | @process-guard         | Plan Check FAIL        | @architect             |
 | @review                | Код написан            | СТОП → человек запускает Scanner |
@@ -51,5 +52,6 @@ alwaysApply: true
 | @process-guard         | Diff Check PASS        | @release-check         |
 | @process-guard         | Diff Check FAIL        | @review                |
 | @release-check         | PASS                   | СТОП → человек деплоит |
-| @release-check         | FAIL                   | Устранить блокеры → повтор |
+| @release-check         | FAIL                   | @review (точечный фикс)        |
+| @review                | Фикс после release     | @process-guard (Diff Check)    |
 | Человек                | Задеплоил              | Smoke тест вручную     |
