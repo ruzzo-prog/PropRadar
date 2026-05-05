@@ -2,6 +2,33 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-06 — Проекция `leads_client` v2 (миграция 008)
+
+- **Контекст:** после **007** зафиксирован контракт **UI/Metabase**: проекция **без** **`lead_id`** и без служебных UUID/языковых меток; **PK** по паре **(source, external_id)**; **26** клиентских столбцов (в т.ч. **`comment`** из **`leads.description`**, фрагмент **statement** в **`dynamic_title`** / **`urban_name`** / **`images`** и др.).
+- **Реализация:** **`migrations/008_recreate_leads_client_v2.sql`** (строго после **007**) — пересоздание **`leads_client`**, триггера и функции синхронизации; **`metabase/propradar_dashboard.json`** — актуальный **`schema_reference`** на **008** и SQL под эту схему; в **`README.md`** порядок миграций: **008** после **007**.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
+- **Документация:** **`CHANGELOG.md`**, **`docs/METABASE_SETUP.md`**, **`README.md`**, этот файл.
+
+
+| Показатель        | Статус       |
+| ----------------- | ------------ |
+| Scanner           | ✅ PASS       |
+| QA (`@tester`)    | 🧪 PASS       |
+| Документация      | 📜 обновлена |
+
+
+```mermaid
+flowchart LR
+  M007[007 leads_client] --> M008[008 recreate v2\nPK source + external_id]
+  M008 --> LC[(leads_client\n26 cols)]
+  L[(leads)] --> T[INSERT/UPDATE\ntrigger]
+  T --> LC
+  LC --> J[propradar_dashboard.json]
+```
+
+
+[▓▓▓▓▓▓▓▓▓▓] 100%
+
 ## 2026-05-05 — P1 hotfix Metabase: карточка 7 «Последние лиды» — только клиентские поля
 
 - **Контекст:** в **`metabase/propradar_dashboard.json`** карточка с **`position` 7** (**«Последние лиды»**) должна показывать оператору только **клиентские** столбцы проекции **`leads_client`**, без **`lead_id`** и без служебных/технических колонок.

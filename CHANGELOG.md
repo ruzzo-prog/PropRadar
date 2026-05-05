@@ -6,6 +6,7 @@
 
 ### Verified
 
+- **Leads client v2 / миграция 008:** пересоздание **`leads_client`** под контракт **v2**; **Scanner** — **PASS**; **`@tester`** — **PASS**.
 - **Myhome / цены (закрытие цикла):** контрольная точка **3** — **PASS**; **Smoke** подтверждён человеком; для **20** лидов **`price_usd`** и **`price_gel`** совпадают с ожиданием; задача закрыта.
 - **Chain completion:** финальный `@release-check` — **PASS**; ручной smoke после деплоя подтверждён человеком.
 - **Leads client / финальная проверка:** контрольная точка **3** — **PASS**; Smoke подтверждён человеком; `leads_client` создана и синхронизируется через trigger, готово к финальному деплою.
@@ -22,7 +23,8 @@
 
 ### Changed
 
-- **Metabase / bundle `metabase/propradar_dashboard.json`:** все native-SQL карточки переведены на таблицу **`leads_client`**; обновлены **«Последние лиды»** (столбцы и сортировка по **`COALESCE(published_at, synced_at)`**); добавлены/уточнены скаляры **средней цены USD** и **GEL** (`ROUND(AVG(...), 2)` по **`price_usd`** / **`price_gel`**); в JSON — **`schema_reference`** (контракт проекции, миграция **007**) и **`operator_instructions_ru`** для высоты карточки и прокрутки таблицы в UI Metabase (Scanner **PASS**, `@tester` **PASS**).
+- **Проекция `leads_client` v2:** миграция **`migrations/008_recreate_leads_client_v2.sql`** (после **007**) — пересоздание таблицы; **PK `(source, external_id)`**; **26** столбцов; без **`lead_id`**, **`source_listing_uuid`**, языковых **`*_lang`**; триггер/функция синхронизации с **`leads`** сохранены по смыслу (см. SQL). Bundle **`metabase/propradar_dashboard.json`**: **`schema_reference`** и native-SQL выровнены под **008** (Scanner **PASS**, `@tester` **PASS**).
+- **Metabase / bundle `metabase/propradar_dashboard.json`:** все native-SQL карточки переведены на таблицу **`leads_client`**; обновлены **«Последние лиды»** (столбцы и сортировка по **`COALESCE(published_at, synced_at)`**); добавлены/уточнены скаляры **средней цены USD** и **GEL** (`ROUND(AVG(...), 2)` по **`price_usd`** / **`price_gel`**); в JSON — **`schema_reference`** (эволюция **007** → актуальный контракт **008**) и **`operator_instructions_ru`** для высоты карточки и прокрутки таблицы в UI Metabase (Scanner **PASS**, `@tester` **PASS**).
 - **Myhome / detail-очередь:** `list_pending_detail_enrichment` для **`source=myhome`**, **`status=new`** — условие **`address IS NULL OR price_gel IS NULL`**, чтобы после миграции **006** снова обрабатывались лиды без **`price_gel`** (Scanner **PASS**, @tester **PASS**).
 - **Myhome обогащение (архитектура):** поля карточки снимаются с **Statements API** (**`GET /v1/statements/{id}`**, см. **`myhome_api_schema.csv`**); телефон (**`phone/show`**) и PDF (**`page.pdf()`**) остаются на Playwright; очереди в БД разделены на **detail** / **phone** / **pdf** (миграция **`005_myhome_api_first.sql`**).
 - Enricher и репозиторий: идемпотентные обновления при повторном обогащении (не перезаписывать уже совпадающие значения).
