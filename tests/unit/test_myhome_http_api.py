@@ -37,28 +37,85 @@ def test_myhome_prod_ok_with_header(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("PROPRADAR_API_KEY", "secret")
 
-    def _fake_run(settings, script: str, args: list[str]) -> tuple[int, str, str]:
-        assert script == "fetch_myhome_ids.py"
-        assert "--since-days" in args
-        return 0, '["10"]', ""
+    captured: dict[str, object] = {}
 
-    monkeypatch.setattr("api.myhome._run_cli", _fake_run)
+    def _fake_fetch(client, **kwargs):
+        captured.update(kwargs)
+        return ["10"]
+
+    monkeypatch.setattr("api.myhome.fetch_all_external_ids_sync", _fake_fetch)
     client = TestClient(app)
     r = client.get("/api/myhome/fetch-ids", headers={"X-API-Key": "secret"})
     assert r.status_code == 200
     assert r.json() == ["10"]
+    assert captured["city"] == "tbilisi"
+    assert captured["category"] == "apartment"
+    assert captured["object_type"] == "apartment"
+    assert captured["seller_type"] == "private"
+    assert captured["limit"] is None
 
 
 def test_dev_allows_without_key_when_unset(
     dev_no_key: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def _fake_run(settings, script: str, args: list[str]) -> tuple[int, str, str]:
-        return 0, "[]", ""
+    def _fake_fetch(client, **kwargs):
+        return []
 
-    monkeypatch.setattr("api.myhome._run_cli", _fake_run)
+    monkeypatch.setattr("api.myhome.fetch_all_external_ids_sync", _fake_fetch)
     r = TestClient(app).get("/api/myhome/fetch-ids")
     assert r.status_code == 200
+
+
+def test_fetch_ids_passes_custom_filters(dev_no_key: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_fetch(client, **kwargs):
+        captured.update(kwargs)
+        return ["42"]
+
+    monkeypatch.setattr("api.myhome.fetch_all_external_ids_sync", _fake_fetch)
+    r = TestClient(app).get(
+        "/api/myhome/fetch-ids?city=tbilisi&category=apartment&object_type=apartment&seller_type=private&limit=100"
+    )
+    assert r.status_code == 200
+    assert r.json() == ["42"]
+    assert captured["limit"] == 100
+    assert captured["city"] == "tbilisi"
+    assert captured["category"] == "apartment"
+    assert captured["object_type"] == "apartment"
+    assert captured["seller_type"] == "private"
+
+
+def test_fetch_ids_returns_400_for_unsupported_filter(
+    dev_no_key: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_fetch(client, **kwargs):
+        raise ValueError("Unsupported city: batumi")
+
+    monkeypatch.setattr("api.myhome.fetch_all_external_ids_sync", _fake_fetch)
+    r = TestClient(app).get("/api/myhome/fetch-ids?city=batumi")
+    assert r.status_code == 400
+
+
+def test_fetch_ids_returns_400_for_unsupported_object_type(
+    dev_no_key: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_fetch(client, **kwargs):
+        raise ValueError("Unsupported object_type: house")
+
+    monkeypatch.setattr("api.myhome.fetch_all_external_ids_sync", _fake_fetch)
+    r = TestClient(app).get("/api/myhome/fetch-ids?object_type=house")
+    assert r.status_code == 400
+
+
+def test_fetch_ids_returns_400_for_invalid_limit(
+    dev_no_key: None,
+) -> None:
+    r = TestClient(app).get("/api/myhome/fetch-ids?limit=abc")
+    assert r.status_code == 400
 
 
 def test_dev_rejects_mismatched_key_when_configured(

@@ -2,6 +2,61 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-06 — P1: регрессия `since_days` в myhome `list_ids`
+
+- **Контекст:** после изменений вокруг `fetch-ids` окно по датам (`since_days`) перестало корректно сужать выборку external ID в `list_ids`.
+- **Реализация:** `src/parsers/adapters/myhome/list_ids.py` — восстановлено влияние `since_days` на отбор ID; `tests/unit/test_myhome_list_ids.py` — покрытие регрессии.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**; целевые unit — **24 passed**; **`pytest tests`** — **51 passed**, **2 skipped**; `ruff` — OK.
+- **Документация (та же цепочка):** обновлены **`CHANGELOG.md`**, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Scanner | ✅ PASS |
+| QA (`pytest tests`) | 🧪 51 passed, 2 skipped |
+| Scope кода (фикс) | `list_ids.py`, `test_myhome_list_ids.py` |
+
+```mermaid
+flowchart LR
+  SD[since_days] --> L[list_ids\nфильтр по дате публикации]
+  L --> IDS[external IDs]
+```
+
+## 2026-05-06 — P0: myhome property filter key `real_estate_types`
+
+- **Контекст:** аудит live API показал, что `object_types` не сужает выдачу по типу имущества, а `real_estate_types` влияет на набор ID.
+- **Реализация:** в `src/parsers/adapters/myhome/list_ids.py` запрос к `/v1/statements/` приведён к `real_estate_types`; добавлена проверка консистентности `category` и `object_type`.
+- **Проверка:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — PASS; `pytest tests` — PASS; `ruff` — OK.
+- **Документация:** `CHANGELOG.md`, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Scope | `src/parsers/adapters/myhome/list_ids.py`, unit tests |
+| Регрессии | не выявлены |
+
+## 2026-05-06 — P1: `fetch-ids` без `since_days`, с `limit=all|N`
+
+- **Контекст:** `since_days` в myhome list API не давал надёжной фильтрации; нужен режим «вся база» или «первые N ID».
+- **Реализация:** `src/api/myhome.py` — удалён query `since_days`, добавлен `limit` (`all`/число); `src/parsers/adapters/myhome/list_ids.py` — убрана обработка окна дат, добавлен ранний stop по `limit`; обновлены unit-тесты и docs (`docs/API.md`, `docs/n8n_myhome_workflow.md`).
+- **Проверка:** `pytest tests/unit/test_myhome_http_api.py tests/unit/test_myhome_list_ids.py` — **20 passed**; `pytest tests` — **47 passed**, **2 skipped**; `ruff` — OK.
+- **Документация:** `CHANGELOG.md`, `docs/API.md`, `docs/n8n_myhome_workflow.md`, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Scope | `src/api/myhome.py`, `src/parsers/adapters/myhome/list_ids.py`, tests/docs |
+| Регрессии | не выявлены |
+
+## 2026-05-06 — P0 hotfix: `object_types` в myhome list query
+
+- **Контекст:** фильтр типа имущества применял ключ `real_estate_types`, из-за чего API myhome мог игнорировать ограничение по объекту.
+- **Реализация:** в `src/parsers/adapters/myhome/list_ids.py` заменён ключ на `object_types` в базовых params и в runtime-переопределении фильтра `category`.
+- **Проверка:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — **19 passed**; `pytest tests` — **46 passed**, **2 skipped**; `ruff` — OK.
+- **Документация:** `CHANGELOG.md`, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Hotfix scope | `src/parsers/adapters/myhome/list_ids.py` |
+| Регресс API | не ожидается |
+
 ## 2026-05-06 — P0: устойчивые импорты пакета `api` (`.myhome` / `.auth`)
 
 - **Контекст:** риск **`ModuleNotFoundError`** / неоднозначности имени пакета **`api`** на **`sys.path`** при **`from api.myhome import router`**.

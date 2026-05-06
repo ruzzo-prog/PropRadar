@@ -25,7 +25,7 @@
 | Шаг     | Назначение                       | Действие в n8n                                                             |
 | ------- | -------------------------------- | -------------------------------------------------------------------------- |
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
-| 1       | Список ID (окно 7 дней)          | `GET` `**/api/myhome/fetch-ids?since_days=7`**                             |
+| 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
 | 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
 | 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
@@ -35,7 +35,7 @@
 
 **Критический инвариант (не смешивать)**
 
-- Вывод шага **1** с `**--since-days 7`** — это **узкое окно** для ограничения объёма **ingest**. Он **не** является полным снимком API.
+- Вывод шага **1** с `limit=all` — полный снимок ID; с `limit=N` — первые N ID для батча/отладки.
 - Шаг **3** с `**discover --fetch-api`** внутри скрипта загружает **полный** список ID с API (аналог `**fetch_myhome_ids.py --full`**). Поэтому **исчезнувшие** считаются корректно, даже если шаг 1 использует 7 дней.
 - **Нельзя** подставлять в `discover` JSON только за 7 дней через `--api-ids-json` и ожидать корректной классификации «исчезнувших» для старых объявлений — получите ложные `disappeared`.
 
@@ -124,11 +124,12 @@ PROPRADAR_API_URL=http://localhost:9000
 
 ---
 
-### Узел 1 — HTTP Request: Fetch IDs (окно 7 дней)
+### Узел 1 — HTTP Request: Fetch IDs (full или batch)
 
 - **Тип:** `HTTP Request`
 - **Method:** `GET`
-- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/fetch-ids?since_days=7`
+- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/fetch-ids?limit=all`
+  - Для батча: `...?limit=100`
   - Полный список без окна: `...?full=true` (см. OpenAPI `/docs`).
 - **Authentication:** заголовок `**X-API-Key`**: `={{ $env.PROPRADAR_API_KEY }}` (или **Generic Header** в Credentials).
 - **Ответ:** тело = JSON-массив ID (n8n обычно кладёт его в `json` item).

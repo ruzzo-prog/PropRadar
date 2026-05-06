@@ -73,14 +73,14 @@ X-API-Key: <значение PROPRADAR_API_KEY>
 
 | Параметр | По умолчанию | Описание |
 |----------|---------------|----------|
-| `since_days` | `7` | Окно публикации (дни), если `full=false`. |
-| `full` | `false` | Полный список ID (`--full`), без `since_days`. |
+| `limit` | `all` | `all` для полной выборки или число (`100`) для первых N ID. |
+| `max_pages` | `500` | Лимит страниц API (предохранитель). |
 | `max_pages` | `500` | Лимит страниц API. |
 
 Пример:
 
 ```bash
-curl -sS -H "X-API-Key: secret" "http://localhost:9000/api/myhome/fetch-ids?since_days=7"
+curl -sS -H "X-API-Key: secret" "http://localhost:9000/api/myhome/fetch-ids?limit=all"
 ```
 
 Ответ: JSON-массив строк/чисел ID.

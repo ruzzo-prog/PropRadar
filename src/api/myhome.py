@@ -11,10 +11,12 @@ import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from config.settings import Settings
+from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync
 
 from .auth import get_settings, verify_propradar_api_key
 
@@ -79,31 +81,48 @@ def _parse_json_stdout(stdout: str, *, script: str) -> Any:
         ) from exc
 
 
+def _parse_limit(limit: str) -> int | None:
+    value = limit.strip().lower()
+    if value == "all":
+        return None
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="limit must be 'all' or integer >= 1") from exc
+    if parsed < 1:
+        raise HTTPException(status_code=400, detail="limit must be 'all' or integer >= 1")
+    return parsed
+
+
 @router.get("/fetch-ids")
 def fetch_ids(
     settings: Annotated[Settings, Depends(get_settings)],
-    since_days: int = Query(7, ge=1, le=3650),
-    full: bool = Query(
-        False,
-        description="Полный список ID (--full), взаимоисключающе с since_days",
-    ),
+    limit: str = Query("all", description="all или число ID, например 100"),
     max_pages: int = Query(500, ge=1, le=10_000),
+    city: str = Query("tbilisi"),
+    category: str = Query("apartment"),
+    object_type: str = Query("apartment"),
+    seller_type: str = Query("private"),
 ) -> list[Any]:
-    if full:
-        args = ["--full", "--output", "json", "--max-pages", str(max_pages)]
-    else:
-        args = ["--since-days", str(since_days), "--output", "json", "--max-pages", str(max_pages)]
-    code, out, err = _run_cli(settings, "fetch_myhome_ids.py", args)
-    data = _parse_json_stdout(out, script="fetch_myhome_ids.py")
-    if code != 0:
-        logger.warning("fetch_myhome_ids exit=%s stderr=%s", code, err[-2000:] if err else "")
-        raise HTTPException(
-            status_code=502,
-            detail={"exit_code": code, "stderr_tail": (err or "")[-2000:]},
-        )
-    if not isinstance(data, list):
-        raise HTTPException(status_code=502, detail="Expected JSON array of IDs")
-    return data
+    limit_value = _parse_limit(limit)
+    base_url = str(settings.myhome_api_base_url).rstrip("/")
+    try:
+        with httpx.Client() as client:
+            ids = fetch_all_external_ids_sync(
+                client,
+                base_url=base_url,
+                max_pages=max_pages,
+                limit=limit_value,
+                city=city,
+                category=category,
+                object_type=object_type,
+                seller_type=seller_type,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="myhome API request failed") from exc
+    return ids
 
 
 class IngestRequest(BaseModel):
