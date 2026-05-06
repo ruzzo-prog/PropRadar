@@ -2,6 +2,52 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-06 — P0: устойчивые импорты пакета `api` (`.myhome` / `.auth`)
+
+- **Контекст:** риск **`ModuleNotFoundError`** / неоднозначности имени пакета **`api`** на **`sys.path`** при **`from api.myhome import router`**.
+- **Реализация:** **`src/api/main.py`** — **`from .myhome import router`**; **`src/api/myhome.py`** — **`from .auth import ...`**. **`api/__init__.py`** без eager-import **`app`** (как после P1).
+- **Проверка:** **`from api.main import app`** при **`PYTHONPATH=src`** — OK; **`pytest tests`** — **40 passed**, **2 skipped**.
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Hotfix scope | `src/api/main.py`, `src/api/myhome.py` |
+| Регресс API | не ожидается |
+
+## 2026-05-06 — P1 hotfix: циклический импорт пакета `api` (uvicorn)
+
+- **Контекст:** при **`uvicorn api.main:app`** с **`PYTHONPATH=src`** — **`ImportError`** из-за цикла: **`api/__init__.py`** тянул **`api.main`**, а **`api/main`** импортировал подмодуль через пакет **`api`**.
+- **Реализация:** только **`src/api/__init__.py`** (убран eager-import **`app`**) и первичная правка **`src/api/main.py`**; затем **P0** — относительные импорты (см. секцию выше).
+- **Проверка:** импорт **`from api.main import app`** — OK; **ruff** — OK.
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+
+| Показатель | Статус |
+|------------|--------|
+| Hotfix scope | `src/api/__init__.py`, `src/api/main.py` |
+| Регресс API | не ожидается |
+
+## 2026-05-06 — FastAPI HTTP-обёртка myhome для n8n (Scanner PASS, цепочка до release-check)
+
+- **Контекст:** n8n вызывает парсинг/синхронизацию через **HTTP** к PropRadar API вместо `Execute Command` на хосте.
+- **Реализация:** `src/api/myhome.py` (`GET/POST /api/myhome/*`, subprocess к **`scripts/`** без их изменения); `src/api/auth.py` — **`X-API-Key`** / **`PROPRADAR_API_KEY`** (в production без ключа — **403**); `src/api/main.py` — подключение роутера; `src/config/settings.py` — **`PROPRADAR_REPO_ROOT`**, таймаут CLI; **`docker/app/docker-compose.yml`** — только сервис **`api`**: **`PYTHONPATH=/srv/src`**, volume **`../../:/srv:ro`**, **`depends_on: leads-db`** (совместный запуск с **`docker/infra`**); **`docs/API.md`**; обновлён **`docs/n8n_myhome_workflow.md`** под HTTP; **`tests/unit/test_myhome_http_api.py`**. Без правок `src/parsers/base.py`, governance, остального **`docker/`** вне **`docker/app/docker-compose.yml`**.
+- **Проверка:** **Scanner** — **PASS** (подтверждение человека); **`pytest tests`** — **40 passed**, **2 skipped**; **ruff** на затронутых путях — OK.
+- **Документация:** **`CHANGELOG.md`**, **`docs/API.md`**, **`docs/n8n_myhome_workflow.md`**, этот файл.
+- **Условия перед деплоем:** задать **`PROPRADAR_API_KEY`** в production; поднять API командой merge compose (см. комментарий в compose); в n8n — **`PROPRADAR_API_URL`** и заголовок **`X-API-Key`**; smoke один прогон эндпоинтов вручную.
+
+| Показатель | Статус |
+|------------|--------|
+| Scanner | ✅ PASS |
+| QA (`pytest`) | 🧪 40 passed, 2 skipped |
+| Документация | 📜 обновлена |
+| Готовность к деплою | ожидается `@release-check` |
+
+```mermaid
+flowchart LR
+  N[n8n HTTP] --> A[PropRadar API :8000]
+  A --> S[scripts CLI subprocess]
+  S --> DB[(leads-db)]
+```
+
 ## 2026-05-06 — P1 hotfix: `setup_metabase_dashboard.py` создаёт все 10 карточек
 
 - **Контекст:** скрипт подключал к дашборду только **6** карточек по фиксированным заголовкам; карточки sync (**8–10**) и **«Средняя цена (GEL)»** не создавались.

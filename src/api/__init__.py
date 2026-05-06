@@ -1,3 +1,1 @@
-from api.main import app
-
-__all__ = ["app"]
+"""Пакет HTTP API PropRadar (без eager-import `app` — избегаем цикла с `api.main`)."""

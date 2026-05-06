@@ -6,6 +6,7 @@
 
 ### Verified
 
+- **PropRadar API / myhome HTTP:** **Scanner** — **PASS**; **`pytest tests`** — **40 passed**, **2 skipped**; HTTP-эндпоинты **`/api/myhome/*`** с **`X-API-Key`**; n8n-runbook переведён на HTTP (`docs/n8n_myhome_workflow.md`); цепочка до **`@release-check`** — сессия 2026-05-06.
 - **Myhome / n8n-синхронизация (список ID, discover, ingest по detail):** **Scanner** — **PASS**; **`pytest tests`** — **30 passed**, **2 skipped** (интеграция myhome); цепочка до **`@release-check`** завершена в сессии 2026-05-06.
 - **Leads client / migration 009:** контрольная точка **3** — **PASS**; smoke подтверждён человеком; `city_name` и `owner_name` синхронизируются из statement JSON, Metabase карточка 7 использует их в клиентской выдаче.
 - **Leads client v2 / миграция 008:** пересоздание **`leads_client`** под контракт **v2**; **Scanner** — **PASS**; **`@tester`** — **PASS**.
@@ -15,6 +16,8 @@
 
 ### Fixed
 
+- **P0 / загрузка API (`api.myhome`):** при старте uvicorn возможны **`ModuleNotFoundError`** или неоднозначность пакета **`api`** на **`sys.path`**. Исправление: в **`api/main.py`** — **`from .myhome import router`**; в **`api/myhome.py`** — **`from .auth import ...`** (внутрипакетные импорты, **`PYTHONPATH=src`** без изменений). (@tester: **`pytest tests`** — PASS).
+- **P1 / циклический импорт пакета `api`:** убран eager-import **`app`** из **`api/__init__.py`** (цикл с **`api.main`**). Последующий **P0**: в **`api/main.py`** и **`api/myhome.py`** — только **относительные** импорты внутри пакета (@tester: **`pytest`** — PASS).
 - **P1 / `scripts/setup_metabase_dashboard.py`:** дашборд собирался только из жёсткого списка из **6** заголовков — игнорировались **«Средняя цена (GEL)»** и карточки **8–10** из **`metabase/propradar_dashboard.json`**. Исправление: чтение **всех** элементов **`cards`**, сортировка по **`position`**, лог **`Processing card {position} {title_ru}`**, раскладка **`_LAYOUT_BY_POSITION`** для позиций **1–10** (@tester: проверка загрузки bundle и ключей layout).
 - **`sync_myhome_status.py`:** ошибки CLI (**`parser.error`**, **`SystemExit`**) не перехватывались как **`Exception`** → при неверных аргументах выводится JSON ошибки и код выхода **2** вместо traceback; в **`cmd_discover`** для пустого источника API — **`ValueError`**; интеграционная проверка — **`tests/unit/test_sync_myhome_status_cli.py`** (@tester **PASS**).
 - **`ingest_detail`:** в БД сохраняется тот же **`external_id`**, что в запросе к **`GET /v1/statements/{id}`**; при расхождении с **`statement.id`** — запись без save и код **`detail_id_mismatch`** (@tester **PASS**).
@@ -40,6 +43,7 @@
 
 ### Added
 
+- **PropRadar HTTP API (myhome для n8n):** **`src/api/myhome.py`**, **`src/api/auth.py`**; эндпоинты **`/api/myhome/fetch-ids`**, **`/ingest`**, **`/sync-status`**, **`/mark-rejected`** (subprocess к существующим **`scripts/*.py`**); **`docs/API.md`**; **`tests/unit/test_myhome_http_api.py`**. В **`docker/app/docker-compose.yml`** — донастройка сервиса **`api`** (volume репозитория в **`/srv`**, **`PYTHONPATH`**, **`depends_on: leads-db`** при merge с infra).
 - **Myhome / оркестрация n8n:** **`scripts/fetch_myhome_ids.py`** (полный список ID или окно **`--since-days`**); **`scripts/sync_myhome_status.py`** (подкоманды **`discover`**, **`mark-rejected`**); **`docs/n8n_myhome_workflow.md`** — сценарий Schedule → fetch → парсер → discover → Evolution API → mark-rejected. Без секретов Evolution в репозитории.
 - **Миграция `migrations/010_add_status_reason_to_leads.sql`:** колонка **`status_reason`** в **`leads`** (код причины, например **`disappeared_from_api`**). Домен **`Lead.status_reason`**; репозиторий: **`list_external_ids_by_source_and_status`**, **`mark_leads_by_external_ids`** (только из **`status=new`**).
 - **Пакеты myhome:** **`src/parsers/adapters/myhome/list_ids.py`** (постраничный список API), **`ingest_detail.py`** (ингест по detail ID). **`scripts/run_myhome_parser.py`:** опция **`--ingest-ids-json`**. Unit-тесты: **`tests/unit/test_myhome_list_ids.py`**, **`tests/unit/test_ingest_detail.py`**, **`tests/unit/test_sync_myhome_status_cli.py`**.

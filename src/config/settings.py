@@ -16,6 +16,29 @@ class Settings(BaseSettings):
     )
 
     app_env: str = Field(default="development", validation_alias="APP_ENV")
+    propradar_api_key: str | None = Field(
+        default=None,
+        validation_alias="PROPRADAR_API_KEY",
+        description=(
+            "Ключ для HTTP API (/api/myhome/*). В production обязателен; "
+            "без заголовка X-API-Key — 403."
+        ),
+    )
+    propradar_repo_root: Path | None = Field(
+        default=None,
+        validation_alias="PROPRADAR_REPO_ROOT",
+        description=(
+            "Корень репозитория для subprocess к scripts/. "
+            "По умолчанию вычисляется от расположения api."
+        ),
+    )
+    myhome_cli_timeout_seconds: int = Field(
+        default=3600,
+        ge=30,
+        le=86_400,
+        validation_alias="MYHOME_CLI_TIMEOUT_SECONDS",
+        description="Таймаут subprocess для CLI myhome (ingest может быть долгим).",
+    )
     database_url: PostgresDsn = Field(
         default="postgresql://leads:changeme@localhost:5433/leads",
         validation_alias="DATABASE_URL",

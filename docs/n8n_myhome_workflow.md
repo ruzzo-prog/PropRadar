@@ -1,6 +1,6 @@
 # n8n: расписание myhome.ge — fetch ID → ingest → discover → WhatsApp → mark-rejected
 
-Оркестрация расписательного парсинга и синхронизации **myhome.ge** через n8n. Секреты Evolution API **не** попадают в Python: креды задаются в **Credentials** узлов n8n и/или в переменных окружения **инстанса n8n**.
+Оркестрация расписательного парсинга и синхронизации **myhome.ge** через n8n. **Рекомендуемый путь:** узлы **HTTP Request** к **PropRadar API** (см. `docs/API.md`, OpenAPI `/docs`). Ключ `**X-API-Key`** и URL API задаются в env/Credentials n8n. Секреты Evolution — отдельно в Credentials WhatsApp-узлов.
 
 ## Оглавление
 
@@ -21,58 +21,67 @@
 
 **Шаги пайплайна**
 
-| Шаг | Назначение | Команда / действие |
-|-----|------------|-------------------|
-| Триггер | Запуск по расписанию | Schedule Trigger (hourly / 6h / daily) |
-| 1 | Список ID с API для «свежих» объявлений (окно) | `fetch_myhome_ids.py --since-days 7 --output json` |
-| 2 | Ingest новых лидов | `run_myhome_parser.py` (опционально `--ingest-ids-json`) |
-| 3 | Discover исчезнувшие (сверка БД ↔ полный список API) | `sync_myhome_status.py discover --fetch-api` |
-| 4 | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared` |
-| 5 | Отметить отклонёнными в БД | `sync_myhome_status.py mark-rejected --ids-json … --reason disappeared_from_api` |
-| 6 | Итоги и опционально Slack / файл | Set / Code + Slack или запись лога |
+
+| Шаг     | Назначение                       | Действие в n8n                                                             |
+| ------- | -------------------------------- | -------------------------------------------------------------------------- |
+| Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
+| 1       | Список ID (окно 7 дней)          | `GET` `**/api/myhome/fetch-ids?since_days=7`**                             |
+| 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
+| 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
+| 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
+| 5       | Mark rejected в БД               | `POST` `**/api/myhome/mark-rejected**` с `ids` и `reason`                  |
+| 6       | Итоги и опционально Slack / файл | Set / Code + Slack или запись лога                                         |
+
 
 **Критический инвариант (не смешивать)**
 
-- Вывод шага **1** с **`--since-days 7`** — это **узкое окно** для ограничения объёма **ingest**. Он **не** является полным снимком API.
-- Шаг **3** с **`discover --fetch-api`** внутри скрипта загружает **полный** список ID с API (аналог **`fetch_myhome_ids.py --full`**). Поэтому **исчезнувшие** считаются корректно, даже если шаг 1 использует 7 дней.
+- Вывод шага **1** с `**--since-days 7`** — это **узкое окно** для ограничения объёма **ingest**. Он **не** является полным снимком API.
+- Шаг **3** с `**discover --fetch-api`** внутри скрипта загружает **полный** список ID с API (аналог `**fetch_myhome_ids.py --full`**). Поэтому **исчезнувшие** считаются корректно, даже если шаг 1 использует 7 дней.
 - **Нельзя** подставлять в `discover` JSON только за 7 дней через `--api-ids-json` и ожидать корректной классификации «исчезнувших» для старых объявлений — получите ложные `disappeared`.
 
 ```mermaid
 flowchart LR
-  T[Schedule] --> S1[fetch_myhome_ids\n--since-days 7]
-  S1 --> S2[run_myhome_parser]
-  S2 --> D[discover --fetch-api]
+  T[Schedule] --> S1[GET fetch-ids]
+  S1 --> S2[POST ingest]
+  S2 --> D[POST sync-status]
   D --> L[Loop disappeared]
   L --> WA[Evolution WhatsApp]
-  WA --> M[mark-rejected\n--ids-json]
+  WA --> M[POST mark-rejected]
   M --> R[Summary / Slack]
 ```
+
+
 
 ---
 
 ## Предварительные условия
 
-- Репозиторий PropRadar на хосте, где n8n выполняет команды (`PROPRADAR_ROOT`), с установленными зависимостями Python и доступом к сети (myhome API).
-- **`DATABASE_URL`** указывает на **leads-db** (PostgreSQL ядра); те же настройки, что и для локального запуска скриптов (см. `config.settings`).
-- Применена миграция **`migrations/010_add_status_reason_to_leads.sql`**, если используется колонка `status_reason`.
+- Запущен сервис **PropRadar API** (`uvicorn api.main:app`, порт **9000** или иной), с `**DATABASE_URL`**, доступом к myhome API и (в production) `**PROPRADAR_API_KEY**`. Из n8n URL должен резолвиться (тот же Docker network: например `http://api:9000`, см. `docker/app/docker-compose.yml`).
+- `**X-API-Key**` в каждом запросе к `/api/myhome/*`, если для окружения API требуется ключ (см. `docs/API.md`).
+- Применена миграция `**migrations/010_add_status_reason_to_leads.sql**`, если используется колонка `status_reason`.
 - Evolution API доступен с хоста n8n (часто `http://localhost:8080` или имя сервиса в Docker-сети).
 
 ---
 
-## Переменные окружения
+## Переменные окружения (n8n)
 
-Задайте на **уровне инстанса n8n** (или в `.env` docker-compose n8n). В узлах подставляйте через `$env.VAR` / выражения n8n.
+Задайте на **уровне инстанса n8n** (или в Credentials). В узлах подставляйте через `$env.VAR` / выражения n8n.
 
-| Имя | Назначение |
-|-----|------------|
-| `PROPRADAR_ROOT` | Абсолютный путь к корню репозитория PropRadar на машине, где выполняется Execute Command. |
-| `PYTHON` | Опционально: путь к интерпретатору (`python3`, `python` или venv). Если не задан — используйте `python` в команде. |
-| `PYTHONPATH` | Должно включать `src` при запуске скриптов: **`src`** относительно `PROPRADAR_ROOT` → на практике в команде: `PYTHONPATH=src` (Linux/macOS) или отдельный шаг `set PYTHONPATH=src` (Windows). |
-| `DATABASE_URL` | Строка подключения к **leads-db**; читается скриптами через `Settings`. |
-| `EVOLUTION_API_URL` | Базовый URL Evolution, например `http://localhost:8080`. В точном пути эндпоинта ориентируйтесь на вашу версию Evolution (см. [Evolution API](#узел-6-http-request--whatsapp-evolution)). |
-| `EVOLUTION_API_AUTH` | Опционально: токен для заголовка (например Bearer) **или** имя credential-поля; предпочтительно хранить секрет в **n8n Credentials**, а не в plain env. |
+Локально (API на хосте, n8n тоже на хосте), например:
 
-**Замечание по Windows:** в одной строке `Execute Command` используйте `cd /d D:\PropRadar && set PYTHONPATH=src && python scripts\...` (или PowerShell-эквивалент), либо вынесите запуск в `.cmd` / `.ps1` в репозитории (вне scope этого гайда).
+```bash
+PROPRADAR_API_URL=http://localhost:9000
+```
+
+| Имя                  | Назначение                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PROPRADAR_API_URL`  | Базовый URL PropRadar API, например `http://localhost:9000` (локально) или `http://api:9000` / `http://host.docker.internal:9000` (Docker). |
+| `PROPRADAR_API_KEY`  | Значение для заголовка `**X-API-Key`** (должно совпадать с `PROPRADAR_API_KEY` на стороне API в production). |
+| `EVOLUTION_API_URL`  | Базовый URL Evolution (см. узел **WhatsApp / Evolution** ниже).                                              |
+| `EVOLUTION_API_AUTH` | Опционально: для Evolution; хранить в **Credentials**.                                                       |
+
+
+**Альтернатива (legacy):** запуск CLI через **Execute Command** на хосте с клоном репозитория — не описывается здесь; при необходимости см. историю git до перехода на HTTP API.
 
 ---
 
@@ -101,11 +110,13 @@ flowchart LR
 - **Тип:** `Schedule Trigger`
 - **Параметры расписания**
 
-| Режим | Cron (UTC или TZ инстанса) | Пример интервала узла |
-|-------|----------------------------|------------------------|
-| Hourly | `0 * * * *` — каждый час в :00 | Каждые 60 минут |
-| Каждые 6 ч | `0 */6 * * *` | Каждые 360 минут |
-| Daily | `0 8 * * *` — 08:00 каждый день | Раз в 24 ч |
+
+| Режим      | Cron (UTC или TZ инстанса)      | Пример интервала узла |
+| ---------- | ------------------------------- | --------------------- |
+| Hourly     | `0 * * * *` — каждый час в :00  | Каждые 60 минут       |
+| Каждые 6 ч | `0 */6 * * *`                   | Каждые 360 минут      |
+| Daily      | `0 8 * * *` — 08:00 каждый день | Раз в 24 ч            |
+
 
 **Важно:** часовой пояс берётся из настроек n8n/сервера; зафиксируйте в runbook, в каком TZ работает инстанс.
 
@@ -113,71 +124,47 @@ flowchart LR
 
 ---
 
-### Узел 1 — Execute Command: Fetch API IDs (окно 7 дней)
+### Узел 1 — HTTP Request: Fetch IDs (окно 7 дней)
 
-- **Тип:** `Execute Command`
-- **Команда (Linux/macOS, пример):**
-
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/fetch_myhome_ids.py --since-days 7 --output json
-```
-
-- **Выход:** stdout — JSON-массив строк ID, одна строка (массив).
-- **Следующий узел:** **Code** (или **Function**) — распарсить stdout в массив для шага 2, например в n8n 2.x взять `items[0].json.stdout` и `JSON.parse`.
-
+- **Тип:** `HTTP Request`
+- **Method:** `GET`
+- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/fetch-ids?since_days=7`
+  - Полный список без окна: `...?full=true` (см. OpenAPI `/docs`).
+- **Authentication:** заголовок `**X-API-Key`**: `={{ $env.PROPRADAR_API_KEY }}` (или **Generic Header** в Credentials).
+- **Ответ:** тело = JSON-массив ID (n8n обычно кладёт его в `json` item).
+- **Следующий узел:** **Set** / **Code** — сформировать тело для шага 2: `{"ids": <массив из шага 1>}`.
 - **Скриншот:** `docs/assets/n8n/nodes/01-fetch-myhome-ids.png`
 
 ---
 
-### Узел 2a — Code: подготовка `ingest-ids-json` (опционально)
+### Узел 2a — Set / Code: тело `POST /api/myhome/ingest`
 
-- Если передаёте ID в парсер явно: сформируйте JSON-файл на диске **или** передайте через stdin в зависимости от возможностей хоста. Практичный путь: **Write Binary File** / второй **Execute Command** с heredoc не всегда удобен; проще **один** Execute Command, который пишет файл:
-
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" -c "
-import json, pathlib, sys
-path = pathlib.Path('/tmp/myhome_ingest_ids.json')
-path.write_text(json.dumps(json.loads(sys.argv[1])), encoding='utf-8')
-print(path)
-" '{{ $json.idsJsonString }}'
-```
-
-Упростите под ваш канал данных: главное — файл с JSON-массивом для `--ingest-ids-json`.
-
+- Поле `**ids`**: массив из ответа узла 1 (например выражение вида `{{ $json }}`, если предыдущий узел вернул один item с массивом в корне — подстройте под фактическую структуру items в n8n).
+- Пустой массив допустим: API вернёт `new: 0` без вызова CLI.
 - **Скриншот (если используете):** `docs/assets/n8n/nodes/02a-prepare-ingest-json.png`
 
 ---
 
-### Узел 2b — Execute Command: Ingest новых лидов
+### Узел 2b — HTTP Request: Ingest
 
-**Вариант A — без входного списка (поведение по умолчанию CLI):**
-
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/run_myhome_parser.py
-```
-
-**Вариант B — ограничить конкретными ID из шага 1:**
-
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/run_myhome_parser.py --ingest-ids-json /tmp/myhome_ingest_ids.json
-```
-
-- **Логирование «сколько новых»:** скрипт печатает в stdout JSON одной строкой, например:
-  `{"parsed": N, "new": K, "errors": [...]}`
-  Добавьте узел **Code** после Execute Command и разберите `stdout` через `JSON.parse` — возьмите поле **`new`** как число новых лидов.
-- **Retry:** см. раздел [Retry](#обработка-ошибок-retry-и-fallback).
-
+- **Тип:** `HTTP Request`
+- **Method:** `POST`
+- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/ingest`
+- **Headers:** `Content-Type: application/json`, `**X-API-Key`**
+- **Body (JSON):** из узла 2a, например `{"ids": [ ... ]}`.
+- **Ответ:** `{"parsed", "new", "errors"}` — поле `**new`** для итоговой статистики.
+- **Примечание:** отдельного HTTP-эндпоинта для «полного» `run_myhome_parser` без списка ID нет; при необходимости расширяйте API отдельной задачей.
 - **Скриншот:** `docs/assets/n8n/nodes/02b-run-myhome-parser.png`
 
 ---
 
-### Узел 3 — Execute Command: Discover исчезнувшие
+### Узел 3 — HTTP Request: Discover (sync-status)
 
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_status.py discover --fetch-api
-```
-
-- **Вывод:** JSON вида:
+- **Тип:** `HTTP Request`
+- **Method:** `POST`
+- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/sync-status` (опционально query `max_pages`).
+- **Headers:** `**X-API-Key`**, `Content-Type: application/json` (тело можно пустым `{}`).
+- **Ответ:** JSON вида:
 
 ```json
 {
@@ -198,8 +185,7 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
 }
 ```
 
-- **Следующий узел:** извлечь массив `disappeared` (Code node: один item на каждый элемент или передать массив в **Split Out**).
-
+- **Следующий узел:** извлечь массив `disappeared` (Code / **Split Out**).
 - **Скриншот:** `docs/assets/n8n/nodes/03-sync-discover.png`
 
 ---
@@ -209,20 +195,19 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
 - **Тип:** `Split In Batches` (или `Loop Over Items`, зависит от версии n8n)
 - **Вход:** список объектов из `disappeared`.
 - **Размер batch:** `1`, если для каждого отправляете отдельный HTTP запрос.
-
 - **Скриншот:** `docs/assets/n8n/nodes/04-split-batches.png`
 
 ---
 
 ### Узел 5 — HTTP Request: WhatsApp через Evolution API
 
-Эндпоинты Evolution зависят от версии и режима (**Baileys**, инстансы и т.д.). Шаблон из ТЗ: **`POST`** на базовый URL + путь отправки сообщения.
+Эндпоинты Evolution зависят от версии и режима (**Baileys**, инстансы и т.д.). Шаблон из ТЗ: `**POST`** на базовый URL + путь отправки сообщения.
 
 1. Задайте **Base URL** = `={{ $env.EVOLUTION_API_URL }}` или фиксируете `http://localhost:8080`.
 2. **Path** уточните по вашему Swagger/докам Evolution (часто встречаются варианты с `/message/sendText/{instance}` или `/message/send/{instance}`).
 3. **Authentication:** предпочтительно **Credential** типа **Header Auth**:
-   - имя заголовка часто **`apikey`** для Evolution v2;
-   - либо **Bearer** с токеном в **Generic Credential Type**.
+  - имя заголовка часто `**apikey`** для Evolution v2;
+  - либо **Bearer** с токеном в **Generic Credential Type**.
 4. **Body (JSON)** — пример структуры (поля замените на контракт **вашей** версии; не копируйте реальные ключи в репозиторий):
 
 ```json
@@ -234,8 +219,8 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
 
 Текст `message_text` сформируйте в предыдущем узле **Set** / **Code** из шаблонов [локалей](#примеры-сообщений-для-разных-локалей).
 
-5. **Settings узла:** включите **Continue On Fail** (или эквивалент), чтобы одна неудачная отправка не останавливала весь workflow.
-6. **Параллельность:** при большом `disappeared` ограничьте параллельные HTTP (настройки batch / задержка), чтобы не упереться в rate limit WhatsApp/Evolution.
+1. **Settings узла:** включите **Continue On Fail** (или эквивалент), чтобы одна неудачная отправка не останавливала весь workflow.
+2. **Параллельность:** при большом `disappeared` ограничьте параллельные HTTP (настройки batch / задержка), чтобы не упереться в rate limit WhatsApp/Evolution.
 
 - **Скриншот:** `docs/assets/n8n/nodes/05-evolution-http.png`
 
@@ -244,43 +229,25 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
 ### Узел 6 — Аккумуляция ошибок отправки (рекомендуется)
 
 - После HTTP узла: **IF** «statusCode не 2xx» → **Set** / **Merge** в массив «ошибок» (или увеличивайте счётчик в **Static Data** через Code — осторожно с конкурентностью).
-- Цель: на шаге итогов иметь **`send_errors_count`**.
-
+- Цель: на шаге итогов иметь `**send_errors_count`**.
 - **Скриншот:** `docs/assets/n8n/nodes/06-wa-error-accumulator.png`
 
 ---
 
-### Узел 7 — Execute Command: Mark rejected в БД
+### Узел 7 — HTTP Request: Mark rejected в БД
 
-Фактический CLI **`mark-rejected`** принимает **только** список ID в файле:
+- **Тип:** `HTTP Request`
+- **Method:** `POST`
+- **URL:** `={{ $env.PROPRADAR_API_URL }}/api/myhome/mark-rejected`
+- **Headers:** `**X-API-Key`**, `Content-Type: application/json`
+- **Body (JSON):** `{"ids": ["..."], "reason": "disappeared_from_api"}` — список `**external_id`** (строки).
 
-```bash
-sync_myhome_status.py mark-rejected --ids-json /path/to/ids.json --reason disappeared_from_api
-```
+**Политика `ids` (как и для CLI):**
 
-Флага **`--fetch-api`** у подкоманды **`mark-rejected` нет** — полный список API уже использован на шаге **discover**.
-
-**Политика ID для `--ids-json` (выберите одну и задокументируйте у себя):**
-
-- **A (проще):** все `external_id` из `disappeared` — независимо от WhatsApp.
-- **B (строже):** только те `external_id`, по которым HTTP отправка завершилась успехом (требует сбора списка в цикле).
-
-Сформируйте файл JSON-массива строк:
-
-```json
-["12345", "67890"]
-```
-
-Затем:
-
-```bash
-cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_status.py mark-rejected --ids-json /tmp/myhome_mark_ids.json --reason disappeared_from_api
-```
-
-Ответ stdout: JSON с полем **`updated`** (число обновлённых строк).
-
-- **Retry / Alert при БД:** см. ниже.
-
+- **A (проще):** все `external_id` из `disappeared`.
+- **B (строже):** только успешно уведомлённые в WhatsApp (собрать в цикле).
+- **Ответ:** `{"updated": N, "reason": "..."}`.
+- **Retry / Alert при БД:** см. [Retry](#обработка-ошибок-retry-и-fallback).
 - **Скриншот:** `docs/assets/n8n/nodes/07-mark-rejected.png`
 
 ---
@@ -295,19 +262,21 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
   - `send_errors` (накопленные).
 - **Slack:** узел **Slack** или **HTTP Request** к incoming webhook; **не** вшивайте webhook URL в репозиторий.
 - **Файл:** узел **Write Binary File** / Execute Command `>> /var/log/propradar-n8n.log`.
-
 - **Скриншот:** `docs/assets/n8n/nodes/08-summary.png`
 
 ---
 
 ## Обработка ошибок: retry и fallback
 
-| Сбой | Политика | Настройка в n8n |
-|------|----------|-----------------|
-| myhome API / сетевые ошибки на шагах 1–3 | Повторить до **3** раз с **exponential backoff** | В узле **Execute Command** / **HTTP Request**: **Retry On Fail**, max tries = 3, подобрать `wait between tries` (например 5s, 30s, 120s) |
-| WhatsApp (Evolution) недоступен или 4xx/5xx | **Не** валить workflow: **Continue On Fail**, лог + инкремент счётчика ошибок | Отдельная ветка после HTTP |
-| БД недоступна на **mark-rejected** | **2** retry, затем **Alert** (Slack/email/второй workflow) | Retry On Fail = 2; затем **Error Workflow** или **IF** по коду выхода |
-| Парсинг JSON из stdout | Try/catch в **Code**; при ошибке — уведомление и **стоп** ветки ingest | — |
+
+| Сбой                                        | Политика                                                                      | Настройка в n8n                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| PropRadar API / сеть на шагах 1–3           | Повторить до **3** раз с **exponential backoff**                              | В узле **HTTP Request**: **Retry On Fail**, max tries = 3, `wait between tries` (например 5s, 30s, 120s) |
+| WhatsApp (Evolution) недоступен или 4xx/5xx | **Не** валить workflow: **Continue On Fail**, лог + инкремент счётчика ошибок | Отдельная ветка после HTTP                                                                               |
+| БД недоступна на **mark-rejected**          | **2** retry, затем **Alert** (Slack/email/второй workflow)                    | Retry On Fail = 2; затем **Error Workflow** или **IF** по коду выхода                                    |
+| 403 от PropRadar API                        | Неверный или отсутствующий `**X-API-Key`** при `APP_ENV` production           | Проверить `PROPRADAR_API_KEY` на API и в n8n; см. `docs/API.md`                                          |
+| Невалидный JSON в ответе API                | Ошибка CLI внутри обёртки                                                     | Смотреть тело ответа **502** и логи контейнера `api`                                                     |
+
 
 **Fallback:** при исчерпании retry на критичных шагах (1–3) можно переходить к узлу **Slack Alert** с телом execution и ссылкой на **Executions** в n8n.
 
@@ -318,12 +287,12 @@ cd "$PROPRADAR_ROOT" && PYTHONPATH=src "${PYTHON:-python}" scripts/sync_myhome_s
 1. **История:** меню **Executions** — фильтр по workflow, статусу (`success` / `error`), времени.
 2. **Лог каждого запуска:** фиксируйте в узле 8 минимум: дата/время, `new`, `disappeared`, `updated`, `send_errors`.
 3. **Алерты по порогам (примеры):**
-   - **`disappeared_count > N`** за сутки: агрегируйте через отдельную БД/таблицу или смотрите последние execution JSON; при превышении — Slack.
-   - **`send_errors > M`:** сравнение в **IF** после цикла.
+  - `**disappeared_count > N`** за сутки: агрегируйте через отдельную БД/таблицу или смотрите последние execution JSON; при превышении — Slack.
+  - `**send_errors > M`:** сравнение в **IF** после цикла.
 4. **Dead man’s switch (workflow не запустился):**
-   - Заведите **второй** короткий workflow: Schedule (например раз в 12h) → **HTTP Request** к n8n API **Executions** (нужен API key n8n) или → проверка «последний успешный запуск основного workflow новее чем X часов».
-   - При нарушении — отправка алерта.
-   - Детали URL и прав зависят от версии n8n; зафиксируйте у себя ссылку на официальный **n8n API** для вашей установки.
+  - Заведите **второй** короткий workflow: Schedule (например раз в 12h) → **HTTP Request** к n8n API **Executions** (нужен API key n8n) или → проверка «последний успешный запуск основного workflow новее чем X часов».
+  - При нарушении — отправка алерта.
+  - Детали URL и прав зависят от версии n8n; зафиксируйте у себя ссылку на официальный **n8n API** для вашей установки.
 
 ---
 
@@ -365,15 +334,17 @@ Listing for {{address}} is no longer found on myhome.ge. If it was sold, please 
 
 ## Troubleshooting
 
-| Симптом | Возможная причина | Действие |
-|--------|-------------------|----------|
-| Огромный `disappeared` после смены логики | В `discover` передан урезанный `--api-ids-json` (например только 7 дней) | Использовать **`discover --fetch-api`**, не подмешивать вывод шага 1 как полный снимок API |
-| `mark-rejected` падает с ошибкой файла | Неверный путь к `--ids-json` или невалидный JSON | Проверить содержимое `/tmp/...`, права на запись в CI хоста n8n |
-| Evolution 401/403 | Неверный apikey / instance | Проверить Credentials; сравнить с рабочим запросом из Postman |
-| Evolution 404 на `/message/send` | Другой путь в вашей версии | Открыть Swagger Evolution, обновить Path в HTTP узле |
-| Пустой `disappeared`, но лиды есть | В БД нет `new` по `source=myhome` или все ID ещё в API | Проверить SQL; убедиться, что ingest отработал |
-| Cron «сдвинут» на часы | TZ сервера ≠ ожидаемый | Уточнить TZ контейнера n8n; скорректировать cron |
-| Дубли WhatsApp при повторном execution | Повторный прогон того же набора | Ввести операционный дедуп (учёт уже отправленных `external_id` в сторонней таблице или логе) — скрипты Python не меняются |
+
+| Симптом                                      | Возможная причина                                                        | Действие                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Огромный `disappeared` после смены логики    | В `discover` передан урезанный `--api-ids-json` (например только 7 дней) | Использовать `**discover --fetch-api**`, не подмешивать вывод шага 1 как полный снимок API                                |
+| `mark-rejected` через API возвращает 400/502 | Пустые `ids` или ошибка CLI                                              | Проверить тело запроса и логи `api`                                                                                       |
+| Evolution 401/403                            | Неверный apikey / instance                                               | Проверить Credentials; сравнить с рабочим запросом из Postman                                                             |
+| Evolution 404 на `/message/send`             | Другой путь в вашей версии                                               | Открыть Swagger Evolution, обновить Path в HTTP узле                                                                      |
+| Пустой `disappeared`, но лиды есть           | В БД нет `new` по `source=myhome` или все ID ещё в API                   | Проверить SQL; убедиться, что ingest отработал                                                                            |
+| Cron «сдвинут» на часы                       | TZ сервера ≠ ожидаемый                                                   | Уточнить TZ контейнера n8n; скорректировать cron                                                                          |
+| Дубли WhatsApp при повторном execution       | Повторный прогон того же набора                                          | Ввести операционный дедуп (учёт уже отправленных `external_id` в сторонней таблице или логе) — скрипты Python не меняются |
+
 
 ---
 

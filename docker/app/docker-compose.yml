@@ -1,5 +1,9 @@
 # Сервисы приложения (заглушки). API: порт 8000 на хосте.
 # Запускать после infra: хост leads-db в docker-сети propradar.
+#
+# API + БД (чтобы сработал depends_on на leads-db):
+#   docker compose -f ../infra/docker-compose.yml -f docker-compose.yml up -d api
+# Только этот файл без infra: сервис leads-db не определён — compose выдаст ошибку.
 
 services:
   parsers:
@@ -17,11 +21,20 @@ services:
     build:
       context: ../..
       dockerfile: docker/app/parsers.Dockerfile
+    working_dir: /srv
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://leads:changeme@leads-db:5432/leads}
       APP_ENV: ${APP_ENV:-development}
+      PYTHONPATH: /srv/src
+      PROPRADAR_API_KEY: ${PROPRADAR_API_KEY:-}
+      PROPRADAR_REPO_ROOT: /srv
     ports:
       - "8000:8000"
+    volumes:
+      - ../../:/srv:ro
+    depends_on:
+      leads-db:
+        condition: service_started
     command:
       [
         "uvicorn",
