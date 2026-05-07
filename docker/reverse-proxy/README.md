@@ -1,6 +1,6 @@
 # Reverse-proxy (Nginx) для PropRadar
 
-TLS-терминация и внешний HTTPS для **n8n** и **Evolution API**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы из `docker/tools/docker-compose.yml`: `n8n`, `evolution-api`.
+TLS-терминация и внешний HTTPS для **n8n** и **Evolution API**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы из `docker/tools/docker-compose.yml`: `n8n`, `evolution-api`. Порты **5678** и **8080** на хосте не публикуются — доступ только через этот прокси (80/443) по доменам **n8n.usluga-market.ru** и **evolution.usluga-market.ru**.
 
 ## API наружу (решение по умолчанию)
 
@@ -9,28 +9,42 @@ TLS-терминация и внешний HTTPS для **n8n** и **Evolution A
 ## Быстрый старт
 
 1. Сеть (один раз): `docker network create propradar`
-2. Запущены `docker/tools` (и при необходимости `docker/infra` + `docker/app` для `api`).
-3. TLS: каталог `nginx/ssl/` должен содержать `fullchain.pem` и `privkey.pem` **до** `docker compose up` (иначе Nginx не поднимется). Для теста:
+2. Запущены `docker/tools` (и при необходимости `docker/infra` + `docker/app` для `api`). Для n8n: `N8N_HOST=n8n.usluga-market.ru`, `N8N_PROTOCOL=https`, порт как в документации вашей версии n8n. Для Evolution: `SERVER_URL=https://evolution.usluga-market.ru`.
 
-   ```bash
-   openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-     -keyout nginx/ssl/privkey.pem -out nginx/ssl/fullchain.pem \
-     -subj "/CN=n8n.example.com"
-   ```
+### Первичный выпуск TLS (certbot standalone)
 
-4. В `nginx/conf.d/n8n.conf` и `evolution.conf` замените `n8n.example.com` / `evolution.example.com` на реальные FQDN.
-5. В env n8n выставьте `N8N_HOST`, `N8N_PROTOCOL=https`, порт `443` (или пустой, см. доки n8n для вашей версии). Для Evolution — `SERVER_URL=https://<ваш-evolution-FQDN>`.
-6. Запуск из этой папки:
+Убедитесь, что **порт 80 свободен** (контейнер `propradar-reverse-proxy` / другой nginx **не запущены**). На хосте с Docker:
 
-   ```bash
-   docker compose up -d
-   ```
+```bash
+sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
+  -d n8n.usluga-market.ru
+sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
+  -d evolution.usluga-market.ru
+```
+
+После успешной выдачи сертификатов поднимите прокси из этой папки:
+
+```bash
+docker compose up -d
+```
 
 Сухой прогон: `docker compose config`.
 
-## Certbot (Let's Encrypt)
+### Монтирование сертификатов в nginx
 
-Том `reverse_proxy_certbot_www` смонтирован в `/var/www/certbot`. Настройте выпуск сертификатов на хосте или отдельным контейнером certbot с тем же томом; путь challenge: `/.well-known/acme-challenge/` (уже прописан в server для порта 80). **Не коммитьте** ключи и PEM в репозиторий.
+В `docker-compose.yml` каталоги хоста смонтированы **read-only**: `/etc/letsencrypt/live` и **`/etc/letsencrypt/archive`**. Файлы в `live/<домен>/` — симлинки на `archive/`; без монтирования `archive` nginx в контейнере не сможет прочитать цепочку.
+
+### Автообновление (cron)
+
+Пример cron (ежедневно, время по желанию):
+
+```cron
+0 3 * * * certbot renew --quiet --deploy-hook "docker exec propradar-reverse-proxy nginx -s reload"
+```
+
+Если в `/etc/letsencrypt/renewal/*.conf` для сертификата указан **authenticator = standalone**, при `renew` тоже потребуется свободный порт 80: добавьте **pre-hook** / **post-hook** (остановка контейнера прокси и запуск после renew) или один раз переведите продление на **webroot**, чтобы nginx продолжал слушать 80 и отдавал `/.well-known/acme-challenge/` (блок уже есть в `conf.d`).
+
+**Не коммитьте** ключи и PEM в репозиторий.
 
 ## Runbook / операции
 
@@ -41,4 +55,4 @@ TLS-терминация и внешний HTTPS для **n8n** и **Evolution A
 ## Безопасность
 
 - PostgreSQL (`leads-db`) не должен слушать `0.0.0.0:5433` в интернете — см. `docs/DEPLOY_SERVER.md`.
-- Публично остаются только 80/443 reverse-proxy и те порты, что вы явно открыли на файрволе.
+- Публично остаются только 80/443 reverse-proxy и те порты, что вы явно открыли на файрволе (например, Metabase **3031**, если нужен прямой доступ).

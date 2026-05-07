@@ -10,8 +10,6 @@ services:
       N8N_PORT: ${N8N_PORT:-5678}
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
-    ports:
-      - "5678:5678"
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
@@ -37,8 +35,6 @@ services:
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
-    ports:
-      - "8080:8080"
     volumes:
       - evolution_instances:/evolution/instances
     networks:
