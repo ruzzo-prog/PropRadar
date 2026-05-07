@@ -2,6 +2,32 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-07 — Evolution API: исправление `Database provider invalid` (DATABASE_* в compose)
+
+- **Контекст:** контейнер **Evolution API** в **`docker/tools`** при старте сообщал **`Database provider invalid`** из‑за неполной или несогласованной конфигурации провайдера БД в окружении.
+- **Реализация (код уже в репо):** в **`docker/tools/docker-compose.yml`** для сервиса **`evolution-api`** добавлены переменные **`DATABASE_*`** (PostgreSQL, учётные данные, имя БД, связка с **`leads-db`** в сети **`propradar`**); выровнены значения по умолчанию и fallback'и; в **`DATABASE_CONNECTION_URI`** пример указывает хост **`leads-db`**. В **`docker/tools/.env.example`** уточнены **`DATABASE_*`** и комментарии для переноса в локальный `.env`.
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-07).
+- **Документация (запись @documentor):** этот файл, **`CHANGELOG.md`**.
+- **Дальнейший шаг по канону:** **`@process-guard` Diff Check** → при PASS — **`@release-check`** / релиз по процессу.
+
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS |
+| QA (`@tester`) | 🧪 PASS |
+| Документация | 📜 статус + changelog |
+| Следующий гейт | 🛡️ `@process-guard` Diff Check |
+
+
+```mermaid
+flowchart LR
+  EVO[evolution-api] --> ENV[DATABASE_* /\nDATABASE_CONNECTION_URI]
+  ENV --> PG[(leads-db\nсеть propradar)]
+```
+
+
+Прогресс задачи Evolution/DATABASE: `[▓▓▓▓▓▓▓▓▓░] 90%` (остаётся Diff Check и приёмка по процессу).
+
 ## 2026-05-07 — Reverse-proxy: TLS для n8n и Evolution (жёсткая граница портов)
 
 - **Контекст:** вынести HTTPS-терминацию в `docker/reverse-proxy`, не публиковать прямые порты сервисов n8n/Evolution на хост, сделать монтирование сертификатов переносимым (не привязка к одному пути Let's Encrypt в конфиге nginx) и отловить «битые» PEM до старта nginx.

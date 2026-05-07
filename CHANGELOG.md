@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- **Evolution API / `docker/tools` — `Database provider invalid`:** для **`evolution-api`** заданы переменные **`DATABASE_*`** и согласованный **`DATABASE_CONNECTION_URI`** (хост **`leads-db`** в Docker-сети **`propradar`**); fallback'и в **`docker/tools/docker-compose.yml`** выровнены; **`docker/tools/.env.example`** дополнен примерами и комментариями. **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
 - **P1 / myhome `list_ids` — регрессия `since_days`:** параметр снова учитывается при отборе external ID в постраничном списке Statements API; правка в `src/parsers/adapters/myhome/list_ids.py`, регрессионное покрытие в `tests/unit/test_myhome_list_ids.py` (@tester: целевые unit — PASS; полный `pytest tests` — **51 passed**, **2 skipped**).
 - **P0 / myhome list property filter upstream:** в `src/parsers/adapters/myhome/list_ids.py` ключ типа имущества переключён на `real_estate_types` (вместо `object_types`) по результатам аудита live API; добавлена защита от рассинхронизации `category` vs `object_type`.
 - **P1 / `fetch-ids` refactor (`limit`):** в `/api/myhome/fetch-ids` убран `since_days`, добавлен `limit=all|N`; в `list_ids` отключена обработка окна по датам и добавлена ранняя остановка по лимиту ID. Обновлены unit-тесты и API/n8n документация.
