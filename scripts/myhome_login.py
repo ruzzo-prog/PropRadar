@@ -1,11 +1,12 @@
 """Headful Playwright: вход на myhome.ge.
 
-Сохраняет storage_state в scripts/myhome_session.json.
+Сохраняет storage_state в путь из ``MYHOME_SESSION_PATH`` (или настройки).
 """
 
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
@@ -14,8 +15,6 @@ from config.settings import Settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("myhome_login")
-
-_STATE_FILE = Path(__file__).resolve().parent / "myhome_session.json"
 
 
 def _try_auto_login(page: Page, email: str, password: str) -> None:
@@ -49,7 +48,21 @@ def _try_auto_login(page: Page, email: str, password: str) -> None:
 
 def main() -> int:
     settings = Settings()
-    logger.info("Откроется окно браузера. Сессия будет записана в %s", _STATE_FILE)
+    state_path = settings.myhome_session_path
+    if not state_path.is_absolute():
+        state_path = (Path.cwd() / state_path).resolve()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    creds_ok = bool(settings.myhome_email and settings.myhome_password)
+    if not creds_ok and not sys.stdin.isatty():
+        logger.error(
+            "Задайте MYHOME_EMAIL и MYHOME_PASSWORD или запускайте в интерактивной консоли.",
+        )
+        return 1
+
+    need_enter = not creds_ok
+
+    logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False)
@@ -57,20 +70,31 @@ def main() -> int:
         page = context.new_page()
         page.goto("https://www.myhome.ge/ru/", wait_until="domcontentloaded", timeout=120_000)
 
-        if settings.myhome_email and settings.myhome_password:
+        if creds_ok:
             try:
-                _try_auto_login(page, settings.myhome_email, settings.myhome_password)
+                _try_auto_login(page, settings.myhome_email or "", settings.myhome_password or "")
+                page.wait_for_load_state("networkidle", timeout=60_000)
             except Exception:
-                logger.warning("Автовход не удался — выполните вход вручную в окне браузера.")
+                logger.warning(
+                    "Автовход не удался — войдите вручную или проверьте селекторы.",
+                )
+                if not sys.stdin.isatty():
+                    browser.close()
+                    return 1
+                need_enter = True
+        else:
+            print("Выполните вход вручную в окне браузера.")
 
-        print("После успешного входа нажмите Enter в этой консоли, чтобы сохранить сессию.")
-        try:
-            input()
-        except EOFError:
-            logger.error("Нет интерактивного stdin — прервите и запустите вручную.")
-            return 1
+        if need_enter:
+            print("После успешного входа нажмите Enter в этой консоли, чтобы сохранить сессию.")
+            try:
+                input()
+            except EOFError:
+                logger.error("Нет интерактивного stdin.")
+                browser.close()
+                return 1
 
-        context.storage_state(path=str(_STATE_FILE))
+        context.storage_state(path=str(state_path))
         browser.close()
 
     logger.info("Готово.")

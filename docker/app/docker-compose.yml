@@ -1,4 +1,5 @@
 # Сервисы приложения. API: контейнер слушает 8000; с хоста — 8000:8000.
+# Playwright-worker: 8090, профили enricher | workers (см. compose.yaml в корне).
 # Рекомендуемый запуск из корня репозитория: см. ../../compose.yaml и --profile app (+ infra).
 # DATABASE_URL и прочие секреты — из корневого .env (env_file ../../.env относительно этого файла).
 #
@@ -55,6 +56,42 @@ services:
       ]
     networks:
       - propradar
+
+  playwright-worker:
+    profiles:
+      - enricher
+      - workers
+    build:
+      context: ../..
+      dockerfile: docker/app/playwright-worker.Dockerfile
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://leads:changeme@leads-db:5432/leads}
+      MYHOME_EMAIL: ${MYHOME_EMAIL:-}
+      MYHOME_PASSWORD: ${MYHOME_PASSWORD:-}
+      MYHOME_SESSION_PATH: ${MYHOME_SESSION_PATH:-/data/adapter_sessions/myhome_session.json}
+      PROPRADAR_REPO_ROOT: /app
+      PYTHONPATH: /app/src
+      APP_ENV: ${APP_ENV:-development}
+    volumes:
+      - adapter_playwright_sessions:/data/adapter_sessions
+    depends_on:
+      leads-db:
+        condition: service_healthy
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    networks:
+      - propradar
+
+volumes:
+  adapter_playwright_sessions:
 
 networks:
   propradar:

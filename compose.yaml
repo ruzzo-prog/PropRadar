@@ -4,7 +4,7 @@
 # Требуется: docker network create propradar
 #
 # Примеры:
-#   docker compose --profile infra --profile app up -d
+#   docker compose --profile infra --profile app --profile enricher up -d
 #   docker compose --profile infra --profile app --profile tools up -d
 #   docker compose --profile infra --profile app --profile tools --profile proxy up -d
 #
