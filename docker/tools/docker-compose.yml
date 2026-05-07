@@ -35,6 +35,10 @@ services:
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
+      DATABASE_ENABLED: ${DATABASE_ENABLED:-true}
+      DATABASE_PROVIDER: ${DATABASE_PROVIDER:-postgresql}
+      DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI:-postgresql://leads:changeme@leads-db:5432/leads?schema=evolution_api}
+      DATABASE_CONNECTION_CLIENT_NAME: ${DATABASE_CONNECTION_CLIENT_NAME:-prop-radar-evolution}
     volumes:
       - evolution_instances:/evolution/instances
     networks:
