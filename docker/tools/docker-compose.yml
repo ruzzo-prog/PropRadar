@@ -9,6 +9,8 @@ services:
       N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PORT: ${N8N_PORT:-5678}
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: "${WEBHOOK_URL:-}"
+      N8N_EDITOR_BASE_URL: "${N8N_EDITOR_BASE_URL:-}"
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
     volumes:
       - n8n_data:/home/node/.n8n
