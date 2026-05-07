@@ -1,0 +1,19 @@
+# Единая точка входа Docker Compose: project directory = корень репозитория.
+# Интерполяция ${VAR} в YAML берётся из ./.env здесь (не из docker/infra).
+#
+# Требуется: docker network create propradar
+#
+# Примеры:
+#   docker compose --profile infra --profile app up -d
+#   docker compose --profile infra --profile app --profile tools up -d
+#   docker compose --profile infra --profile app --profile tools --profile proxy up -d
+#
+# Фрагменты: docker/infra, docker/app, docker/tools, docker/reverse-proxy (см. profiles в каждом файле).
+
+name: propradar
+
+include:
+  - path: docker/infra/docker-compose.yml
+  - path: docker/app/docker-compose.yml
+  - path: docker/tools/docker-compose.yml
+  - path: docker/reverse-proxy/docker-compose.yml
