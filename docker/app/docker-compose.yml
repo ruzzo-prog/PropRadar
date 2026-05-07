@@ -1,17 +1,14 @@
-# Сервисы приложения (заглушки). API: контейнер слушает 8000; с хоста — 8000:8000.
-# Локальный uvicorn на хосте (вне compose): порт 9000, см. README и .env.example.local.
-# Запускать после infra: хост leads-db в docker-сети propradar.
+# Сервисы приложения. API: контейнер слушает 8000; с хоста — 8000:8000.
+# Рекомендуемый запуск из корня репозитория: см. ../../compose.yaml и --profile app (+ infra).
+# DATABASE_URL и прочие секреты — из корневого .env (env_file ../../.env относительно этого файла).
 #
-# API + БД (чтобы сработал depends_on на leads-db):
-#   docker compose -f ../infra/docker-compose.yml -f docker-compose.yml up -d api
-# Только этот файл без infra: сервис leads-db не определён — compose выдаст ошибку.
-#
-# Первая compose-файл задаёт project directory (docker/infra), поэтому интерполяция ${VAR}
-# в YAML не читает docker/app/.env — секреты для api задаём через env_file относительно
-# этого файла (docker/app/.env попадает в контейнер напрямую).
+# Устаревший вариант merge из каталога docker/app (порядок файлов важен для project directory):
+#   docker compose -f docker-compose.yml -f ../infra/docker-compose.yml up -d api
 
 services:
   parsers:
+    profiles:
+      - app
     build:
       context: ../..
       dockerfile: docker/app/parsers.Dockerfile
@@ -23,12 +20,14 @@ services:
       - propradar
 
   api:
+    profiles:
+      - app
     build:
       context: ../..
       dockerfile: docker/app/parsers.Dockerfile
     working_dir: /srv
     env_file:
-      - .env
+      - ../../.env
     environment:
       PYTHONPATH: /srv/src
       PROPRADAR_REPO_ROOT: /srv

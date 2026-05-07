@@ -6,10 +6,14 @@
 
 ### Added
 
-- **Документация ingress:** заполнен `**Docs/INGRESS_ARCHITECTURE.md`** — четыре домена из канона, поток myhome.ge → PropRadar API → n8n → leads-db → WhatsApp (Evolution), схема узлов n8n, контракты `**/api/myhome/***` (сверка с кодом и `docs/API.md`), роли `**leads**` / `**leads_client**`, Docker/порты (**9000** локальный uvicorn vs **8000** compose), переменные окружения без секретов, ссылки на источники правды.
+- **Docker / корневой `compose.yaml`:** единая точка входа с `include` фрагментов `docker/infra`, `docker/app`, `docker/tools`, `docker/reverse-proxy`; профили **`infra`**, **`app`**, **`tools`**, **`proxy`**; project directory — корень репозитория (интерполяция `${VAR}` из корневого `.env`). Сервис **`api`**: `env_file` на **`../../.env`** (корень репо). Обновлены **`docs/DEPLOY_SERVER.md`**, **`README.md`**, примеры env.
+
+- **Документация ingress:** заполнен **`Docs/INGRESS_ARCHITECTURE.md`** — четыре домена из канона, поток myhome.ge → PropRadar API → n8n → leads-db → WhatsApp (Evolution), схема узлов n8n, контракты `**/api/myhome/***` (сверка с кодом и `docs/API.md`), роли **`leads`** / **`leads_client`**, Docker/порты (**9000** локальный uvicorn vs **8000** compose), переменные окружения без секретов, ссылки на источники правды.
 - **Деплой на сервер (VPS/Hetzner):** runbook `**docs/DEPLOY_SERVER.md**`; reverse-proxy слой в `**docker/reverse-proxy/**` (конфигурация репозитория); примеры окружения `**.env.example.local**` / `**.env.example.server**` (без секретов); в compose — `**healthcheck**` и `**depends_on**` для предсказуемого порядка старта; обновлены `**README.md**` и n8n-документация под серверный сценарий.
 
 ### Changed
+
+- **Docker compose фрагменты (`docker/*`):** у всех сервисов задан **profile** (`infra`, `app`, `tools`, `proxy`); прямой запуск `docker compose up` из подкаталога без `--profile` больше не поднимает сервисы — используйте корневой **`compose.yaml`** или добавляйте **`--profile …`**.
 
 - **Reverse-proxy / TLS (n8n, Evolution):** конфиг nginx использует стабильные пути **`/etc/nginx/certs/{n8n,evolution}/`** внутри контейнера; на хосте пути к `fullchain.pem` / `privkey.pem` задаются через **`N8N_TLS_*`** и **`EVOLUTION_TLS_*`** (file bind-mount). Перед `nginx` выполняется preflight **`00-tls-preflight.sh`**, запуск **явно через `sh`**; проверки **`-f`** (обычный файл) и **читаемости** для всех четырёх PEM. Порты **5678** / **8080** на хост не публикуются (`docker/tools` без `ports` у n8n и evolution-api); внешний вход — **80/443** reverse-proxy. Подробности — `docker/reverse-proxy/README.md`; **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
 

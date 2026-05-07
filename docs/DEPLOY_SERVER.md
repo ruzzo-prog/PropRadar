@@ -7,7 +7,7 @@
 1. **Windows / локальная разработка и тесты:** клон репозитория, `scripts/setup_venv.ps1`, копируете в корень `.env` содержимое `.env.example.local` (или `.env.example` как базу для хоста), поднимаете `docker/infra` (PostgreSQL на `localhost:5433`), при необходимости `docker/tools` (n8n, Metabase **3031**, Evolution). API для разработки на хосте: `uvicorn api.main:app --reload --host 127.0.0.1 --port 9000` (порт **9000** — локальный профиль; в Docker контейнер `api` слушает **8000**, с хоста доступен как **8000**).
 2. **Фиксация изменений:** `git push` в основную ветку (или ветку деплоя по вашему процессу).
 3. **Сервер:** `git pull` в каталоге проекта.
-4. **Запуск стеков:** создать сеть при необходимости `docker network create propradar`, затем `docker compose` для `docker/infra`, `docker/tools`, `docker/app`, при публичных n8n/Evolution — `docker/reverse-proxy` (TLS). Точные команды см. ниже.
+4. **Запуск стеков:** создать сеть при необходимости `docker network create propradar`, затем из **корня репозитория** `docker compose --profile … up -d` (см. `compose.yaml` и раздел ниже); либо по отдельности фрагменты в `docker/infra`, `docker/tools`, `docker/app`, при публичных n8n/Evolution — `docker/reverse-proxy` (TLS). Точные команды см. ниже.
 
 ## Порты (согласованная матрица)
 
@@ -43,19 +43,28 @@
 
 ## Типовой порядок compose на сервере
 
-Из корня репозитория (подставьте свои `.env` на сервере по `.env.example.server`):
+**Рекомендуемый способ (единый project directory и `./.env` в корне репозитория):** файл **`compose.yaml`** в корне включает фрагменты `docker/infra`, `docker/app`, `docker/tools`, `docker/reverse-proxy`. Сервисы отнесены к **профилям** (`infra`, `app`, `tools`, `proxy`), чтобы поднимать только нужное.
+
+Из корня репозитория (перед первым запуском скопируйте или объедините переменные в **корневой** `.env` по шаблону `.env.example` / `.env.example.server`; контейнер **`api`** читает **`../../.env`** относительно `docker/app/docker-compose.yml`, то есть **тот же корневой файл**):
 
 ```bash
 docker network create propradar 2>/dev/null || true
 
-cd docker/infra && docker compose up -d && cd ../..
-cd docker/tools && docker compose up -d && cd ../..
-cd docker/app && docker compose -f ../infra/docker-compose.yml -f docker-compose.yml up -d && cd ../..
-# при готовых TLS-сертификатах и FQDN:
-cd docker/reverse-proxy && docker compose up -d && cd ../..
+# Минимум для API + PostgreSQL (типичный сервер приложения):
+docker compose --profile infra --profile app up -d
+
+# Дополнительно инструменты (n8n, Metabase, Evolution):
+docker compose --profile tools up -d
+
+# TLS / nginx для публичных n8n и Evolution (после сертификатов):
+docker compose --profile proxy up -d
 ```
 
-Проверка: `docker compose -f docker/infra/docker-compose.yml ps`, логи `api`, `curl -s http://127.0.0.1:8000/health` на сервере (если проброшен 8000 только на localhost — так и задумано для внешнего доступа; снаружи API по умолчанию не публикуется).
+Миграция с прежней схемы (`docker/app/.env` только в подкаталоге): положите секреты в **корневой** `.env` (например `cp docker/app/.env .env` или симлинк), затем пересоздайте контейнеры.
+
+**Устаревший вариант** (отдельные `cd` по каталогам и merge `-f`) оставлен для совместимости в комментариях к фрагментам; для предсказуемого `DATABASE_URL` предпочтительнее команды выше из корня.
+
+Проверка: `docker compose --profile infra --profile app ps`, логи сервиса `api`, `docker exec <container-api> env | grep DATABASE_URL`, `curl -s http://127.0.0.1:8000/health` на сервере (если проброшен 8000 только на localhost — так и задумано для внешнего доступа; снаружи API по умолчанию не публикуется). Имя проекта Compose по умолчанию — **`propradar`** (префикс контейнеров может отличаться от старых запусков из `docker/infra`).
 
 ## Reverse-proxy и TLS
 

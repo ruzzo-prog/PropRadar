@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-07 — Docker: корневой `compose.yaml`, профили, корневой `.env`
+
+- **Контекст:** при merge compose из разных каталогов путались project directory и `DATABASE_URL`; нужен единый вход для деплоя (`git pull` + `docker compose up`).
+- **Реализация:** в корне **`compose.yaml`** с `include` фрагментов и профилями **`infra`**, **`app`**, **`tools`**, **`proxy`**; во фрагментах сервисы помечены профилями; **`api`**: **`env_file: ../../.env`** (корень репозитория). Обновлены **`docs/DEPLOY_SERVER.md`**, **`README.md`**, **`Docs/INGRESS_ARCHITECTURE.md`**, **`CHANGELOG.md`**, **`docker/app/.env.example`**.
+- **Проверка:** `docker compose --profile infra --profile app config` — OK (локально).
+- **Дальнейший шаг по канону:** **`@process-guard` Diff Check** → при необходимости **`@release-check`**.
+
 ## 2026-05-07 — Evolution API: исправление `Database provider invalid` (DATABASE_* в compose)
 
 - **Контекст:** контейнер **Evolution API** в **`docker/tools`** при старте сообщал **`Database provider invalid`** из‑за неполной или несогласованной конфигурации провайдера БД в окружении.

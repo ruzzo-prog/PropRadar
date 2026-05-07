@@ -30,7 +30,9 @@ sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-ema
 docker compose up -d
 ```
 
-Сухой прогон: `docker compose config`.
+Либо из **корня репозитория**: `docker compose --profile proxy up -d` (см. корневой `compose.yaml`).
+
+Сухой прогон: `docker compose config` (из этой папки) или из корня с профилем `proxy`.
 
 ### Монтирование TLS (отдельные файлы, без жёстких путей в nginx)
 

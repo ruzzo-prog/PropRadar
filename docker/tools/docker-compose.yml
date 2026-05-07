@@ -1,8 +1,11 @@
 # n8n, Metabase (хост 3031 → контейнер 3000), Evolution API.
 # Требуется сеть:  docker network create propradar
+# Запуск из корня репозитория: docker compose --profile tools up -d (см. compose.yaml).
 
 services:
   n8n:
+    profiles:
+      - tools
     image: docker.n8n.io/n8nio/n8n
     restart: unless-stopped
     environment:
@@ -19,6 +22,8 @@ services:
       - propradar
 
   metabase:
+    profiles:
+      - tools
     image: metabase/metabase:latest
     restart: unless-stopped
     environment:
@@ -33,6 +38,8 @@ services:
       - propradar
 
   evolution-api:
+    profiles:
+      - tools
     image: atendai/evolution-api:latest
     restart: unless-stopped
     environment:

@@ -1,8 +1,13 @@
 # PostgreSQL 15 — leads-db. Порт на хосте: 5433.
 # Перед запуском:  docker network create propradar
+#
+# Профиль infra: этот сервис не стартует без --profile infra
+# (единый вход из корня репозитория: compose.yaml).
 
 services:
   leads-db:
+    profiles:
+      - infra
     image: postgres:15-alpine
     container_name: propradar-leads-db
     restart: unless-stopped

@@ -140,7 +140,7 @@ flowchart TB
 
 ### Сеть Docker
 
-- Сеть **`propradar`** создаётся вручную (`docker network create propradar`); сервисы **`leads-db`** (`docker/infra/docker-compose.yml`) и **`api`** (`docker/app/docker-compose.yml`) подключаются к ней.
+- Сеть **`propradar`** создаётся вручную (`docker network create propradar`); сервисы **`leads-db`** (`docker/infra/docker-compose.yml`) и **`api`** (`docker/app/docker-compose.yml`) подключаются к ней. Рекомендуемый запуск из корня репозитория: **`compose.yaml`** с профилями **`infra`** / **`app`** (см. `docs/DEPLOY_SERVER.md`); интерполяция `${VAR}` и корневой `.env` согласованы с **project directory** = корень репо.
 - Из контейнера n8n в той же сети API может быть доступен как **`http://api:8000`** (или другой порт, если изменён mapping); с хоста — `http://localhost:8000` при опубликованном порте.
 
 ### Имена переменных окружения (без значений секретов)

@@ -9,6 +9,8 @@
 
 services:
   reverse-proxy:
+    profiles:
+      - proxy
     image: nginx:alpine
     container_name: propradar-reverse-proxy
     restart: unless-stopped
