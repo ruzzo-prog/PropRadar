@@ -5,6 +5,10 @@
 # API + БД (чтобы сработал depends_on на leads-db):
 #   docker compose -f ../infra/docker-compose.yml -f docker-compose.yml up -d api
 # Только этот файл без infra: сервис leads-db не определён — compose выдаст ошибку.
+#
+# Первая compose-файл задаёт project directory (docker/infra), поэтому интерполяция ${VAR}
+# в YAML не читает docker/app/.env — секреты для api задаём через env_file относительно
+# этого файла (docker/app/.env попадает в контейнер напрямую).
 
 services:
   parsers:
@@ -23,11 +27,10 @@ services:
       context: ../..
       dockerfile: docker/app/parsers.Dockerfile
     working_dir: /srv
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://leads:changeme@leads-db:5432/leads}
-      APP_ENV: ${APP_ENV:-development}
       PYTHONPATH: /srv/src
-      PROPRADAR_API_KEY: ${PROPRADAR_API_KEY:-}
       PROPRADAR_REPO_ROOT: /srv
     ports:
       - "8000:8000"
