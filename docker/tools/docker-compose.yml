@@ -11,6 +11,7 @@ services:
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       WEBHOOK_URL: "${WEBHOOK_URL:-}"
       N8N_EDITOR_BASE_URL: "${N8N_EDITOR_BASE_URL:-}"
+      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
     volumes:
       - n8n_data:/home/node/.n8n
