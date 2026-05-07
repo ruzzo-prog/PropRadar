@@ -2,6 +2,22 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-08 — n8n workflow **Pars MyHome** (`eElCijxLVTbmLIIF`): ветка обогащения через MCP
+
+- **Контекст:** доработка workflow **Pars MyHome** через MCP (**n8n Workflow SDK**): условный вызов **`playwright-worker`** после ingest.
+- **Узлы:** **IF Enrich Needed** — строгое условие `total_new > 0`; **HTTP Enrich Request** — `POST http://playwright-worker:8001/enrich`, тело **`adapter`** / **`phone`**, таймаут **10 с**, ошибки — **`onError`** **continueRegularOutput**; **Enrich Skip** — **NoOp**.
+- **Публикация:** активная версия **`activeVersionId`** `cbbc8fd3-8e2d-4156-afb4-7d3482e84ac7`. UI: [workflow в n8n](https://n8n.usluga-market.ru/workflow/eElCijxLVTbmLIIF).
+- **Проверка:** **`validate_workflow`** — **PASS**; **`pytest tests`** — **54 passed**, **2 skipped**.
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Валидация workflow (SDK) | ✅ PASS |
+| QA (`pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 этот файл |
+
+
+Прогресс доработки Pars MyHome (enrich-ветка): `[▓▓▓▓▓▓▓▓▓▓] 100%`.
+
 ## 2026-05-08 (hotfix) — P1: playwright-worker, entrypoint (Xvfb / uvicorn)
 
 - **Симптом:** контейнер **unhealthy**, в **`ps`** нет **uvicorn** (цепочка через **`xvfb-run … uvicorn`** не оставляла **uvicorn** стабильным основным процессом).
