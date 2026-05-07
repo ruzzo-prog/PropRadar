@@ -1,4 +1,5 @@
-# Сервисы приложения (заглушки). API: порт 8000 на хосте.
+# Сервисы приложения (заглушки). API: контейнер слушает 8000; с хоста — 8000:8000.
+# Локальный uvicorn на хосте (вне compose): порт 9000, см. README и .env.example.local.
 # Запускать после infra: хост leads-db в docker-сети propradar.
 #
 # API + БД (чтобы сработал depends_on на leads-db):
@@ -34,7 +35,13 @@ services:
       - ../../:/srv:ro
     depends_on:
       leads-db:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     command:
       [
         "uvicorn",

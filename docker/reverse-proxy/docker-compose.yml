@@ -1,0 +1,29 @@
+# Nginx reverse-proxy + TLS для n8n и Evolution API (сеть propradar).
+# Предварительно: docker network create propradar
+# Поднять вместе с docker/tools и (при необходимости) docker/app, docker/infra.
+#
+# API (FastAPI) по умолчанию не публикуется через этот прокси — только внутренняя
+# сеть Docker (http://api:8000). См. README.md в этой папке.
+
+services:
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: propradar-reverse-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - reverse_proxy_certbot_www:/var/www/certbot:ro
+    networks:
+      - propradar
+
+volumes:
+  reverse_proxy_certbot_www:
+
+networks:
+  propradar:
+    external: true

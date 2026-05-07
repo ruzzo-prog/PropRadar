@@ -10,6 +10,10 @@ COPY src /app/src
 
 RUN pip install --no-cache-dir -e .
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Браузеры Playwright в образ не ставим (тяжёлый слой); парсеры в контейнере — заглушка.
 
 CMD ["sleep", "infinity"]

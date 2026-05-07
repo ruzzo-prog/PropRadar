@@ -56,7 +56,7 @@ flowchart LR
 
 ## Предварительные условия
 
-- Запущен сервис **PropRadar API** (`uvicorn api.main:app`, порт **9000** или иной), с `**DATABASE_URL`**, доступом к myhome API и (в production) `**PROPRADAR_API_KEY**`. Из n8n URL должен резолвиться (тот же Docker network: например `http://api:9000`, см. `docker/app/docker-compose.yml`).
+- Запущен сервис **PropRadar API** (`uvicorn api.main:app` на хосте, порт **9000**, либо контейнер `api` в Docker на **8000**), с `**DATABASE_URL`**, доступом к myhome API и (в production) `**PROPRADAR_API_KEY**`. Из n8n в Docker к API: **`http://api:8000`** (та же сеть `propradar`, см. `docker/app/docker-compose.yml`). Если API запущен на хосте, а n8n в контейнере — **`http://host.docker.internal:9000`** (Windows / Docker Desktop) вместо `localhost`.
 - `**X-API-Key**` в каждом запросе к `/api/myhome/*`, если для окружения API требуется ключ (см. `docs/API.md`).
 - Применена миграция `**migrations/010_add_status_reason_to_leads.sql**`, если используется колонка `status_reason`.
 - Evolution API доступен с хоста n8n (часто `http://localhost:8080` или имя сервиса в Docker-сети).
@@ -67,15 +67,21 @@ flowchart LR
 
 Задайте на **уровне инстанса n8n** (или в Credentials). В узлах подставляйте через `$env.VAR` / выражения n8n.
 
-Локально (API на хосте, n8n тоже на хосте), например:
+Локально (API на хосте :9000, n8n на хосте), например:
 
 ```bash
 PROPRADAR_API_URL=http://localhost:9000
 ```
 
+Контейнер n8n + контейнер `api` в одной сети:
+
+```bash
+PROPRADAR_API_URL=http://api:8000
+```
+
 | Имя                  | Назначение                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `PROPRADAR_API_URL`  | Базовый URL PropRadar API, например `http://localhost:9000` (локально) или `http://api:9000` / `http://host.docker.internal:9000` (Docker). |
+| `PROPRADAR_API_URL`  | Базовый URL PropRadar API: **`http://localhost:9000`** (uvicorn на хосте), **`http://api:8000`** (оба в Docker), либо **`http://host.docker.internal:9000`** (n8n в Docker, API на хосте). |
 | `PROPRADAR_API_KEY`  | Значение для заголовка `**X-API-Key`** (должно совпадать с `PROPRADAR_API_KEY` на стороне API в production). |
 | `EVOLUTION_API_URL`  | Базовый URL Evolution (см. узел **WhatsApp / Evolution** ниже).                                              |
 | `EVOLUTION_API_AUTH` | Опционально: для Evolution; хранить в **Credentials**.                                                       |
@@ -204,7 +210,7 @@ PROPRADAR_API_URL=http://localhost:9000
 
 Эндпоинты Evolution зависят от версии и режима (**Baileys**, инстансы и т.д.). Шаблон из ТЗ: `**POST`** на базовый URL + путь отправки сообщения.
 
-1. Задайте **Base URL** = `={{ $env.EVOLUTION_API_URL }}` или фиксируете `http://localhost:8080`.
+1. Задайте **Base URL** = `={{ $env.EVOLUTION_API_URL }}` или фиксируете `http://evolution-api:8080` внутри той же Docker-сети; за reverse-proxy (TLS) — `https://<ваш FQDN Evolution>`.
 2. **Path** уточните по вашему Swagger/докам Evolution (часто встречаются варианты с `/message/sendText/{instance}` или `/message/send/{instance}`).
 3. **Authentication:** предпочтительно **Credential** типа **Header Auth**:
   - имя заголовка часто `**apikey`** для Evolution v2;
