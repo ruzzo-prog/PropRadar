@@ -2,24 +2,43 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-07 — Docs: канон ingress (`INGRESS_ARCHITECTURE`)
+
+- **Контекст:** пустой `**Docs/INGRESS_ARCHITECTURE.md`** не закрывал требование канонических документов из `Docs/AI_GOVERNANCE.md` (раздел «Назначение»); нужна единая картина контура myhome → API → n8n → БД → WhatsApp без правок кода.
+- **Реализация:** создан полный текст `**Docs/INGRESS_ARCHITECTURE.md`** (домены, mermaid-поток, таблица узлов n8n, контракты API, `**leads**` vs `**leads_client**`, Docker/порты с явным разделением режимов **9000** vs **8000**, env-имена); синхронизированы `**CHANGELOG.md`** и этот файл.
+- **Проверка:** docs-only; код и compose не менялись; контракты сверены с `src/api/myhome.py` и `docs/API.md`.
+
+
+| Показатель               | Статус                                  |
+| ------------------------ | --------------------------------------- |
+| Объём                    | только `*.md`                           |
+| Канон (ingress-документ) | `Docs/INGRESS_ARCHITECTURE.md` заполнен |
+
+
+Прогресс документации ingress: `[▓▓▓▓▓▓▓▓▓▓] 100%` (черновик структуры закрыт).
+
 ## 2026-05-06 — P1: регрессия `since_days` в myhome `list_ids`
 
 - **Контекст:** после изменений вокруг `fetch-ids` окно по датам (`since_days`) перестало корректно сужать выборку external ID в `list_ids`.
 - **Реализация:** `src/parsers/adapters/myhome/list_ids.py` — восстановлено влияние `since_days` на отбор ID; `tests/unit/test_myhome_list_ids.py` — покрытие регрессии.
-- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**; целевые unit — **24 passed**; **`pytest tests`** — **51 passed**, **2 skipped**; `ruff` — OK.
-- **Документация (та же цепочка):** обновлены **`CHANGELOG.md`**, этот файл.
+- **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**; целевые unit — **24 passed**; `**pytest tests`** — **51 passed**, **2 skipped**; `ruff` — OK.
+- **Документация (та же цепочка):** обновлены `**CHANGELOG.md`**, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
-| Scanner | ✅ PASS |
-| QA (`pytest tests`) | 🧪 51 passed, 2 skipped |
-| Scope кода (фикс) | `list_ids.py`, `test_myhome_list_ids.py` |
+
+| Показатель          | Статус                                   |
+| ------------------- | ---------------------------------------- |
+| Scanner             | ✅ PASS                                   |
+| QA (`pytest tests`) | 🧪 51 passed, 2 skipped                  |
+| Scope кода (фикс)   | `list_ids.py`, `test_myhome_list_ids.py` |
+
 
 ```mermaid
 flowchart LR
   SD[since_days] --> L[list_ids\nфильтр по дате публикации]
   L --> IDS[external IDs]
 ```
+
+
 
 ## 2026-05-06 — P0: myhome property filter key `real_estate_types`
 
@@ -28,10 +47,12 @@ flowchart LR
 - **Проверка:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — PASS; `pytest tests` — PASS; `ruff` — OK.
 - **Документация:** `CHANGELOG.md`, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
-| Scope | `src/parsers/adapters/myhome/list_ids.py`, unit tests |
-| Регрессии | не выявлены |
+
+| Показатель | Статус                                                |
+| ---------- | ----------------------------------------------------- |
+| Scope      | `src/parsers/adapters/myhome/list_ids.py`, unit tests |
+| Регрессии  | не выявлены                                           |
+
 
 ## 2026-05-06 — P1: `fetch-ids` без `since_days`, с `limit=all|N`
 
@@ -40,10 +61,12 @@ flowchart LR
 - **Проверка:** `pytest tests/unit/test_myhome_http_api.py tests/unit/test_myhome_list_ids.py` — **20 passed**; `pytest tests` — **47 passed**, **2 skipped**; `ruff` — OK.
 - **Документация:** `CHANGELOG.md`, `docs/API.md`, `docs/n8n_myhome_workflow.md`, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
-| Scope | `src/api/myhome.py`, `src/parsers/adapters/myhome/list_ids.py`, tests/docs |
-| Регрессии | не выявлены |
+
+| Показатель | Статус                                                                     |
+| ---------- | -------------------------------------------------------------------------- |
+| Scope      | `src/api/myhome.py`, `src/parsers/adapters/myhome/list_ids.py`, tests/docs |
+| Регрессии  | не выявлены                                                                |
+
 
 ## 2026-05-06 — P0 hotfix: `object_types` в myhome list query
 
@@ -52,49 +75,57 @@ flowchart LR
 - **Проверка:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — **19 passed**; `pytest tests` — **46 passed**, **2 skipped**; `ruff` — OK.
 - **Документация:** `CHANGELOG.md`, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
+
+| Показатель   | Статус                                    |
+| ------------ | ----------------------------------------- |
 | Hotfix scope | `src/parsers/adapters/myhome/list_ids.py` |
-| Регресс API | не ожидается |
+| Регресс API  | не ожидается                              |
+
 
 ## 2026-05-06 — P0: устойчивые импорты пакета `api` (`.myhome` / `.auth`)
 
-- **Контекст:** риск **`ModuleNotFoundError`** / неоднозначности имени пакета **`api`** на **`sys.path`** при **`from api.myhome import router`**.
-- **Реализация:** **`src/api/main.py`** — **`from .myhome import router`**; **`src/api/myhome.py`** — **`from .auth import ...`**. **`api/__init__.py`** без eager-import **`app`** (как после P1).
-- **Проверка:** **`from api.main import app`** при **`PYTHONPATH=src`** — OK; **`pytest tests`** — **40 passed**, **2 skipped**.
-- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Контекст:** риск `**ModuleNotFoundError`** / неоднозначности имени пакета `**api**` на `**sys.path**` при `**from api.myhome import router**`.
+- **Реализация:** `**src/api/main.py`** — `**from .myhome import router**`; `**src/api/myhome.py**` — `**from .auth import ...**`. `**api/__init__.py**` без eager-import `**app**` (как после P1).
+- **Проверка:** `**from api.main import app`** при `**PYTHONPATH=src**` — OK; `**pytest tests**` — **40 passed**, **2 skipped**.
+- **Документация:** `**CHANGELOG.md`**, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
+
+| Показатель   | Статус                                 |
+| ------------ | -------------------------------------- |
 | Hotfix scope | `src/api/main.py`, `src/api/myhome.py` |
-| Регресс API | не ожидается |
+| Регресс API  | не ожидается                           |
+
 
 ## 2026-05-06 — P1 hotfix: циклический импорт пакета `api` (uvicorn)
 
-- **Контекст:** при **`uvicorn api.main:app`** с **`PYTHONPATH=src`** — **`ImportError`** из-за цикла: **`api/__init__.py`** тянул **`api.main`**, а **`api/main`** импортировал подмодуль через пакет **`api`**.
-- **Реализация:** только **`src/api/__init__.py`** (убран eager-import **`app`**) и первичная правка **`src/api/main.py`**; затем **P0** — относительные импорты (см. секцию выше).
-- **Проверка:** импорт **`from api.main import app`** — OK; **ruff** — OK.
-- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Контекст:** при `**uvicorn api.main:app`** с `**PYTHONPATH=src**` — `**ImportError**` из-за цикла: `**api/__init__.py**` тянул `**api.main**`, а `**api/main**` импортировал подмодуль через пакет `**api**`.
+- **Реализация:** только `**src/api/__init__.py`** (убран eager-import `**app**`) и первичная правка `**src/api/main.py**`; затем **P0** — относительные импорты (см. секцию выше).
+- **Проверка:** импорт `**from api.main import app`** — OK; **ruff** — OK.
+- **Документация:** `**CHANGELOG.md`**, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
+
+| Показатель   | Статус                                   |
+| ------------ | ---------------------------------------- |
 | Hotfix scope | `src/api/__init__.py`, `src/api/main.py` |
-| Регресс API | не ожидается |
+| Регресс API  | не ожидается                             |
+
 
 ## 2026-05-06 — FastAPI HTTP-обёртка myhome для n8n (Scanner PASS, цепочка до release-check)
 
 - **Контекст:** n8n вызывает парсинг/синхронизацию через **HTTP** к PropRadar API вместо `Execute Command` на хосте.
-- **Реализация:** `src/api/myhome.py` (`GET/POST /api/myhome/*`, subprocess к **`scripts/`** без их изменения); `src/api/auth.py` — **`X-API-Key`** / **`PROPRADAR_API_KEY`** (в production без ключа — **403**); `src/api/main.py` — подключение роутера; `src/config/settings.py` — **`PROPRADAR_REPO_ROOT`**, таймаут CLI; **`docker/app/docker-compose.yml`** — только сервис **`api`**: **`PYTHONPATH=/srv/src`**, volume **`../../:/srv:ro`**, **`depends_on: leads-db`** (совместный запуск с **`docker/infra`**); **`docs/API.md`**; обновлён **`docs/n8n_myhome_workflow.md`** под HTTP; **`tests/unit/test_myhome_http_api.py`**. Без правок `src/parsers/base.py`, governance, остального **`docker/`** вне **`docker/app/docker-compose.yml`**.
-- **Проверка:** **Scanner** — **PASS** (подтверждение человека); **`pytest tests`** — **40 passed**, **2 skipped**; **ruff** на затронутых путях — OK.
-- **Документация:** **`CHANGELOG.md`**, **`docs/API.md`**, **`docs/n8n_myhome_workflow.md`**, этот файл.
-- **Условия перед деплоем:** задать **`PROPRADAR_API_KEY`** в production; поднять API командой merge compose (см. комментарий в compose); в n8n — **`PROPRADAR_API_URL`** и заголовок **`X-API-Key`**; smoke один прогон эндпоинтов вручную.
+- **Реализация:** `src/api/myhome.py` (`GET/POST /api/myhome/*`, subprocess к `**scripts/`** без их изменения); `src/api/auth.py` — `**X-API-Key**` / `**PROPRADAR_API_KEY**` (в production без ключа — **403**); `src/api/main.py` — подключение роутера; `src/config/settings.py` — `**PROPRADAR_REPO_ROOT`**, таймаут CLI; `**docker/app/docker-compose.yml**` — только сервис `**api**`: `**PYTHONPATH=/srv/src**`, volume `**../../:/srv:ro**`, `**depends_on: leads-db**` (совместный запуск с `**docker/infra**`); `**docs/API.md**`; обновлён `**docs/n8n_myhome_workflow.md**` под HTTP; `**tests/unit/test_myhome_http_api.py**`. Без правок `src/parsers/base.py`, governance, остального `**docker/**` вне `**docker/app/docker-compose.yml**`.
+- **Проверка:** **Scanner** — **PASS** (подтверждение человека); `**pytest tests`** — **40 passed**, **2 skipped**; **ruff** на затронутых путях — OK.
+- **Документация:** `**CHANGELOG.md`**, `**docs/API.md**`, `**docs/n8n_myhome_workflow.md**`, этот файл.
+- **Условия перед деплоем:** задать `**PROPRADAR_API_KEY`** в production; поднять API командой merge compose (см. комментарий в compose); в n8n — `**PROPRADAR_API_URL**` и заголовок `**X-API-Key**`; smoke один прогон эндпоинтов вручную.
 
-| Показатель | Статус |
-|------------|--------|
-| Scanner | ✅ PASS |
-| QA (`pytest`) | 🧪 40 passed, 2 skipped |
-| Документация | 📜 обновлена |
+
+| Показатель          | Статус                     |
+| ------------------- | -------------------------- |
+| Scanner             | ✅ PASS                     |
+| QA (`pytest`)       | 🧪 40 passed, 2 skipped    |
+| Документация        | 📜 обновлена               |
 | Готовность к деплою | ожидается `@release-check` |
+
 
 ```mermaid
 flowchart LR
@@ -103,32 +134,38 @@ flowchart LR
   S --> DB[(leads-db)]
 ```
 
+
+
 ## 2026-05-06 — P1 hotfix: `setup_metabase_dashboard.py` создаёт все 10 карточек
 
 - **Контекст:** скрипт подключал к дашборду только **6** карточек по фиксированным заголовкам; карточки sync (**8–10**) и **«Средняя цена (GEL)»** не создавались.
-- **Реализация:** итерация по полному массиву **`cards`** из bundle, сортировка по **`position`**, логирование шага для каждой карточки, явная сетка **`_LAYOUT_BY_POSITION`** для позиций **1–10**. Файл: **`scripts/setup_metabase_dashboard.py`** только.
+- **Реализация:** итерация по полному массиву `**cards`** из bundle, сортировка по `**position**`, логирование шага для каждой карточки, явная сетка `**_LAYOUT_BY_POSITION**` для позиций **1–10**. Файл: `**scripts/setup_metabase_dashboard.py`** только.
 - **Проверка:** импорт модуля и assert: **10** карточек в bundle, ключи layout **1–10**; **ruff** — OK.
-- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Документация:** `**CHANGELOG.md`**, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
-| Hotfix scope | `setup_metabase_dashboard.py` |
-| Регресс bundle JSON | не менялся |
+
+| Показатель          | Статус                        |
+| ------------------- | ----------------------------- |
+| Hotfix scope        | `setup_metabase_dashboard.py` |
+| Регресс bundle JSON | не менялся                    |
+
 
 ## 2026-05-06 — Myhome: n8n-синхронизация, `status_reason`, CLI (Scanner PASS, цепочка до release-check)
 
 - **Контекст:** автоматизированное расписание парсинга myhome через n8n; сверка «исчезнувших» с API; фиксация причины в БД; WhatsApp из n8n (Evolution), не из Python.
 - **Реализация:** миграция **010** (колонка `status_reason`); `scripts/fetch_myhome_ids.py`, `scripts/sync_myhome_status.py` (подкоманды `discover` / `mark-rejected`); флаг `--ingest-ids-json` в `scripts/run_myhome_parser.py`; модули `list_ids`, `ingest_detail`; расширение репозитория и домена `Lead`; `docs/n8n_myhome_workflow.md`; `README.md` — порядок миграций включает **010**. Без правок `src/parsers/base.py`, `docker/`, governance вне scope.
-- **Проверка:** **Scanner** — **PASS** (подтверждение человека); **`pytest tests`** — **30 passed**, **2 skipped** (live myhome); ретесты после hotfix (**ingest** / **`sync_myhome_status`**) включены.
+- **Проверка:** **Scanner** — **PASS** (подтверждение человека); `**pytest tests`** — **30 passed**, **2 skipped** (live myhome); ретесты после hotfix (**ingest** / `**sync_myhome_status`**) включены.
 - **Документация:** `CHANGELOG.md`, `docs/n8n_myhome_workflow.md`, этот файл.
 - **Условия перед деплоем:** применить `migrations/010_add_status_reason_to_leads.sql` на leads-db; настроить узлы n8n по `docs/n8n_myhome_workflow.md`; smoke WhatsApp вручную.
 
-| Показатель | Статус |
-|------------|--------|
-| Scanner | ✅ PASS |
-| QA (`pytest`) | 🧪 30 passed, 2 skipped |
-| Документация | 📜 обновлена |
+
+| Показатель          | Статус                                      |
+| ------------------- | ------------------------------------------- |
+| Scanner             | ✅ PASS                                      |
+| QA (`pytest`)       | 🧪 30 passed, 2 skipped                     |
+| Документация        | 📜 обновлена                                |
 | Готовность к деплою | PASS WITH CONDITIONS (см. `@release-check`) |
+
 
 ```mermaid
 flowchart LR
@@ -138,6 +175,8 @@ flowchart LR
   W --> M[mark-rejected]
 ```
 
+
+
 ## 2026-05-06 — Финализация myhome/leads_client: КТ3 PASS, smoke подтверждён
 
 - **Контекст:** после миграций **008/009** и серии P1 hotfix по Metabase карточке **7** зафиксирован итоговый рабочий контур клиентской выдачи.
@@ -146,12 +185,14 @@ flowchart LR
 - **Статус:** задача по финализации адаптера/проекции **закрыта**.
 - **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, этот файл.
 
-| Показатель | Статус |
-|------------|--------|
-| КТ3 | ✅ PASS |
-| Smoke (ручной) | ✅ PASS |
-| Release-check | ✅ PASS |
-| Документация | 📜 обновлена |
+
+| Показатель     | Статус       |
+| -------------- | ------------ |
+| КТ3            | ✅ PASS       |
+| Smoke (ручной) | ✅ PASS       |
+| Release-check  | ✅ PASS       |
+| Документация   | 📜 обновлена |
+
 
 ```mermaid
 flowchart LR
@@ -161,17 +202,21 @@ flowchart LR
   R --> X[Финализация закрыта]
 ```
 
+
+
 ## 2026-05-06 — Проекция `leads_client`: `city_name` / `owner_name` из statement (миграция 009)
 
-- **Контекст:** поля **`city_name`** и **`owner_name`** в клиентской проекции должны отражать данные из **`myhome_statement_json`**, без опоры на колонку **`leads.city_name`**.
-- **Реализация:** **`migrations/009_add_city_name_to_leads_client.sql`** (после **008**) — **`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`** для обоих полей, backfill через **`UPDATE ... FROM leads`** по **`(source, external_id)`**, **`CREATE OR REPLACE FUNCTION sync_leads_client_from_lead`** с заполнением и **ON CONFLICT** для **`city_name`** / **`owner_name`**. **`metabase/propradar_dashboard.json`**: обновлён **`schema_reference`** (28 столбцов, ссылка на **009**). **`README.md`**, **`CHANGELOG.md`** — порядок миграций и запись в журнале.
-- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS**.
+- **Контекст:** поля `**city_name`** и `**owner_name**` в клиентской проекции должны отражать данные из `**myhome_statement_json**`, без опоры на колонку `**leads.city_name**`.
+- **Реализация:** `**migrations/009_add_city_name_to_leads_client.sql`** (после **008**) — `**ALTER TABLE ... ADD COLUMN IF NOT EXISTS`** для обоих полей, backfill через `**UPDATE ... FROM leads**` по `**(source, external_id)**`, `**CREATE OR REPLACE FUNCTION sync_leads_client_from_lead**` с заполнением и **ON CONFLICT** для `**city_name`** / `**owner_name**`. `**metabase/propradar_dashboard.json**`: обновлён `**schema_reference**` (28 столбцов, ссылка на **009**). `**README.md`**, `**CHANGELOG.md**` — порядок миграций и запись в журнале.
+- **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**.
 
-| Показатель        | Статус           |
-| ----------------- | ---------------- |
-| Scanner           | ✅ PASS         |
-| QA (`@tester`)    | 🧪 PASS         |
-| Документация      | 📜 обновлена     |
+
+| Показатель     | Статус       |
+| -------------- | ------------ |
+| Scanner        | ✅ PASS       |
+| QA (`@tester`) | 🧪 PASS      |
+| Документация   | 📜 обновлена |
+
 
 ```mermaid
 flowchart LR
@@ -179,14 +224,16 @@ flowchart LR
   M009 --> LC[(leads_client\n28 cols)]
 ```
 
+
+
 ---
 
 ## 2026-05-06 — P1 hotfix Metabase: карточка 7 — `city_name` и `owner_name`
 
-- **Контекст:** операторская таблица **«Последние лиды»** (**`position` 7** в **`metabase/propradar_dashboard.json`**) после контракта **`leads_client`** с **009** должна показывать **город** из **`city_name`**, а не **`urban_name`**; добавлен вывод **`owner_name`**.
-- **Исправление:** обновлены **`description_ru`** и **`sql`** карточки **7** (подписи «Город» / «Имя владельца»).
-- **Проверка:** **`@tester`** — **PASS**.
-- **Документация:** **`CHANGELOG.md`**, **`docs/METABASE_SETUP.md`**, этот файл.
+- **Контекст:** операторская таблица **«Последние лиды»** (`**position` 7** в `**metabase/propradar_dashboard.json`**) после контракта `**leads_client**` с **009** должна показывать **город** из `**city_name`**, а не `**urban_name**`; добавлен вывод `**owner_name**`.
+- **Исправление:** обновлены `**description_ru`** и `**sql**` карточки **7** (подписи «Город» / «Имя владельца»).
+- **Проверка:** `**@tester`** — **PASS**.
+- **Документация:** `**CHANGELOG.md`**, `**docs/METABASE_SETUP.md**`, этот файл.
 
 
 | Показатель     | Статус       |
@@ -209,10 +256,10 @@ flowchart LR
 
 ## 2026-05-06 — Проекция `leads_client` v2 (миграция 008)
 
-- **Контекст:** после **007** зафиксирован контракт **UI/Metabase**: проекция **без** `**lead_id`** и без служебных UUID/языковых меток; **PK** по паре **(source, external_id)**; **26** клиентских столбцов (в т.ч. `**comment`** из `**leads.description**`, фрагмент **statement** в `**dynamic_title`** / `**urban_name**` / `**images**` и др.).
-- **Реализация:** `**migrations/008_recreate_leads_client_v2.sql`** (строго после **007**) — пересоздание `**leads_client`**, триггера и функции синхронизации; `**metabase/propradar_dashboard.json**` — актуальный `**schema_reference**` на **008** и SQL под эту схему; в `**README.md`** порядок миграций: **008** после **007**.
+- **Контекст:** после **007** зафиксирован контракт **UI/Metabase**: проекция **без** `**lead_id`** и без служебных UUID/языковых меток; **PK** по паре **(source, external_id)**; **26** клиентских столбцов (в т.ч. `**comment`** из `**leads.description`**, фрагмент **statement** в `**dynamic_title`** / `**urban_name`** / `**images**` и др.).
+- **Реализация:** `**migrations/008_recreate_leads_client_v2.sql`** (строго после **007**) — пересоздание `**leads_client`**, триггера и функции синхронизации; `**metabase/propradar_dashboard.json`** — актуальный `**schema_reference**` на 008 и SQL под эту схему; в `**README.md**` порядок миграций: **008** после **007**.
 - **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**.
-- **Документация:** `**CHANGELOG.md`**, `**docs/METABASE_SETUP.md**`, `**README.md**`, этот файл.
+- **Документация:** `**CHANGELOG.md`**, `**docs/METABASE_SETUP.md`**, `**README.md**`, этот файл.
 
 
 | Показатель     | Статус       |
@@ -237,10 +284,10 @@ flowchart LR
 
 ## 2026-05-05 — P1 hotfix Metabase: карточка 7 «Последние лиды» — только клиентские поля
 
-- **Контекст:** в `**metabase/propradar_dashboard.json`** карточка с `**position` 7** (**«Последние лиды»**) должна показывать оператору только **клиентские** столбцы проекции `**leads_client`**, без `**lead_id**` и без служебных/технических колонок.
+- **Контекст:** в `**metabase/propradar_dashboard.json`** карточка с `**position` 7** (**«Последние лиды»**) должна показывать оператору только **клиентские** столбцы проекции `**leads_client`**, без `**lead_id`** и без служебных/технических колонок.
 - **Исправление:** SQL карточки **7** переведён на набор полей для UI/агентств (без идентификаторов и тех. меток из ядра).
 - **Проверка:** `**@tester`** — **PASS**.
-- **Документация:** `**CHANGELOG.md`**, `**docs/METABASE_SETUP.md**`, этот файл.
+- **Документация:** `**CHANGELOG.md`**, `**docs/METABASE_SETUP.md`**, этот файл.
 
 
 | Показатель     | Статус       |
@@ -262,9 +309,9 @@ flowchart LR
 ## 2026-05-05 — P1 hotfix Metabase: KeyError на `title_ru` карточки USD
 
 - **Контекст:** при запуске `**scripts/setup_metabase_dashboard.py`** падение с **KeyError**: `**title_ru`** скалярной карточки **USD** в `**metabase/propradar_dashboard.json`** не совпадал с литералом в скрипте (сопоставление карточек по **точному** `**title_ru`**).
-- **Исправление:** в bundle выровнен заголовок USD на `**Средняя цена объекта (USD)`**; карточки **USD/GEL** по-прежнему на `**leads_client`**.
+- **Исправление:** в bundle выровнен заголовок USD на `**Средняя цена объекта (USD)`**; карточки USD/GEL по-прежнему на `**leads_client`**.
 - **Проверка:** `**@tester`** — **PASS**.
-- **Документация:** `**CHANGELOG.md`**, `**Docs/METABASE_SETUP.md**`, этот файл.
+- **Документация:** `**CHANGELOG.md`**, `**Docs/METABASE_SETUP.md`**, этот файл.
 
 
 | Показатель     | Статус       |
@@ -285,8 +332,8 @@ flowchart LR
 
 ## 2026-05-05 — Metabase: дашборд на `leads_client` (bundle JSON)
 
-- **Контекст:** после миграции **007** клиентская проекция `**leads_client`** — основной источник для карточек в `**metabase/propradar_dashboard.json**`.
-- **Сделано:** все SQL в bundle переведены на `**leads_client`**; карточки **«Средняя цена (USD)»** и **«Средняя цена (GEL)»** (ROUND AVG `**price_usd`** / `**price_gel**`); таблица **«Последние лиды»** (LIMIT 20; первоначально в том же релизе включала и `**lead_id`**); в JSON добавлены `**schema_reference**` (ссылка на **007** и ключевые столбцы) и `**operator_instructions_ru`** для высоты карточки/прокрутки таблицы в UI Metabase. **Уточнение (P1 hotfix, карточка `position` 7):** вывод только клиентских полей — без `**lead_id`** и без служебных колонок (см. раздел выше и актуальный `**sql**` в bundle).
+- **Контекст:** после миграции **007** клиентская проекция `**leads_client`** — основной источник для карточек в `**metabase/propradar_dashboard.json`**.
+- **Сделано:** все SQL в bundle переведены на `**leads_client`**; карточки «Средняя цена (USD)» и «Средняя цена (GEL)» (ROUND AVG `**price_usd`** / `**price_gel**`); таблица **«Последние лиды»** (LIMIT 20; первоначально в том же релизе включала и `**lead_id`**); в JSON добавлены `**schema_reference`** (ссылка на 007 и ключевые столбцы) и `**operator_instructions_ru**` для высоты карточки/прокрутки таблицы в UI Metabase. **Уточнение (P1 hotfix, карточка `position` 7):** вывод только клиентских полей — без `**lead_id`** и без служебных колонок (см. раздел выше и актуальный `**sql`** в bundle).
 - **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**.
 - **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, при необходимости `README.md`, этот файл.
 
@@ -337,7 +384,7 @@ flowchart LR
 ## 2026-05-05 — Проекция `leads_client` (миграция 007)
 
 - **Контекст:** клиентские выборки и отчёты (Metabase/UI) удобнее вести по денормализованной проекции `**leads`**, без дублирования логики в приложении.
-- **Реализация:** `**migrations/007_create_leads_client_table.sql`** (после **006**) — таблица `**leads_client`** (PK `**lead_id`**, 1:1 с `**leads**`, UNIQUE `**(source, external_id)**`); поля ядра из `**leads**` + фрагмент из `**myhome_statement_json**` (`**district_name**`, `**dynamic_title**`, `**urban_name**`, `**images**` при JSON-массиве); триггер `**trg_leads_sync_client**` — `**AFTER INSERT OR UPDATE**` на `**leads**` → `**sync_leads_client_from_lead**`, **ON CONFLICT DO UPDATE**; индексы `**idx_leads_client_external_id`**, `**idx_leads_client_district_name`**; initial fill из `**leads**` до включения триггера.
+- **Реализация:** `**migrations/007_create_leads_client_table.sql`** (после **006**) — таблица `**leads_client`** (PK `**lead_id`**, 1:1 с `**leads`**, UNIQUE `**(source, external_id)**`); поля ядра из `**leads**` + фрагмент из `**myhome_statement_json**` (`**district_name**`, `**dynamic_title**`, `**urban_name**`, `**images**` при JSON-массиве); триггер `**trg_leads_sync_client**` — `**AFTER INSERT OR UPDATE**` на `**leads**` → `**sync_leads_client_from_lead**`, ON CONFLICT DO UPDATE; индексы `**idx_leads_client_external_id**`, `**idx_leads_client_district_name`**; initial fill из `**leads`** до включения триггера.
 - **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**.
 - **Документация:** `CHANGELOG.md`, `README.md` (список миграций), этот файл.
 - **Релиз вручную:** применить **007** к **leads-db** сразу после **006**.
@@ -387,7 +434,7 @@ flowchart LR
 ## 2026-05-05 — Backfill `price_gel` и очередь detail после миграции 006
 
 - **Контекст:** после `**migrations/006_add_price_gel_rename_price_usd.sql`** в **leads-db** часть строк остаётся с `**price_gel = NULL`**; обогащение деталями должно снова подхватывать такие записи наряду с пустым адресом.
-- **Сделано:** `**list_pending_detail_enrichment`** для `**source=myhome`**, `**status=new**`: `**address IS NULL OR price_gel IS NULL**`; скрипт `**scripts/backfill_price_gel.py**` — выборка только `**new**` с `**price_gel IS NULL**`, заполнение через тот же путь, что **Statements API** в enricher (`**--limit`**, 1–500).
+- **Сделано:** `**list_pending_detail_enrichment`** для `**source=myhome`**, `**status=new`**: `**address IS NULL OR price_gel IS NULL**`; скрипт `**scripts/backfill_price_gel.py**` — выборка только `**new**` с `**price_gel IS NULL**`, заполнение через тот же путь, что Statements API в enricher (`**--limit**`, 1–500).
 - **Проверка:** **Scanner** — **PASS**; `**@tester`** — **PASS**.
 - **Документация:** `CHANGELOG.md`, `README.md`, этот файл.
 - **Релиз вручную:** после **006** при необходимости — `python scripts/backfill_price_gel.py` (доступны **DATABASE_URL** и API; PII не логировать).
@@ -414,7 +461,7 @@ flowchart LR
 ## 2026-05-05 — Ретро-фикс (закрытие замечаний Diff Check, P1 hotfix)
 
 - **Контекст:** после **Diff Check** по горячему фиксу цен/описания оставались расхождения между артефактами репозитория и фактической схемой `**price_gel`** / `**price_usd`**.
-- **Сделано:** в `**metabase/propradar_dashboard.json`** во всех SQL заменено `**price_total_usd`** → `**price_usd**`; в `**.gitignore**` добавлен игнор каталога `**data/myhome_pdf/**` (выгрузки PDF enricher не попадают в git); `**myhome_api_schema.csv**` выровнен под канон имён `**price_gel**` / `**price_usd**`.
+- **Сделано:** в `**metabase/propradar_dashboard.json`** во всех SQL заменено `**price_total_usd`** → `**price_usd`**; в `**.gitignore**` добавлен игнор каталога `**data/myhome_pdf/**` (выгрузки PDF enricher не попадают в git); `**myhome_api_schema.csv**` выровнен под канон имён `**price_gel**` / `**price_usd**`.
 - **Проверка:** `@tester` — **PASS** (подтверждено перед документированием); дальше — **@process-guard (Diff Check)** на полный diff.
 - **Документация:** `CHANGELOG.md`, `docs/METABASE_SETUP.md`, при необходимости `README.md`, этот файл.
 
@@ -441,7 +488,7 @@ flowchart LR
 
 - **Контекст:** после API-first — в `**description`** попадали HTML-фрагменты (например `**<br />`**); цены нужно хранить явно в **двух валютах** с переименованием устаревшей колонки.
 - **Симптомы:** «грязный» текст описания в БД; путаница в именовании `**price_total_usd`** при фактической семантике USD из API.
-- **Реализация:** очистка HTML при маппинге `**description`** из ответа API; колонка `**price_gel`** (GEL из `**price.1**`), `**price_usd**` (USD из `**price.2**`, ранее `**price_total_usd**`); миграция `**migrations/006_add_price_gel_rename_price_usd.sql**` (после **005**).
+- **Реализация:** очистка HTML при маппинге `**description`** из ответа API; колонка `**price_gel`** (GEL из `**price.1`**), `**price_usd**` (USD из `**price.2**`, ранее `**price_total_usd**`); миграция `**migrations/006_add_price_gel_rename_price_usd.sql**` (после **005**).
 - **Проверка:** `@tester` — **PASS** (unit); интеграция к live API — **SKIP** по умолчанию (`**MYHOME_INTEGRATION=1`** — вручную при необходимости).
 - **Документация:** `CHANGELOG.md`, `README.md` (список миграций), `docs/METABASE_SETUP.md` (заметка про SQL), этот файл.
 - **Риски:** сохранённые в Metabase и прочие SQL, где фигурирует `**price_total_usd`**, нужно перевести на `**price_usd`**; при отчётах по цене в лари добавить `**price_gel**`.
@@ -558,7 +605,7 @@ flowchart LR
 ## 2026-05-04 — Metabase: скрипт API для дашборда «PropRadar — Лиды»
 
 - **Контекст:** автоматическая настройка дашборда через **Metabase HTTP API** без ручной расстановки шести карточек; идемпотентность при уже созданном дашборде.
-- **Реализация:** `**scripts/setup_metabase_dashboard.py`** (сессия, поиск БД `**LEADS_DATABASE_NAME`** / «PropRadar Leads», `**POST /api/card**`, `**POST /api/dashboard**`, раскладка `**POST .../cards**`), `**pyproject.toml**` (`**ruff**` включает `**scripts/**`), корневой `**.env.example**` (закомментированные `**METABASE_***`). `**docs/METABASE_SETUP.md**` — раздел про автоматизацию. Остальные запреты scope (без правок `**src/**`, `**migrations/**`, `**docker/infra**`) соблюдены.
+- **Реализация:** `**scripts/setup_metabase_dashboard.py`** (сессия, поиск БД `**LEADS_DATABASE_NAME`** / «PropRadar Leads», `**POST /api/card`**, `**POST /api/dashboard**`, раскладка `**POST .../cards**`), `**pyproject.toml**` (`**ruff**` включает `**scripts/**`), корневой `**.env.example**` (закомментированные `**METABASE_***`). `**docs/METABASE_SETUP.md**` — раздел про автоматизацию. Остальные запреты scope (без правок `**src/**`, `**migrations/**`, `**docker/infra**`) соблюдены.
 - **Проверка:** Scanner PASS (подтверждено человеком). `@tester`: `**ruff check src tests scripts`**, `**mypy src`**, `**pytest -m "not integration"**` — OK; `**docker compose config**` (infra/tools/app) — OK. Smoke против живого Metabase — вручную (`**METABASE_***`).
 - **Документация:** `**docs/METABASE_SETUP.md`**, `**CHANGELOG.md`**, `**README.md**`, этот файл.
 - **Релиз вручную:** один прогон скрипта после настройки админа и подключения БД в UI.
@@ -566,7 +613,7 @@ flowchart LR
 ## 2026-05-04 — Metabase: дашборд и подключение leads-db
 
 - **Контекст:** наблюдаемость/монетизация — дашборд для агентств и внутреннего мониторинга; Metabase в `**docker/tools`**, порт хоста 3031, сеть `**propradar`**.
-- **Реализация:** правки `**docker/tools/docker-compose.yml`** (Metabase: `JAVA_TIMEZONE`/`TZ`), `**docker/tools/.env.example`** (блок `**LEADS_DB_***` для формы в UI), `**metabase/propradar_dashboard.json**` (6 карточек, SQL под PG15 и миграции `001`+`002`), `**docs/METABASE_SETUP.md**` (шаги, DNS, ручная сборка дашборда из JSON). `**docker/infra**`, `**src/**`, `**migrations/**`, `**docs/AI_GOVERNANCE.md**` не менялись.
+- **Реализация:** правки `**docker/tools/docker-compose.yml`** (Metabase: `JAVA_TIMEZONE`/`TZ`), `**docker/tools/.env.example`** (блок `**LEADS_DB_*`** для формы в UI), `**metabase/propradar_dashboard.json**` (6 карточек, SQL под PG15 и миграции `001`+`002`), `**docs/METABASE_SETUP.md**` (шаги, DNS, ручная сборка дашборда из JSON). `**docker/infra**`, `**src/**`, `**migrations/**`, `**docs/AI_GOVERNANCE.md**` не менялись.
 - **Проверка:** Scanner PASS (подтверждено человеком). `@tester`: валидность JSON, `docker compose config` для **infra/tools/app** — OK; `ruff`/`mypy`/`pytest` ( регрессия кода) — OK. Ручной smoke: `up tools` и UI **[http://localhost:3031](http://localhost:3031)** — по `**METABASE_SETUP.md`**.
 - **Документация:** `docs/METABASE_SETUP.md`, `CHANGELOG.md`, этот файл.
 - **Релиз вручную:** поднять infra + tools, подключить БД **leads** в Metabase, собрать дашборд по SQL из JSON.
