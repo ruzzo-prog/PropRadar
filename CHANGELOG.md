@@ -34,6 +34,8 @@
 
 ### Fixed
 
+- **P1 hotfix / playwright-worker (Xvfb, entrypoint):** в **`docker/app/playwright-worker-entrypoint.sh`** вместо **`xvfb-run … uvicorn`** — **Xvfb :99** в фоне, **`DISPLAY=:99`**, **`exec uvicorn`** как PID 1 (симптом: **unhealthy**, **uvicorn** отсутствовал в **`ps`**).
+
 - **Evolution API / `docker/tools` — `Database provider invalid`:** для **`evolution-api`** заданы переменные **`DATABASE_*`** и согласованный **`DATABASE_CONNECTION_URI`** (хост **`leads-db`** в Docker-сети **`propradar`**); fallback'и в **`docker/tools/docker-compose.yml`** выровнены; **`docker/tools/.env.example`** дополнен примерами и комментариями. **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
 - **P1 / myhome `list_ids` — регрессия `since_days`:** параметр снова учитывается при отборе external ID в постраничном списке Statements API; правка в `src/parsers/adapters/myhome/list_ids.py`, регрессионное покрытие в `tests/unit/test_myhome_list_ids.py` (@tester: целевые unit — PASS; полный `pytest tests` — **51 passed**, **2 skipped**).
 - **P0 / myhome list property filter upstream:** в `src/parsers/adapters/myhome/list_ids.py` ключ типа имущества переключён на `real_estate_types` (вместо `object_types`) по результатам аудита live API; добавлена защита от рассинхронизации `category` vs `object_type`.

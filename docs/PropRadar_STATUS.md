@@ -2,6 +2,20 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-08 (hotfix) — P1: playwright-worker, entrypoint (Xvfb / uvicorn)
+
+- **Симптом:** контейнер **unhealthy**, в **`ps`** нет **uvicorn** (цепочка через **`xvfb-run … uvicorn`** не оставляла **uvicorn** стабильным основным процессом).
+- **Исправление:** **`docker/app/playwright-worker-entrypoint.sh`** — **Xvfb :99** в фоне, **`DISPLAY=:99`**, **`exec uvicorn`** как основной процесс контейнера (вместо **`xvfb-run … uvicorn`**).
+- **Процесс:** emergency path — **`Docs/AI_GOVERNANCE.md`** §10.
+- **Проверка:** **`pytest tests`** — **54 passed**, **2 skipped** (сессия 2026-05-08).
+
+| Показатель | Статус |
+| ---------- | ------ |
+| QA (`pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 статус + changelog |
+
+Прогресс hotfix playwright-worker entrypoint: `[▓▓▓▓▓▓▓▓▓▓] 100%` (документация зафиксирована).
+
 ## 2026-05-08 — Playwright worker (FastAPI :8001): `/enrich`, `/login`, `/health`
 
 - **Контекст:** вынести обогащение через Playwright (фаза **phone** после успешного ingest в БД) в отдельный контейнер в сети **`propradar`**; n8n только ставит задачу и фиксирует приём (**HTTP 202**), без опроса готовности и без ожидания завершения Playwright в том же HTTP-запросе.
