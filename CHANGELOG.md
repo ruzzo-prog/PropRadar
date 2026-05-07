@@ -7,9 +7,11 @@
 ### Added
 
 - **Документация ingress:** заполнен `**Docs/INGRESS_ARCHITECTURE.md`** — четыре домена из канона, поток myhome.ge → PropRadar API → n8n → leads-db → WhatsApp (Evolution), схема узлов n8n, контракты `**/api/myhome/***` (сверка с кодом и `docs/API.md`), роли `**leads**` / `**leads_client**`, Docker/порты (**9000** локальный uvicorn vs **8000** compose), переменные окружения без секретов, ссылки на источники правды.
+- **Деплой на сервер (VPS/Hetzner):** runbook `**docs/DEPLOY_SERVER.md**`; reverse-proxy слой в `**docker/reverse-proxy/**` (конфигурация репозитория); примеры окружения `**.env.example.local**` / `**.env.example.server**` (без секретов); в compose — `**healthcheck**` и `**depends_on**` для предсказуемого порядка старта; обновлены `**README.md**` и n8n-документация под серверный сценарий.
 
 ### Verified
 
+- **Деплой-готовность (reverse-proxy, env-профили, runbook):** **Scanner** — **PASS** (подтверждение человека); `**@tester`** — **PASS** (сессия 2026-05-07).
 - **PropRadar API / myhome HTTP:** **Scanner** — **PASS**; `**pytest tests`** — **40 passed**, **2 skipped**; HTTP-эндпоинты `**/api/myhome/*`** с `**X-API-Key**`; n8n-runbook переведён на HTTP (`docs/n8n_myhome_workflow.md`); цепочка до `**@release-check**` — сессия 2026-05-06.
 - **Myhome / n8n-синхронизация (список ID, discover, ingest по detail):** **Scanner** — **PASS**; `**pytest tests`** — **30 passed**, **2 skipped** (интеграция myhome); цепочка до `**@release-check`** завершена в сессии 2026-05-06.
 - **Leads client / migration 009:** контрольная точка **3** — **PASS**; smoke подтверждён человеком; `city_name` и `owner_name` синхронизируются из statement JSON, Metabase карточка 7 использует их в клиентской выдаче.

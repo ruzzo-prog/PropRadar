@@ -2,6 +2,32 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-07 — Деплой: Hetzner/VPS, reverse-proxy, runbook, профили env
+
+- **Контекст:** подготовка production-контура на выделенном сервере (в т.ч. Hetzner): единая точка входа через reverse-proxy, устойчивый порядок старта (`healthcheck` / `depends_on`), раздельные примеры переменных для локальной и серверной среды без секретов в репозитории.
+- **Реализация (код/compose уже в репо):** runbook `docs/DEPLOY_SERVER.md`; слой `docker/reverse-proxy/**`; профили `**.env.example.local**` / `**.env.example.server**`; обновления healthchecks и `depends_on` в связанных compose; правки `README.md` и n8n-документации под серверный сценарий.
+- **Проверка:** **Scanner** — **PASS** (подтверждение человека); `**@tester`** — **PASS**.
+- **Документация (запись @documentor):** обновлены `CHANGELOG.md` и этот файл; пошаговый деплой и сетевой контур — `docs/DEPLOY_SERVER.md` (уже в репозитории), плюс обновления `README.md` и n8n runbook.
+
+
+| Показатель        | Статус                                         |
+| ----------------- | ---------------------------------------------- |
+| Scanner           | ✅ PASS (со слов человека)                      |
+| QA (`@tester`)    | 🧪 PASS                                         |
+| Документация      | 📜 `docs/DEPLOY_SERVER.md`, README, n8n runbook |
+| Прод-инфраструктура | reverse-proxy + профили env + порядок старта |
+
+
+```mermaid
+flowchart LR
+  EXT[Клиенты / вебhooks] --> RP[docker/reverse-proxy]
+  RP --> SVC[Compose-сервисы\nAPI / n8n / прочее]
+  SVC --> DB[(leads-db и др.)]
+```
+
+
+Прогресс подготовки деплоя (сервер/VPS): `[▓▓▓▓▓▓▓▓░░] 80%` (остались ручной smoke на сервере и финальный `@release-check` по процессу).
+
 ## 2026-05-07 — Docs: канон ingress (`INGRESS_ARCHITECTURE`)
 
 - **Контекст:** пустой `**Docs/INGRESS_ARCHITECTURE.md`** не закрывал требование канонических документов из `Docs/AI_GOVERNANCE.md` (раздел «Назначение»); нужна единая картина контура myhome → API → n8n → БД → WhatsApp без правок кода.
@@ -648,7 +674,7 @@ flowchart LR
 
 ## Технический долг
 
-- `Docs/INGRESS_ARCHITECTURE.md` — заготовка пустая; заполнить перед первым ingress-изменением в коде.
+- *(актуально)* см. открытые P1/P2 в бэклоге и заметки в runbook `docs/DEPLOY_SERVER.md` после первого боевого прогона.
 
 ## ENV
 
