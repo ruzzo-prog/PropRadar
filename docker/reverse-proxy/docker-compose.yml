@@ -1,5 +1,6 @@
 # Nginx reverse-proxy + TLS для n8n и Evolution API (сеть propradar).
-# TLS: сертификаты Let's Encrypt на хосте (/etc/letsencrypt), см. README.md.
+# TLS: 4 file bind-mount с хоста (fullchain/privkey для N8N и Evolution) — см. README.
+# Внутри контейнера пути фиксированы: /etc/nginx/certs/{n8n,evolution}/...
 # Предварительно: docker network create propradar
 # Поднять вместе с docker/tools и (при необходимости) docker/app, docker/infra.
 #
@@ -14,12 +15,23 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Preflight вызывается явно через sh в command — не зависит от executable bit
+    # (на Windows при core.fileMode=false скрипты в /docker-entrypoint.d могут не запускаться).
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        sh /docker-entrypoint.d/00-tls-preflight.sh
+        exec nginx -g 'daemon off;'
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      # live/ → symlink на archive/; без archive цепочки в контейнере не читаются
-      - /etc/letsencrypt/live:/etc/letsencrypt/live:ro
-      - /etc/letsencrypt/archive:/etc/letsencrypt/archive:ro
+      - ./nginx/docker-entrypoint.d/00-tls-preflight.sh:/docker-entrypoint.d/00-tls-preflight.sh:ro
+      - ${N8N_TLS_FULLCHAIN:-./letsencrypt/live/n8n.usluga-market.ru/fullchain.pem}:/etc/nginx/certs/n8n/fullchain.pem:ro
+      - ${N8N_TLS_PRIVKEY:-./letsencrypt/live/n8n.usluga-market.ru/privkey.pem}:/etc/nginx/certs/n8n/privkey.pem:ro
+      - ${EVOLUTION_TLS_FULLCHAIN:-./letsencrypt/live/evolution.usluga-market.ru/fullchain.pem}:/etc/nginx/certs/evolution/fullchain.pem:ro
+      - ${EVOLUTION_TLS_PRIVKEY:-./letsencrypt/live/evolution.usluga-market.ru/privkey.pem}:/etc/nginx/certs/evolution/privkey.pem:ro
       - reverse_proxy_certbot_www:/var/www/certbot:ro
     networks:
       - propradar
