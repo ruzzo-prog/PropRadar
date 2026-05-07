@@ -2,6 +2,32 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-08 — Playwright worker (FastAPI :8001): `/enrich`, `/login`, `/health`
+
+- **Контекст:** вынести обогащение через Playwright (фаза **phone** после успешного ingest в БД) в отдельный контейнер в сети **`propradar`**; n8n только ставит задачу и фиксирует приём (**HTTP 202**), без опроса готовности и без ожидания завершения Playwright в том же HTTP-запросе.
+- **Реализация:** сервис **`playwright-worker`** — **`src/worker/main.py`** (FastAPI, порт контейнера **8001**): **`POST /enrich`** → **202 Accepted**, **`POST /login`**, **`GET /health`**; образ **`docker/app/playwright-worker.Dockerfile`**, entrypoint; описание в **`docker/app/docker-compose.yml`** с профилями **`enricher`** и **`workers`**; том для файлов сессии браузера (повторные запуски без ручного логина при сохранённой сессии). Зафиксированный коммит функционала: **`52429d9`** (**feat worker**). Дополнительно в рабочем дереве: **`scripts/myhome_login.py`** — при неудаче автологина по **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** немедленный код выхода **1** без ожидания ручного **Enter** (серверный/CI сценарий).
+- **Границы scope (не меняли):** логика дедупликации в n8n, размер батча **50**, модуль **`pdf.py`**, миграции БД, **`parsers.Dockerfile`**.
+- **Проверка:** **`pytest tests`** — **54 passed**, **2 skipped**; **Scanner** — **PASS** (со слов человека).
+- **Документация (@documentor):** **`docs/PropRadar_STATUS.md`**, **`CHANGELOG.md`**, **`docs/INGRESS_ARCHITECTURE.md`**, **`docs/n8n_myhome_workflow.md`**.
+
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS (со слов человека) |
+| QA (`pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 статус + changelog + ingress + n8n |
+| Следующий гейт | 🛡️ `@process-guard` Diff Check |
+
+
+```mermaid
+flowchart LR
+  N8N[n8n\nHTTP Request] -->|POST /enrich\nadapter+phase| PW[playwright-worker\n:8001]
+  PW --> VOL[(volume\nсессий Playwright)]
+```
+
+
+Прогресс цепочки playwright-worker: `[▓▓▓▓▓▓▓▓░░] 90%` (остаётся **Diff Check** по процессу).
+
 ## 2026-05-07 — Docker: корневой `compose.yaml`, профили, корневой `.env`
 
 - **Контекст:** при merge compose из разных каталогов путались project directory и `DATABASE_URL`; нужен единый вход для деплоя (`git pull` + `docker compose up`).

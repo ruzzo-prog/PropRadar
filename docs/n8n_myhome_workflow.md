@@ -27,6 +27,7 @@
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
 | 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
+| 2c      | Асинхронное обогащение (phone)   | `POST` **`http://playwright-worker:8001/enrich`** (или URL из env), тело **`{"adapter":"myhome","phase":"phone"}`**; ожидается только **HTTP 202**, опроса статуса (**polling**) нет |
 | 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
 | 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
 | 5       | Mark rejected в БД               | `POST` `**/api/myhome/mark-rejected**` с `ids` и `reason`                  |
@@ -43,7 +44,8 @@
 flowchart LR
   T[Schedule] --> S1[GET fetch-ids]
   S1 --> S2[POST ingest]
-  S2 --> D[POST sync-status]
+  S2 --> PW[POST playwright-worker /enrich\n202 only]
+  PW --> D[POST sync-status]
   D --> L[Loop disappeared]
   L --> WA[Evolution WhatsApp]
   WA --> M[POST mark-rejected]
@@ -57,6 +59,7 @@ flowchart LR
 ## Предварительные условия
 
 - Запущен сервис **PropRadar API** (`uvicorn api.main:app` на хосте, порт **9000**, либо контейнер `api` в Docker на **8000**), с `**DATABASE_URL`**, доступом к myhome API и (в production) `**PROPRADAR_API_KEY**`. Из n8n в Docker к API: **`http://api:8000`** (та же сеть `propradar`, см. `docker/app/docker-compose.yml`). Если API запущен на хосте, а n8n в контейнере — **`http://host.docker.internal:9000`** (Windows / Docker Desktop) вместо `localhost`.
+- Для шага обогащения через Playwright: в той же Docker-сети доступен **`playwright-worker`** на **`http://playwright-worker:8001`** (профили **`enricher`** / **`workers`** в `docker/app/docker-compose.yml`); на узле HTTP после ingest использовать **`POST /enrich`** и том сессий согласно compose (без секретов в репозитории).
 - `**X-API-Key**` в каждом запросе к `/api/myhome/*`, если для окружения API требуется ключ (см. `docs/API.md`).
 - Применена миграция `**migrations/010_add_status_reason_to_leads.sql**`, если используется колонка `status_reason`.
 - Evolution API доступен с хоста n8n (часто `http://localhost:8080` или имя сервиса в Docker-сети).
@@ -83,6 +86,7 @@ PROPRADAR_API_URL=http://api:8000
 | -------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `PROPRADAR_API_URL`  | Базовый URL PropRadar API: **`http://localhost:9000`** (uvicorn на хосте), **`http://api:8000`** (оба в Docker), либо **`http://host.docker.internal:9000`** (n8n в Docker, API на хосте). |
 | `PROPRADAR_API_KEY`  | Значение для заголовка `**X-API-Key`** (должно совпадать с `PROPRADAR_API_KEY` на стороне API в production). |
+| `PLAYWRIGHT_WORKER_URL` | Опционально: базовый URL сервиса **`playwright-worker`** для узла **`POST /enrich`** (по умолчанию в Docker-сети **`http://playwright-worker:8001`**). |
 | `EVOLUTION_API_URL`  | Базовый URL Evolution (см. узел **WhatsApp / Evolution** ниже).                                              |
 | `EVOLUTION_API_AUTH` | Опционально: для Evolution; хранить в **Credentials**.                                                       |
 
@@ -162,6 +166,22 @@ PROPRADAR_API_URL=http://api:8000
 - **Ответ:** `{"parsed", "new", "errors"}` — поле `**new`** для итоговой статистики.
 - **Примечание:** отдельного HTTP-эндпоинта для «полного» `run_myhome_parser` без списка ID нет; при необходимости расширяйте API отдельной задачей.
 - **Скриншот:** `docs/assets/n8n/nodes/02b-run-myhome-parser.png`
+
+---
+
+### Узел 2c — HTTP Request: Playwright worker (`POST /enrich`)
+
+Выполняется **после успешного** **`POST /api/myhome/ingest`** (узел 2b): постановка фоновой задачи обогащения (фаза **`phone`**) в **`playwright-worker`**.
+
+- **Тип:** `HTTP Request`
+- **Method:** `POST`
+- **URL:** базовый адрес из **`PLAYWRIGHT_WORKER_URL`** (без завершающего `/`) + **`/enrich`**, например выражение **`={{ $env.PLAYWRIGHT_WORKER_URL }}/enrich`**; если переменная не задана — укажите литерал **`http://playwright-worker:8001/enrich`** для контейнерного сценария в сети **`propradar`**.
+- **Headers:** `Content-Type: application/json`
+- **Body (JSON):** **`{"adapter":"myhome","phase":"phone"}`**
+- **Ожидаемый успешный ответ:** код **202 Accepted**; тело ответа для принятия решений в workflow **не используется**.
+- **Polling / повторный GET статуса:** не предусмотрены контрактом — узел завершается после получения **202**.
+- **Ошибки:** коды вне **202** или сетевой сбой обрабатывайте политикой retry/error workflow n8n отдельно от ingest и discover.
+- **Скриншот (опционально):** `docs/assets/n8n/nodes/02c-playwright-enrich.png`
 
 ---
 

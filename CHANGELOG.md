@@ -6,6 +6,8 @@
 
 ### Added
 
+- **Playwright worker (**коммит `52429d9`, feat worker**):** отдельный сервис **`src/worker/main.py`** (FastAPI **:8001**) — **`POST /enrich`** (**202**), **`POST /login`**, **`GET /health`**; Docker — **`docker/app/playwright-worker.Dockerfile`**, сервис в **`docker/app/docker-compose.yml`** с профилями **`enricher`** / **`workers`** и томом под файлы сессии Playwright. После успешного **`POST /api/myhome/ingest`** оркестратор n8n вызывает **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`**; допустимый успешный ответ на стороне n8n — только **HTTP 202**, **polling** результата не выполняется. **`scripts/myhome_login.py`:** при ошибке автологина из **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** — немедленный **`exit 1`** без паузы на ручной ввод (серверный сценарий).
+
 - **Docker / корневой `compose.yaml`:** единая точка входа с `include` фрагментов `docker/infra`, `docker/app`, `docker/tools`, `docker/reverse-proxy`; профили **`infra`**, **`app`**, **`tools`**, **`proxy`**; project directory — корень репозитория (интерполяция `${VAR}` из корневого `.env`). Сервис **`api`**: `env_file` на **`../../.env`** (корень репо). Обновлены **`docs/DEPLOY_SERVER.md`**, **`README.md`**, примеры env.
 
 - **Документация ingress:** заполнен **`Docs/INGRESS_ARCHITECTURE.md`** — четыре домена из канона, поток myhome.ge → PropRadar API → n8n → leads-db → WhatsApp (Evolution), схема узлов n8n, контракты `**/api/myhome/***` (сверка с кодом и `docs/API.md`), роли **`leads`** / **`leads_client`**, Docker/порты (**9000** локальный uvicorn vs **8000** compose), переменные окружения без секретов, ссылки на источники правды.

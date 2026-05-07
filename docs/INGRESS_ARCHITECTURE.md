@@ -32,13 +32,17 @@ flowchart TB
 
   subgraph propradar["PropRadar"]
     API["FastAPI\n/api/myhome/*"]
+    PW["playwright-worker\n:8001 /enrich"]
     CLI["scripts/\nrun_myhome_parser,\nsync_myhome_status"]
     DB[("PostgreSQL\nleads-db")]
+    VOL[("volume\nсессий PW")]
   end
 
   N8N["n8n\nSchedule + HTTP"]
 
   N8N -->|GET/POST + X-API-Key| API
+  N8N -->|POST /enrich\n202 only| PW
+  PW --> VOL
   API <-->|HTTP list/detail| MH
   API --> CLI
   CLI --> DB
@@ -46,7 +50,7 @@ flowchart TB
   API --> DB
 ```
 
-**Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
+**Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
 
 ---
 
@@ -58,6 +62,7 @@ flowchart TB
 | 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |
 | 2b | **HTTP Request** | `POST …/api/myhome/ingest`. |
+| 2c | **HTTP Request** | `POST http://playwright-worker:8001/enrich`, тело JSON **`{"adapter":"myhome","phase":"phone"}`**; успешное завершение узла — только код **202**; **polling** не используется. |
 | 3 | **HTTP Request** | `POST …/api/myhome/sync-status` — discover исчезнувших. |
 | 4 | **Split In Batches / Loop** | Обход элементов `disappeared`. |
 | 5 | **HTTP Request** | Отправка в WhatsApp через Evolution (контракт версии Evolution — локально). |
