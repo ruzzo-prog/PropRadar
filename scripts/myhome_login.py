@@ -60,8 +60,6 @@ def main() -> int:
         )
         return 1
 
-    need_enter = not creds_ok
-
     logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
     with sync_playwright() as pw:
@@ -76,16 +74,12 @@ def main() -> int:
                 page.wait_for_load_state("networkidle", timeout=60_000)
             except Exception:
                 logger.warning(
-                    "Автовход не удался — войдите вручную или проверьте селекторы.",
+                    "Автовход не удался — проверьте селекторы и MYHOME_EMAIL/MYHOME_PASSWORD.",
                 )
-                if not sys.stdin.isatty():
-                    browser.close()
-                    return 1
-                need_enter = True
+                browser.close()
+                return 1
         else:
             print("Выполните вход вручную в окне браузера.")
-
-        if need_enter:
             print("После успешного входа нажмите Enter в этой консоли, чтобы сохранить сессию.")
             try:
                 input()

@@ -21,9 +21,9 @@ COPY docker/app/playwright-worker-entrypoint.sh /usr/local/bin/playwright-worker
 RUN chmod +x /usr/local/bin/playwright-worker-entrypoint.sh \
     && pip install --no-cache-dir -e .
 
-EXPOSE 8090
+EXPOSE 8001
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
-    CMD curl -fsS http://127.0.0.1:8090/health || exit 1
+    CMD curl -fsS http://127.0.0.1:8001/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/playwright-worker-entrypoint.sh"]

@@ -15,6 +15,8 @@
 
 ### Changed
 
+- **Playwright-worker (порт):** **`uvicorn`** в контейнере и **`docker/app/docker-compose.yml`** (публикация **8001:8001**, healthcheck) выровнены с документированным **`http://playwright-worker:8001`** (ingress, n8n runbook); ранее использовался **8090**.
+
 - **Docker compose фрагменты (`docker/*`):** у всех сервисов задан **profile** (`infra`, `app`, `tools`, `proxy`); прямой запуск `docker compose up` из подкаталога без `--profile` больше не поднимает сервисы — используйте корневой **`compose.yaml`** или добавляйте **`--profile …`**.
 
 - **Reverse-proxy / TLS (n8n, Evolution):** конфиг nginx использует стабильные пути **`/etc/nginx/certs/{n8n,evolution}/`** внутри контейнера; на хосте пути к `fullchain.pem` / `privkey.pem` задаются через **`N8N_TLS_*`** и **`EVOLUTION_TLS_*`** (file bind-mount). Перед `nginx` выполняется preflight **`00-tls-preflight.sh`**, запуск **явно через `sh`**; проверки **`-f`** (обычный файл) и **читаемости** для всех четырёх PEM. Порты **5678** / **8080** на хост не публикуются (`docker/tools` без `ports` у n8n и evolution-api); внешний вход — **80/443** reverse-proxy. Подробности — `docker/reverse-proxy/README.md`; **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
