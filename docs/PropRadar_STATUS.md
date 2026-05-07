@@ -8,7 +8,7 @@
 - **Реализация:** сервис **`playwright-worker`** — **`src/worker/main.py`** (FastAPI, порт контейнера **8001**): **`POST /enrich`** → **202 Accepted**, **`POST /login`**, **`GET /health`**; образ **`docker/app/playwright-worker.Dockerfile`**, entrypoint; описание в **`docker/app/docker-compose.yml`** с профилями **`enricher`** и **`workers`**; том для файлов сессии браузера (повторные запуски без ручного логина при сохранённой сессии). Зафиксированный коммит функционала: **`52429d9`** (**feat worker**); слушающий порт в Docker (**8001**, compose **`8001:8001`**) согласован с ingress/n8n-доками (устранено расхождение с черновым **8090**). Дополнительно в рабочем дереве: **`scripts/myhome_login.py`** — при неудаче автологина по **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** немедленный код выхода **1** без ожидания ручного **Enter** (серверный/CI сценарий).
 - **Границы scope (не меняли):** логика дедупликации в n8n, размер батча **50**, модуль **`pdf.py`**, миграции БД, **`parsers.Dockerfile`**.
 - **Проверка:** **`pytest tests`** — **54 passed**, **2 skipped**; **Scanner** — **PASS** (со слов человека).
-- **Документация (@documentor):** **`docs/PropRadar_STATUS.md`**, **`CHANGELOG.md`**, **`docs/INGRESS_ARCHITECTURE.md`**, **`docs/n8n_myhome_workflow.md`**.
+- **Дальнейший шаг по канону:** **`@release-check`** (пройден в сессии 2026-05-08) → **деплой человеком** → **smoke**.
 
 
 | Показатель | Статус |
@@ -16,7 +16,8 @@
 | Scanner | ✅ PASS (со слов человека) |
 | QA (`pytest tests`) | 🧪 54 passed, 2 skipped |
 | Документация | 📜 статус + changelog + ingress + n8n |
-| Следующий гейт | 🛡️ `@process-guard` Diff Check |
+| `@process-guard` Diff Check | ✅ PASS (на коммите **`38bf2f4`**, сессия 2026-05-08) |
+| Следующий гейт | 🚀 **Деплой человеком** + ручной smoke |
 
 
 ```mermaid
@@ -26,7 +27,7 @@ flowchart LR
 ```
 
 
-Прогресс цепочки playwright-worker: `[▓▓▓▓▓▓▓▓░░] 90%` (остаётся **Diff Check** по процессу).
+Прогресс цепочки playwright-worker: `[▓▓▓▓▓▓▓▓▓▓] 100%` (Diff Check PASS на **`38bf2f4`**; остаётся деплой и smoke человеком).
 
 ## 2026-05-07 — Docker: корневой `compose.yaml`, профили, корневой `.env`
 
