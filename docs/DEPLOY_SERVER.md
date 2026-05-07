@@ -18,9 +18,11 @@
 | Локальный uvicorn на Windows/хосте | вручную | **9000** |
 | PostgreSQL leads-db (хост, локальная разработка) | `docker/infra` | **5433** → 5432 |
 | Metabase UI | `docker/tools` | **3031** → 3000 |
-| n8n | `docker/tools` | 5678 |
-| Evolution API | `docker/tools` | 8080 |
+| n8n (слушает в контейнере; **на хост не проброшен**) | `docker/tools` | **5678** (только внутри `propradar`) |
+| Evolution API (аналогично) | `docker/tools` | **8080** (только внутри `propradar`) |
 | Reverse-proxy HTTP/HTTPS | `docker/reverse-proxy` | 80, 443 |
+
+Публичный доступ к n8n и Evolution на сервере — через **HTTPS** на **`docker/reverse-proxy`** (домены и TLS — см. `docker/reverse-proxy/README.md`, переменные **`N8N_TLS_*`** / **`EVOLUTION_TLS_*`** и preflight перед стартом nginx).
 
 ## Переменные окружения: local vs server
 
@@ -57,7 +59,7 @@ cd docker/reverse-proxy && docker compose up -d && cd ../..
 
 ## Reverse-proxy и TLS
 
-См. `docker/reverse-proxy/README.md`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
+См. `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight (`-f` / читаемость PEM), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
 
 ## Healthchecks
 

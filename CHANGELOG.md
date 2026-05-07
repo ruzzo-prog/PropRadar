@@ -9,6 +9,10 @@
 - **Документация ingress:** заполнен `**Docs/INGRESS_ARCHITECTURE.md`** — четыре домена из канона, поток myhome.ge → PropRadar API → n8n → leads-db → WhatsApp (Evolution), схема узлов n8n, контракты `**/api/myhome/***` (сверка с кодом и `docs/API.md`), роли `**leads**` / `**leads_client**`, Docker/порты (**9000** локальный uvicorn vs **8000** compose), переменные окружения без секретов, ссылки на источники правды.
 - **Деплой на сервер (VPS/Hetzner):** runbook `**docs/DEPLOY_SERVER.md**`; reverse-proxy слой в `**docker/reverse-proxy/**` (конфигурация репозитория); примеры окружения `**.env.example.local**` / `**.env.example.server**` (без секретов); в compose — `**healthcheck**` и `**depends_on**` для предсказуемого порядка старта; обновлены `**README.md**` и n8n-документация под серверный сценарий.
 
+### Changed
+
+- **Reverse-proxy / TLS (n8n, Evolution):** конфиг nginx использует стабильные пути **`/etc/nginx/certs/{n8n,evolution}/`** внутри контейнера; на хосте пути к `fullchain.pem` / `privkey.pem` задаются через **`N8N_TLS_*`** и **`EVOLUTION_TLS_*`** (file bind-mount). Перед `nginx` выполняется preflight **`00-tls-preflight.sh`**, запуск **явно через `sh`**; проверки **`-f`** (обычный файл) и **читаемости** для всех четырёх PEM. Порты **5678** / **8080** на хост не публикуются (`docker/tools` без `ports` у n8n и evolution-api); внешний вход — **80/443** reverse-proxy. Подробности — `docker/reverse-proxy/README.md`; **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
+
 ### Verified
 
 - **Деплой-готовность (reverse-proxy, env-профили, runbook):** **Scanner** — **PASS** (подтверждение человека); `**@tester`** — **PASS** (сессия 2026-05-07).

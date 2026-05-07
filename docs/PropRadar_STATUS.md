@@ -2,6 +2,33 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
 
+## 2026-05-07 — Reverse-proxy: TLS для n8n и Evolution (жёсткая граница портов)
+
+- **Контекст:** вынести HTTPS-терминацию в `docker/reverse-proxy`, не публиковать прямые порты сервисов n8n/Evolution на хост, сделать монтирование сертификатов переносимым (не привязка к одному пути Let's Encrypt в конфиге nginx) и отловить «битые» PEM до старта nginx.
+- **Реализация (код/compose в репо):** в `nginx/conf.d` пути TLS — фиксированные внутри контейнера `/etc/nginx/certs/{n8n,evolution}/…`; на хосте — четыре переменные **`N8N_TLS_FULLCHAIN`**, **`N8N_TLS_PRIVKEY`**, **`EVOLUTION_TLS_FULLCHAIN`**, **`EVOLUTION_TLS_PRIVKEY`** с дефолтами под текущие домены; bind-mount отдельных файлов вместо целых деревьев `live`/`archive`. Перед `nginx` команда compose **явно** вызывает `00-tls-preflight.sh` через **`sh`**; preflight проверяет **`-f`** (обычный файл, не каталог-заглушка) и **читаемость** **`-r`** для всех четырёх PEM. В `docker/tools` у **n8n** и **evolution-api** секция **`ports` отсутствует** — **5678** и **8080** остаются внутри сети **`propradar`**, снаружи — только **80/443** reverse-proxy (и явно открытые вами порты вроде Metabase **3031**).
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-07).
+- **Документация (запись @documentor):** этот файл, `CHANGELOG.md`, уточнение матрицы портов в `docs/DEPLOY_SERVER.md`; детали TLS — `docker/reverse-proxy/README.md`.
+- **Дальнейший шаг по канону:** **`@process-guard` Diff Check** → при PASS — `@release-check` / релиз по процессу.
+
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS |
+| QA (`@tester`) | 🧪 PASS |
+| Документация | 📜 статус + changelog + runbook; README reverse-proxy — источник правды по TLS |
+| Следующий гейт | 🛡️ `@process-guard` Diff Check |
+
+
+```mermaid
+flowchart LR
+  EXT[Клиенты / webhooks\n:443] --> RP[docker/reverse-proxy\nTLS terminate]
+  RP --> N8N[n8n :5678 внутри сети]
+  RP --> EVO[evolution-api :8080 внутри сети]
+```
+
+
+Прогресс контура reverse-proxy/TLS: `[▓▓▓▓▓▓▓▓▓░] 90%` (остаётся Diff Check и приёмка релиза по процессу).
+
 ## 2026-05-07 — Деплой: Hetzner/VPS, reverse-proxy, runbook, профили env
 
 - **Контекст:** подготовка production-контура на выделенном сервере (в т.ч. Hetzner): единая точка входа через reverse-proxy, устойчивый порядок старта (`healthcheck` / `depends_on`), раздельные примеры переменных для локальной и серверной среды без секретов в репозитории.
