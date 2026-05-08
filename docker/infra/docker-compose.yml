@@ -32,7 +32,7 @@ services:
   propradar-redis:
     profiles:
       - infra
-    image: redis:7.4.6-alpine
+    image: redis:7.4.9-alpine
     container_name: propradar-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
