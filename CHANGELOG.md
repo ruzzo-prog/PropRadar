@@ -6,6 +6,8 @@
 
 ### Added
 
+- **MyHome phone enrichment:** модуль **`src/parsers/adapters/myhome/phone_extractor.py`** — **`get_phone(statement_id, httpx.AsyncClient)`** загружает публичную HTML-карточку и извлекает номер из **`__NEXT_DATA__`** и **JSON-LD**; **`MyHomePhoneEnricher`** сначала пакетно вызывает HTTP-слой, затем для лидов без номера сохраняет прежний **Playwright** fallback (паузы на странице без урезания). Юнит-тесты **`tests/unit/test_phone_extractor.py`**. Канон **`Docs/AI_GOVERNANCE.md`** (раздел 9), поток **`Docs/INGRESS_ARCHITECTURE.md`**; описание процесса — **`docs/phone_extraction.md`**.
+
 - **Infra / Redis:** в **`docker/infra/docker-compose.yml`** сервис **`propradar-redis`** — образ **`redis:7.4.9-alpine`**, режим **`redis-server --appendonly yes`** (AOF), том **`propradar_redis_data`**, профиль **`infra`**; порты на хост **не публикуются** — доступ только из сети **`propradar`**; healthcheck через **`redis-cli ping`**.
 
 - **Playwright worker (**коммит `52429d9`, feat worker**):** отдельный сервис **`src/worker/main.py`** (FastAPI **:8001**) — **`POST /enrich`** (**202**), **`POST /login`**, **`GET /health`**; Docker — **`docker/app/playwright-worker.Dockerfile`**, сервис в **`docker/app/docker-compose.yml`** с профилями **`enricher`** / **`workers`** и томом под файлы сессии Playwright. После успешного **`POST /api/myhome/ingest`** оркестратор n8n вызывает **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`**; допустимый успешный ответ на стороне n8n — только **HTTP 202**, **polling** результата не выполняется. **`scripts/myhome_login.py`:** при ошибке автологина из **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** — немедленный **`exit 1`** без паузы на ручной ввод (серверный сценарий).
@@ -31,6 +33,8 @@
 - **Reverse-proxy / TLS (Metabase, `metabase.usluga-market.ru`):** **Цель:** публичный **HTTPS** для Metabase по тому же паттерну, что n8n и Evolution (терминация на nginx, без обязательной публикации UI только на **3031**). **Реализация:** новый виртуальный хост **`docker/reverse-proxy/nginx/conf.d/metabase.conf`** (HTTP **80** — ACME **`/.well-known`**, редирект на HTTPS; HTTPS **443** — прокси на **`metabase:3000`** с заголовками forwarded); во фрагменте **`docker/reverse-proxy/docker-compose.yml`** — bind-mount **`METABASE_TLS_FULLCHAIN`** / **`METABASE_TLS_PRIVKEY`** → **`/etc/nginx/certs/metabase/{fullchain.pem,privkey.pem}`**; **`00-tls-preflight.sh`** — те же **`check_one`** для пары PEM Metabase и обновлённая подсказка по переменным при ошибке. Runbook и матрица портов — **`docs/DEPLOY_SERVER.md`**, переменные и smoke — **`docker/reverse-proxy/README.md`**. **Проверки:** **`docker compose config`**, сценарий preflight при отсутствии PEM — ожидаемый **`exit 1`**; smoke **HTTP→HTTPS** и браузер — по runbook (`curl -sI http://metabase.usluga-market.ru/`). **`@tester`** — **PASS** (2026-05-08).
 
 ### Verified
+
+- **MyHome HTTP-first телефон (`phone_extractor.py`, `phone.py`):** **Scanner** — **SKIP**; **`pytest tests/unit/test_phone_extractor.py`** — **20 passed**; интеграция live — **SKIP**; **`@tester`** — **PASS** (2026-05-09).
 
 - **P0 / myhome_login submit-селекторы (`scripts/myhome_login.py`, коммит `9a10de0`):** **Scanner** — **PASS** (со слов человека); **`pytest tests/unit/test_myhome_login.py`** — **PASS**; полный **`pytest tests`** — **PASS** при корректном **`PYTHONPATH`** — **`@tester`** — **PASS** (2026-05-08).
 

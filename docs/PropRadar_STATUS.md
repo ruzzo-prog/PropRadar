@@ -2,6 +2,37 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — MyHome: HTTP-first извлечение телефона из HTML
+
+- **Цель:** снизить долю обращений к Playwright для поля `phone`; при отсутствии номера в HTML сохранён прежний сценарий клика и ответ `phone/show`.
+- **Реализация:** **`src/parsers/adapters/myhome/phone_extractor.py`** (`get_phone(statement_id, httpx.AsyncClient)`); **`MyHomePhoneEnricher`** — предварительный HTTP по карточкам, затем Playwright только для лидов без номера; значения телефонов не логируются.
+- **Границы scope:** адаптер myhome (**`phone_extractor.py`**, **`phone.py`**), канон **`Docs/AI_GOVERNANCE.md`** (раздел 9), **`Docs/INGRESS_ARCHITECTURE.md`**, **`docs/phone_extraction.md`**, **`CHANGELOG.md`**, тест **`tests/unit/test_phone_extractor.py`**. **`playwright-worker`** и **`scripts/myhome_login.py`** не изменялись.
+- **Проверки:** **Scanner** — **SKIP** (по выбору оркестратора на этом проходе); **`pytest tests/unit/test_phone_extractor.py`** — **20 passed**; интеграция live myhome — **SKIP**; **`@tester`** — **PASS** (2026-05-09).
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, **`docs/phone_extraction.md`**.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check**.
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ⏭️ SKIP |
+| QA (`pytest tests/unit/test_phone_extractor.py`) | 🧪 20 passed |
+| Интеграция live | ⏭️ SKIP |
+| **`@tester`** | 🧪 PASS (2026-05-09) |
+| Документация | 📜 changelog + status + `docs/phone_extraction.md` |
+
+| Аспект | Было | Стало |
+| ------ | ----- | ----- |
+| Источник номера | В основном Playwright + `phone/show` | Сначала HTTP-разбор карточки (**`__NEXT_DATA__`**, JSON-LD), затем прежний Playwright fallback |
+
+```mermaid
+flowchart TD
+  H[HTTP GET карточки pr/id] --> P{Номер из JSON}
+  P -->|найден| W[Запись phone]
+  P -->|нет| B[Playwright: клик и phone/show]
+  B --> W
+```
+
+Прогресс документации HTTP-first phone: `[▓▓▓▓▓▓▓▓▓▓] 100%` (**следующий шаг** — **`@process-guard` Diff Check**).
+
 ## 2026-05-09 — P0: myhome_login timing (`networkidle` + 3000ms) в `_run_auto_login`
 
 - **Симптом / цель:** `auth.tnet.ge` рендерит форму логина после JS (React SPA), из-за чего при `wait_until="domcontentloaded"` поля могли отсутствовать в момент поиска.
