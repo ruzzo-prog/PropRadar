@@ -48,7 +48,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        set -eo pipefail
+        set -euo pipefail
         if [ "$${CACHE_REDIS_ENABLED:-false}" = "true" ]; then
           uri="$${CACHE_REDIS_URI:-redis://127.0.0.1:6379}"
           if [[ ! "$$uri" =~ ^redis://([^:/@]+)(:([0-9]+))?(/.*)?$$ ]]; then
@@ -73,7 +73,9 @@ services:
           fi
           echo "Redis is reachable."
         fi
-        npm run db:deploy && npm run db:generate && npm run start:prod
+        npm run db:deploy
+        npm run db:generate
+        exec npm run start:prod
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
