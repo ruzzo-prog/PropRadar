@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Locator, Page, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
 
@@ -52,6 +53,24 @@ class MyHomeLoginError(RuntimeError):
         self.stage = stage
         self.reason = reason
         super().__init__(f"{stage}:{reason}")
+
+
+def _normalize_login_error(
+    exc: BaseException,
+    *,
+    default_stage: str = "unexpected",
+) -> MyHomeLoginError:
+    """Приводит исключения Playwright и прочие сбои к ``MyHomeLoginError``.
+
+    Текст исходного исключения в ``reason`` не попадает (без утечек в лог).
+    """
+    if isinstance(exc, MyHomeLoginError):
+        return exc
+    if isinstance(exc, PWTimeoutError):
+        return MyHomeLoginError(default_stage, "timeout")
+    if isinstance(exc, PlaywrightError):
+        return MyHomeLoginError(default_stage, "playwright_error")
+    return MyHomeLoginError(default_stage, f"unexpected:{type(exc).__name__}")
 
 
 def _env_truthy(name: str) -> bool:
@@ -117,9 +136,24 @@ def _fill_and_submit(
     email: str,
     password: str,
 ) -> None:
-    email_el.fill(email, timeout=15_000)
-    password_el.fill(password, timeout=15_000)
-    submit_el.click(timeout=15_000)
+    try:
+        email_el.fill(email, timeout=15_000)
+    except PWTimeoutError as exc:
+        raise MyHomeLoginError("fill_submit", "email_timeout") from exc
+    except PlaywrightError as exc:
+        raise MyHomeLoginError("fill_submit", "email_failed") from exc
+    try:
+        password_el.fill(password, timeout=15_000)
+    except PWTimeoutError as exc:
+        raise MyHomeLoginError("fill_submit", "password_timeout") from exc
+    except PlaywrightError as exc:
+        raise MyHomeLoginError("fill_submit", "password_failed") from exc
+    try:
+        submit_el.click(timeout=15_000)
+    except PWTimeoutError as exc:
+        raise MyHomeLoginError("fill_submit", "submit_timeout") from exc
+    except PlaywrightError as exc:
+        raise MyHomeLoginError("fill_submit", "submit_failed") from exc
 
 
 def _wait_auth_success(page: Page) -> None:
@@ -137,11 +171,16 @@ def _wait_auth_success(page: Page) -> None:
 
 
 def _run_auto_login(page: Page, email: str, password: str) -> None:
-    page.goto(
-        _resolve_login_url(),
-        wait_until="domcontentloaded",
-        timeout=120_000,
-    )
+    try:
+        page.goto(
+            _resolve_login_url(),
+            wait_until="domcontentloaded",
+            timeout=120_000,
+        )
+    except PWTimeoutError as exc:
+        raise MyHomeLoginError("navigate_login", "goto_timeout") from exc
+    except PlaywrightError as exc:
+        raise MyHomeLoginError("navigate_login", "goto_failed") from exc
     em, pw_field, sub = _locate_required_controls(page)
     _fill_and_submit(em, pw_field, sub, email, password)
     _wait_auth_success(page)
@@ -173,74 +212,117 @@ def main() -> int:
 
     exit_code = 0
     trace_stop_failed = False
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        context = browser.new_context(locale="ru-RU")
-        if debug:
-            context.tracing.start(screenshots=True, snapshots=True)
-        page = context.new_page()
-        try:
-            if creds_ok:
+    try:
+        with sync_playwright() as pw:
+            browser = None
+            try:
                 try:
-                    _run_auto_login(
-                        page,
-                        settings.myhome_email or "",
-                        settings.myhome_password or "",
-                    )
-                except MyHomeLoginError as exc:
-                    logger.error(
-                        "Автовход не удался: stage=%s type=%s",
-                        exc.stage,
-                        exc.reason,
-                    )
-                    if debug:
-                        _debug_failure_shot(page, state_path)
-                    exit_code = 1
-                except Exception:
-                    logger.exception("Автовход не удался: stage=unexpected type=error")
-                    if debug:
-                        _debug_failure_shot(page, state_path)
-                    exit_code = 1
-            else:
+                    browser = pw.chromium.launch(headless=True)
+                except PWTimeoutError as exc:
+                    raise MyHomeLoginError("launch_browser", "timeout") from exc
+                except PlaywrightError as exc:
+                    raise MyHomeLoginError("launch_browser", "launch_failed") from exc
                 try:
-                    page.goto(
-                        "https://www.myhome.ge/ru/",
-                        wait_until="domcontentloaded",
-                        timeout=120_000,
-                    )
-                except Exception:
-                    logger.exception(
-                        "Ручной вход: не удалось открыть стартовую страницу (stage=manual_goto)",
-                    )
-                    exit_code = 1
-                if exit_code == 0:
-                    print("Выполните вход вручную в окне браузера.")
-                    print(
-                        "После успешного входа нажмите Enter в этой консоли, "
-                        "чтобы сохранить сессию.",
-                    )
+                    context = browser.new_context(locale="ru-RU")
+                except PlaywrightError as exc:
+                    raise MyHomeLoginError("browser_context", "new_context_failed") from exc
+                if debug:
                     try:
-                        input()
-                    except EOFError:
-                        logger.error("Нет интерактивного stdin.")
-                        exit_code = 1
-        finally:
-            if debug:
+                        context.tracing.start(screenshots=True, snapshots=True)
+                    except Exception:
+                        logger.warning(
+                            "myhome_login tracing start failed (stage=tracing_start)",
+                            exc_info=True,
+                        )
                 try:
-                    context.tracing.stop(path=str(state_path.parent / "myhome_login_trace.zip"))
-                except Exception:
-                    trace_stop_failed = True
-                    logger.warning("myhome_login trace stop failed", exc_info=True)
+                    page = context.new_page()
+                except PlaywrightError as exc:
+                    raise MyHomeLoginError("browser_page", "new_page_failed") from exc
+                try:
+                    if creds_ok:
+                        try:
+                            _run_auto_login(
+                                page,
+                                settings.myhome_email or "",
+                                settings.myhome_password or "",
+                            )
+                        except Exception as exc:
+                            err = _normalize_login_error(exc, default_stage="auto_login")
+                            logger.error(
+                                "Автовход не удался: stage=%s reason=%s",
+                                err.stage,
+                                err.reason,
+                            )
+                            if debug:
+                                _debug_failure_shot(page, state_path)
+                            exit_code = 1
+                    else:
+                        try:
+                            page.goto(
+                                "https://www.myhome.ge/ru/",
+                                wait_until="domcontentloaded",
+                                timeout=120_000,
+                            )
+                        except Exception as exc:
+                            err = _normalize_login_error(exc, default_stage="manual_goto")
+                            logger.error(
+                                "Ручной вход: stage=%s reason=%s",
+                                err.stage,
+                                err.reason,
+                            )
+                            exit_code = 1
+                        if exit_code == 0:
+                            print("Выполните вход вручную в окне браузера.")
+                            print(
+                                "После успешного входа нажмите Enter в этой консоли, "
+                                "чтобы сохранить сессию.",
+                            )
+                            try:
+                                input()
+                            except EOFError:
+                                err = MyHomeLoginError("manual_stdin", "eof")
+                                logger.error(
+                                    "Ручной вход: stage=%s reason=%s",
+                                    err.stage,
+                                    err.reason,
+                                )
+                                exit_code = 1
+                finally:
+                    if debug:
+                        try:
+                            context.tracing.stop(
+                                path=str(state_path.parent / "myhome_login_trace.zip"),
+                            )
+                        except Exception:
+                            trace_stop_failed = True
+                            logger.warning(
+                                "myhome_login trace stop failed (stage=trace_stop)",
+                                exc_info=True,
+                            )
 
-        if exit_code == 0:
-            if debug and trace_stop_failed:
-                logger.error(
-                    "Сессия не сохранена: остановка trace завершилась с ошибкой (stage=trace_stop)",
-                )
-                exit_code = 1
-            else:
-                context.storage_state(path=str(state_path))
-        browser.close()
+                if exit_code == 0:
+                    if debug and trace_stop_failed:
+                        logger.error(
+                            "Сессия не сохранена: stage=trace_stop reason=stop_failed",
+                        )
+                        exit_code = 1
+                    else:
+                        try:
+                            context.storage_state(path=str(state_path))
+                        except Exception as exc:
+                            err = _normalize_login_error(exc, default_stage="storage_state")
+                            logger.error(
+                                "Не удалось сохранить сессию: stage=%s reason=%s",
+                                err.stage,
+                                err.reason,
+                            )
+                            exit_code = 1
+            finally:
+                if browser is not None:
+                    browser.close()
+    except MyHomeLoginError as exc:
+        logger.error("myhome_login: stage=%s reason=%s", exc.stage, exc.reason)
+        return 1
 
     if exit_code != 0:
         return exit_code
@@ -251,6 +333,18 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except MyHomeLoginError as exc:
+        logging.getLogger("myhome_login").error(
+            "myhome_login: stage=%s reason=%s",
+            exc.stage,
+            exc.reason,
+        )
+        raise SystemExit(1) from exc
     except Exception as exc:  # noqa: BLE001
-        logging.getLogger("myhome_login").error("%s: %s", type(exc).__name__, exc)
+        err = _normalize_login_error(exc)
+        logging.getLogger("myhome_login").error(
+            "myhome_login: stage=%s reason=%s",
+            err.stage,
+            err.reason,
+        )
         raise SystemExit(1) from exc

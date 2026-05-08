@@ -1,11 +1,14 @@
-"""Точечные проверки URL-логики scripts/myhome_login.py (без Playwright)."""
+"""Точечные проверки scripts/myhome_login.py (без живого браузера)."""
 
 from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PWTimeoutError
 
 _REPO = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location(
@@ -31,3 +34,59 @@ _spec.loader.exec_module(_ml)
 )
 def test_url_indicates_logged_in(url: str, expected: bool) -> None:
     assert _ml._url_indicates_logged_in(url) is expected
+
+
+def test_normalize_preserves_myhome_login_error() -> None:
+    orig = _ml.MyHomeLoginError("navigate_login", "goto_timeout")
+    assert _ml._normalize_login_error(orig) is orig
+
+
+def test_normalize_pw_timeout_uses_default_stage() -> None:
+    err = _ml._normalize_login_error(PWTimeoutError("timeout"), default_stage="manual_goto")
+    assert err.stage == "manual_goto"
+    assert err.reason == "timeout"
+
+
+def test_normalize_playwright_error() -> None:
+    err = _ml._normalize_login_error(PlaywrightError("x"), default_stage="storage_state")
+    assert err.stage == "storage_state"
+    assert err.reason == "playwright_error"
+
+
+def test_normalize_generic_exception_class_in_reason() -> None:
+    err = _ml._normalize_login_error(RuntimeError("ignored"), default_stage="auto_login")
+    assert err.stage == "auto_login"
+    assert err.reason == "unexpected:RuntimeError"
+
+
+def test_fill_and_submit_maps_email_timeout() -> None:
+    email_el = MagicMock()
+    pw_el = MagicMock()
+    sub_el = MagicMock()
+    email_el.fill.side_effect = PWTimeoutError("t")
+    with pytest.raises(_ml.MyHomeLoginError) as ei:
+        _ml._fill_and_submit(email_el, pw_el, sub_el, "e", "p")
+    assert ei.value.stage == "fill_submit"
+    assert ei.value.reason == "email_timeout"
+
+
+def test_fill_and_submit_maps_password_playwright_error() -> None:
+    email_el = MagicMock()
+    pw_el = MagicMock()
+    sub_el = MagicMock()
+    pw_el.fill.side_effect = PlaywrightError("x")
+    with pytest.raises(_ml.MyHomeLoginError) as ei:
+        _ml._fill_and_submit(email_el, pw_el, sub_el, "e", "p")
+    assert ei.value.stage == "fill_submit"
+    assert ei.value.reason == "password_failed"
+
+
+def test_fill_and_submit_maps_submit_timeout() -> None:
+    email_el = MagicMock()
+    pw_el = MagicMock()
+    sub_el = MagicMock()
+    sub_el.click.side_effect = PWTimeoutError("t")
+    with pytest.raises(_ml.MyHomeLoginError) as ei:
+        _ml._fill_and_submit(email_el, pw_el, sub_el, "e", "p")
+    assert ei.value.stage == "fill_submit"
+    assert ei.value.reason == "submit_timeout"
