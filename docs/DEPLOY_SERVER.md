@@ -112,28 +112,67 @@ docker compose --profile proxy up -d
 
 Каноничные детали — `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight для **шести** PEM-файлов (**n8n**, **Evolution**, **Metabase**: по `fullchain` и `privkey` внутри контейнера — переменные **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`**), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
 
-### Metabase (`metabase.usluga-market.ru`)
+### Единый процесс Let's Encrypt (n8n, Evolution, Metabase)
 
-1. **Certbot (первичный выпуск, standalone):** порт **80** на хосте должен быть свободен (прокси не слушает 80), затем:
+Один тип доверия для всех трёх публичных доменов: **Let's Encrypt** на хосте, **шесть** переменных в корневом **`.env`**, монтирование в контейнер nginx по `docker/reverse-proxy/docker-compose.yml`, проверка **preflight** до старта nginx.
+
+1. **Предварительные условия**
+   - **UFW:** открыть **`80/tcp`** и **`443/tcp`** (`sudo ufw allow 80/tcp`, `sudo ufw allow 443/tcp`; при необходимости `sudo ufw reload`). Для **`certbot certonly --standalone`** порт **80** на хосте должен быть **свободен** на время выпуска (временно остановите сервис, который слушает 80, либо используйте webroot — см. `docker/reverse-proxy/README.md`).
+   - **DNS:** для каждого FQDN одна **A**-запись на **один** публичный IP сервера (без дублирующих A на другие адреса для того же имени — иначе ACME и браузер могут расходоваться с фактическим сервером).
+   - **Docker:** сеть **`propradar`**, из корня репозитория профили **`tools`** и **`proxy`** так, чтобы **`reverse-proxy`**, **`n8n`**, **`evolution-api`**, **`metabase`** были в одной сети (см. раздел «Типовой порядок compose» выше).
+
+2. **Выпуск сертификатов (certbot, standalone)**
+
+   На каждый домен — отдельная команда (после освобождения 80, п. 1):
+
    ```bash
-   sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
-     -d metabase.usluga-market.ru
+   sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email -d n8n.usluga-market.ru
+   sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email -d evolution.usluga-market.ru
+   sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email -d metabase.usluga-market.ru
    ```
-2. **Переменные в корневом `.env`** (или абсолютные пути, если certbot кладёт сертификаты в `/etc/letsencrypt/...`; см. README про symlink и `readlink -f`):
-   - **`METABASE_TLS_FULLCHAIN`** — `fullchain.pem` для `metabase.usluga-market.ru`
-   - **`METABASE_TLS_PRIVKEY`** — `privkey.pem` для того же домена
-3. **Профиль `tools` и `proxy`:** контейнер **`metabase`** должен быть в сети **`propradar`** вместе с **`reverse-proxy`** (как при запуске из корня: `docker compose --profile infra --profile app --profile tools --profile proxy up -d`).
-4. **Применить конфиг прокси:** из корня репозитория после правок сертификатов или `nginx/conf.d`:
+
+   Продление и политика renew — на хосте (cron, `certbot renew`, перезагрузка nginx в контейнере); symlink в `live/` и bind-mount — см. `docker/reverse-proxy/README.md` (`readlink -f` при необходимости).
+
+3. **Переменные в корневом `.env`**
+
+   Задайте **все шесть** путей к материалу LE (типичный путь на Ubuntu после certbot):
+
+   ```
+   N8N_TLS_FULLCHAIN=/etc/letsencrypt/live/n8n.usluga-market.ru/fullchain.pem
+   N8N_TLS_PRIVKEY=/etc/letsencrypt/live/n8n.usluga-market.ru/privkey.pem
+   EVOLUTION_TLS_FULLCHAIN=/etc/letsencrypt/live/evolution.usluga-market.ru/fullchain.pem
+   EVOLUTION_TLS_PRIVKEY=/etc/letsencrypt/live/evolution.usluga-market.ru/privkey.pem
+   METABASE_TLS_FULLCHAIN=/etc/letsencrypt/live/metabase.usluga-market.ru/fullchain.pem
+   METABASE_TLS_PRIVKEY=/etc/letsencrypt/live/metabase.usluga-market.ru/privkey.pem
+   ```
+
+   В переменных **`_*_TLS_*`** указывайте **файлы на хосте**, которые реально существуют и читаются процессом docker (обычно пути под **`/etc/letsencrypt/live/<домен>/`**). Не подменяйте их путями вида **`/etc/nginx/certs/...` на хосте** для «обхода» LE: внутри контейнера nginx уже монтирует в **`/etc/nginx/certs/{n8n,evolution,metabase}/`**; если на хост положить только самоподписанный материал, браузер покажет **недоверенный** сертификат при том же preflight.
+
+4. **Применение конфигурации reverse-proxy**
+
+   Из **корня** репозитория:
+
    ```bash
    docker compose --profile proxy up -d --force-recreate reverse-proxy
    ```
-   Либо только перечитать nginx без пересоздания (если обновляли только `*.conf`): `docker compose exec reverse-proxy nginx -s reload`.
-5. **Smoke:** редирект HTTP→HTTPS и UI:
+
+   Если менялись только **`nginx/conf.d/*.conf`**, допустим `docker compose exec reverse-proxy nginx -s reload` (см. README).
+
+5. **Проверка**
+
    ```bash
-   curl -sI http://metabase.usluga-market.ru/
+   curl -vI https://n8n.usluga-market.ru/ 2>&1 | grep -E 'SSL|HTTP'
+   curl -vI https://evolution.usluga-market.ru/ 2>&1 | grep -E 'SSL|HTTP'
+   curl -vI https://metabase.usluga-market.ru/ 2>&1 | grep -E 'SSL|HTTP'
    ```
-   Ожидается `301` и `Location: https://metabase.usluga-market.ru/...`. В браузере откройте `https://metabase.usluga-market.ru/` — должна загрузиться веб-форма Metabase.
-6. **Metabase и публичный URL:** задайте в окружении сервиса `metabase` базовый URL, соответствующий HTTPS за прокси (например переменные вида site URL для вашей версии Metabase — см. официальную документацию), чтобы ссылки и редиректы не указывали на `http://...:3031`.
+
+   Ожидание: **`SSL certificate verify ok`**, ответ приложения (**`HTTP/2 200`** или согласованный редирект). Редирект с HTTP: `curl -sI http://<домен>/` — **`301`** и **`Location: https://...`**.
+
+### Metabase (`metabase.usluga-market.ru`)
+
+- **TLS и выпуск:** следуйте разделу **«Единый процесс Let's Encrypt»** выше (отдельный **`certbot`** для **`metabase.usluga-market.ru`**, пара **`METABASE_TLS_*`** в **`.env`**, пересоздание **`reverse-proxy`**).
+- **Профиль `tools` и `proxy`:** контейнер **`metabase`** и **`reverse-proxy`** в сети **`propradar`** (из корня: `docker compose --profile infra --profile app --profile tools --profile proxy up -d`).
+- **Metabase и публичный URL:** задайте в окружении сервиса `metabase` базовый URL под HTTPS за прокси (см. официальную документацию вашей версии Metabase), чтобы ссылки и редиректы не указывали на `http://...:3031`.
 
 ## Healthchecks
 

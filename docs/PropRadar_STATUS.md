@@ -2,6 +2,24 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — Документация: единый runbook LE для n8n / Evolution / Metabase (Hetzner)
+
+- **Сделано:** в **`docs/DEPLOY_SERVER.md`** добавлен раздел **«Единый процесс Let's Encrypt (n8n, Evolution, Metabase)»** — **UFW 80/443**, одна **A** на FQDN, три **`certbot certonly --standalone`**, шесть **`_*_TLS_*`** в корневом **`.env`** (`/etc/letsencrypt/live/<домен>/`), **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**, проверка **`curl -vI`** + **SSL/HTTP**; **`CHANGELOG.md`** — запись в **`### Documented`**.
+- **Операции на сервере (вне git, по состоянию на дату):** LE для **`metabase.usluga-market.ru`**, выравнивание **`METABASE_TLS_*`** на **`live/metabase.usluga-market.ru/`**, **UFW**, удаление лишней **A**, пересоздание **reverse-proxy**; **КТ3** — **`HTTP/2 200`**, **`SSL certificate verify ok`** для **n8n**, **evolution**, **metabase** (подтверждение человека).
+
+## 2026-05-09 — Документация: myhome + playwright-worker (runbook)
+
+- **Сделано:** полный набор операторских документов — **`docs/playwright_worker.md`**, **`docs/myhome_login.md`**; обновлён **`docs/phone_extraction.md`** (Cloudflare, итог Playwright-only); **`CHANGELOG.md`** — сводка сессии в **`### Documented`**.
+- **Контур воркера (по состоянию на дату записи):** **`playwright-worker`** — **HEALTHY**; автологин и сохранение сессии — **работают**; файл **`myhome_session.json`** (том **`adapter_playwright_sessions`**) — **валиден**, в сессии зафиксированы **AccessToken** / **RefreshToken** для **`.tnet.ge`** (детали не в статусе).
+- **Откат HTTP-телефона:** выполнен ранее в эту же дату (**`phone_extractor.py`** удалён, канон §9 / ingress — **Playwright-only**). Задача «откатить phone_extractor» — **закрыта**.
+
+### Известные проблемы (не исправлялись в этой доку-сессии)
+
+| Проблема | Суть |
+|----------|------|
+| **`compose.yaml` + сервис `api`** | У **`api`** в **`docker/app/docker-compose.yml`** указано **`depends_on: leads-db`**, но **`leads-db`** живёт во фрагменте **`infra`** с профилем **`--profile infra`**. Подъём **только** `--profile app` **без** **`infra`** приводит к тому, что **`leads-db`** не в составе проекта / unhealthy-цепочка — **`api`** может **не подняться**. Рабочий минимум для API+БД: **`--profile infra --profile app`**. Для воркера обогащения: **`--profile infra --profile enricher`**. |
+| **`phone_extractor` (архив)** | Код **удалён**; в документах не планируется возврат HTTP-пути из-за **Cloudflare** на **www.myhome.ge**. |
+
 ## 2026-05-09 — P1: myhome_login — `_wait_auth_success` и SSO `auth.myauto.ge` + `AccessToken`
 
 - **Симптом / цель:** после сабмита логина TNET браузер уходит на **`auth.myauto.ge`** (промежуточный SSO); в headless JS-редирект на **myhome.ge** может не выполниться, из-за чего **`wait_for_url(myhome)`** с таймаутом **90 s** не завершался успехом, хотя auth API уже вернул **200** и сессию нужно сохранять.
@@ -17,7 +35,7 @@
 ## 2026-05-09 — Откат: MyHome HTTP-first телефона (Cloudflare)
 
 - **Причина:** фича **`phone_extractor`** (HTTP GET **`www.myhome.ge`**) в проде не работает: **Cloudflare Managed Challenge** блокирует `httpx`/curl (403); сценарий проверялся в браузере агента и в unit-тестах, **live с сервера до деплоя не подтверждался** — регресс процесса приёмки.
-- **Откат:** удалены **`src/parsers/adapters/myhome/phone_extractor.py`**, **`tests/unit/test_phone_extractor.py`**; **`src/parsers/adapters/myhome/phone.py`** возвращён к режиму **только Playwright** (клик + **`phone/show`**); **`docs/AI_GOVERNANCE.md`** §9 и **`docs/INGRESS_ARCHITECTURE.md`** снова описывают Playwright-only путь. **`docs/phone_extraction.md`** **не трогали** — остаётся как архив диагностики.
+- **Откат:** удалены **`src/parsers/adapters/myhome/phone_extractor.py`**, **`tests/unit/test_phone_extractor.py`**; **`src/parsers/adapters/myhome/phone.py`** возвращён к режиму **только Playwright** (клик + **`phone/show`**); **`docs/AI_GOVERNANCE.md`** §9 и **`docs/INGRESS_ARCHITECTURE.md`** снова описывают Playwright-only путь. **`docs/phone_extraction.md`** до сессии **`@documentor`** оставался как черновик архива; **позже в тот же день** файл **переписан** (Cloudflare, исторический блок **`__NEXT_DATA__`**, итог Playwright-only) — см. блок **«Документация: myhome + playwright-worker»** выше.
 - **Границы scope:** адаптер myhome, канон, ingress, **`CHANGELOG.md`**, этот файл; **без** правок **`playwright-worker`**, **`scripts/myhome_login.py`**, схемы БД.
 - **Проверки:** **`pytest tests/unit/test_myhome_enricher.py`** — **PASS**; полный **`pytest tests/unit`** — **70 passed** (сессия отката); **`ruff`** по **`phone.py`** — **PASS**. Полный Scanner — по решению человека.
 - **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`** (после QA и документирования).
@@ -26,7 +44,7 @@
 | ---------- | ------ |
 | Код откатан | ✅ |
 | Канон §9 / ingress | ✅ синхронизированы с Playwright-only |
-| Архив диагностики | 📜 `docs/phone_extraction.md` (без изменений) |
+| Документ телефона | 📜 `docs/phone_extraction.md` — обновлён в док-сессии (см. верхний блок **2026-05-09**) |
 
 ## 2026-05-09 — (отменено) MyHome: HTTP-first извлечение телефона из HTML
 

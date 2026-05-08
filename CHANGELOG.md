@@ -4,13 +4,19 @@
 
 ## [Unreleased]
 
+### Documented
+
+- **Сессия 2026-05-09 (Hetzner / reverse-proxy, LE для трёх доменов):** в **`docs/DEPLOY_SERVER.md`** — раздел **«Единый процесс Let's Encrypt (n8n, Evolution, Metabase)»**: предусловия (**UFW 80/443**, одна **A** на домен), три команды **`certbot certonly --standalone`**, все **шесть** переменных **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`** с путями **`/etc/letsencrypt/live/<домен>/`**, пересоздание **`reverse-proxy`** (`docker compose --profile proxy up -d --force-recreate reverse-proxy`), проверка **`curl -vI https://<домен>`** + **`grep`** по **SSL/HTTP**; блок **Metabase** сведён к ссылке на единый процесс + site URL.
+
+- **Сессия 2026-05-09 (myhome: вход, телефон, воркер):** добавлены runbook **`docs/playwright_worker.md`** (архитектура **`playwright-worker`**, профили **`infra` + enricher**, smoke, диагностические скрипты **`/tmp/check_*.py`**) и **`docs/myhome_login.md`** (переменные, volume сессии, SSO **auth.myauto.ge** + **`AccessToken`**, headless, **`networkidle`**). Обновлён **`docs/phone_extraction.md`** — раздел про **Cloudflare** и итог **Playwright-only**. Сводка исправлений за день: **`EMAIL_SELECTORS`** — **`input[name="Email"]`**; **`_run_auto_login`** — **`wait_until="networkidle"`** + **`wait_for_timeout(3000)`** перед локацией полей; **`_wait_auth_success`** — успех при **myhome.ge** или **auth.myauto.ge?…AccessToken=…**, таймаут ожидания URL **30 s**; оперативная смена пароля в **`.env`** на стороне оператора; **расследование:** HTTP-телефон с **www.myhome.ge** невозможен (**Cloudflare**); **revert:** удалены **`phone_extractor`** и тесты, канон телефона снова **только Playwright** (**`docs/AI_GOVERNANCE.md`**, **`docs/INGRESS_ARCHITECTURE.md`**).
+
 ### Fixed
 
 - **`scripts/myhome_login.py` — `_wait_auth_success` / SSO TNET:** после успешного auth API браузер может остановиться на **`auth.myauto.ge`** с параметром **`AccessToken`** без финального редиректа на **myhome.ge** (типично в headless). Ожидание успеха расширено: **myhome.ge** (как раньше) или **auth.myauto.ge** с **`AccessToken`** в query; таймаут ожидания URL снижен до **30 s** (вместо 90 s). Значения токенов в лог не пишутся.
 
 ### Reverted
 
-- **MyHome HTTP-first телефона:** после деплоя выявлено, что **`www.myhome.ge`** отдаёт **Cloudflare Managed Challenge** для простых HTTP-клиентов (`httpx`, `curl`; 403 на сервере/локально); рабочий путь — только **Playwright** с браузером. Откат: удалены **`src/parsers/adapters/myhome/phone_extractor.py`**, **`tests/unit/test_phone_extractor.py`**; **`src/parsers/adapters/myhome/phone.py`** снова **только Playwright**; восстановлены формулировки в **`docs/AI_GOVERNANCE.md`** (§9) и **`docs/INGRESS_ARCHITECTURE.md`**. Причина внедрения без проверки live до выкладки зафиксирована постмортем. Файл **`docs/phone_extraction.md`** намеренно **не изменялся** (история диагностики).
+- **MyHome HTTP-first телефона:** после деплоя выявлено, что **`www.myhome.ge`** отдаёт **Cloudflare Managed Challenge** для простых HTTP-клиентов (`httpx`, `curl`; 403 на сервере/локально); рабочий путь — только **Playwright** с браузером. Откат: удалены **`src/parsers/adapters/myhome/phone_extractor.py`**, **`tests/unit/test_phone_extractor.py`**; **`src/parsers/adapters/myhome/phone.py`** снова **только Playwright**; восстановлены формулировки в **`docs/AI_GOVERNANCE.md`** (§9) и **`docs/INGRESS_ARCHITECTURE.md`**. Причина внедрения без проверки live до выкладки зафиксирована постмортем. Файл **`docs/phone_extraction.md`** при откате **не менялся**; позже в тот же день переписан в **`### Documented`** (Cloudflare, исторический **`__NEXT_DATA__`**, итог Playwright-only).
 
 ### Added
 
