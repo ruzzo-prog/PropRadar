@@ -213,13 +213,14 @@ def _run_auto_login(page: Page, email: str, password: str) -> None:
     try:
         page.goto(
             _resolve_login_url(),
-            wait_until="domcontentloaded",
+            wait_until="networkidle",
             timeout=120_000,
         )
     except PWTimeoutError as exc:
         raise MyHomeLoginError("navigate_login", "goto_timeout") from exc
     except PlaywrightError as exc:
         raise MyHomeLoginError("navigate_login", "goto_failed") from exc
+    page.wait_for_timeout(3000)
     em, pw_field, sub = _locate_required_controls(page)
     _fill_and_submit(em, pw_field, sub, email, password)
     _wait_auth_success(page)
