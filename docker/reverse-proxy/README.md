@@ -1,6 +1,6 @@
 # Reverse-proxy (Nginx) для PropRadar
 
-TLS-терминация и внешний HTTPS для **n8n** и **Evolution API**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы из `docker/tools/docker-compose.yml`: `n8n`, `evolution-api`. Порты **5678** и **8080** на хосте не публикуются — доступ только через этот прокси (80/443) по доменам **n8n.usluga-market.ru** и **evolution.usluga-market.ru**.
+TLS-терминация и внешний HTTPS для **n8n**, **Evolution API** и **Metabase**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы из `docker/tools/docker-compose.yml`: `n8n`, `evolution-api`, `metabase:3000`. Порты **5678** и **8080** на хосте не публикуются — доступ только через этот прокси (80/443) по доменам **n8n.usluga-market.ru**, **evolution.usluga-market.ru** и **metabase.usluga-market.ru** (Metabase по-прежнему может быть доступен напрямую с хоста на **3031** → 3000, если порт опубликован во фрагменте `tools`).
 
 Порядок стеков и матрица портов на сервере — `docs/DEPLOY_SERVER.md`.
 
@@ -11,7 +11,7 @@ TLS-терминация и внешний HTTPS для **n8n** и **Evolution A
 ## Быстрый старт
 
 1. Сеть (один раз): `docker network create propradar`
-2. Запущены `docker/tools` (и при необходимости `docker/infra` + `docker/app` для `api`). Для n8n: `N8N_HOST=n8n.usluga-market.ru`, `N8N_PROTOCOL=https`, порт как в документации вашей версии n8n. Для Evolution: `SERVER_URL=https://evolution.usluga-market.ru`.
+2. Запущены `docker/tools` (и при необходимости `docker/infra` + `docker/app` для `api`). Для n8n: `N8N_HOST=n8n.usluga-market.ru`, `N8N_PROTOCOL=https`, порт как в документации вашей версии n8n. Для Evolution: `SERVER_URL=https://evolution.usluga-market.ru`. Для Metabase за прокси задайте публичный URL с тем же хостом, что в `server_name` (например `MB_SITE_URL=https://metabase.usluga-market.ru` — см. документацию Metabase по переменным окружения для вашей версии).
 
 ### Первичный выпуск TLS (certbot standalone)
 
@@ -22,6 +22,8 @@ sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-ema
   -d n8n.usluga-market.ru
 sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
   -d evolution.usluga-market.ru
+sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
+  -d metabase.usluga-market.ru
 ```
 
 После успешной выдачи сертификатов поднимите прокси из этой папки:
@@ -39,7 +41,8 @@ docker compose up -d
 В `conf.d/*.conf` внутри контейнера используются **фиксированные** пути:
 
 - `/etc/nginx/certs/n8n/fullchain.pem` и `/etc/nginx/certs/n8n/privkey.pem`;
-- `/etc/nginx/certs/evolution/fullchain.pem` и `/etc/nginx/certs/evolution/privkey.pem`.
+- `/etc/nginx/certs/evolution/fullchain.pem` и `/etc/nginx/certs/evolution/privkey.pem`;
+- `/etc/nginx/certs/metabase/fullchain.pem` и `/etc/nginx/certs/metabase/privkey.pem`.
 
 На **хосте** пути к реальным `fullchain.pem` / `privkey.pem` задаются переменными окружения для **file bind-mount** (любой домен, любой каталог на хосте):
 
@@ -49,6 +52,8 @@ docker compose up -d
 | **`N8N_TLS_PRIVKEY`** | приватный ключ n8n | `./letsencrypt/live/n8n.usluga-market.ru/privkey.pem` |
 | **`EVOLUTION_TLS_FULLCHAIN`** | fullchain для Evolution | `./letsencrypt/live/evolution.usluga-market.ru/fullchain.pem` |
 | **`EVOLUTION_TLS_PRIVKEY`** | приватный ключ Evolution | `./letsencrypt/live/evolution.usluga-market.ru/privkey.pem` |
+| **`METABASE_TLS_FULLCHAIN`** | fullchain для Metabase | `./letsencrypt/live/metabase.usluga-market.ru/fullchain.pem` |
+| **`METABASE_TLS_PRIVKEY`** | приватный ключ Metabase | `./letsencrypt/live/metabase.usluga-market.ru/privkey.pem` |
 
 Пути по умолчанию **относительны** к каталогу `docker/reverse-proxy`. На Linux в проде удобно задать абсолютные пути в `.env` рядом с compose, например:
 
@@ -57,11 +62,13 @@ N8N_TLS_FULLCHAIN=/etc/letsencrypt/live/n8n.usluga-market.ru/fullchain.pem
 N8N_TLS_PRIVKEY=/etc/letsencrypt/live/n8n.usluga-market.ru/privkey.pem
 EVOLUTION_TLS_FULLCHAIN=/etc/letsencrypt/live/evolution.usluga-market.ru/fullchain.pem
 EVOLUTION_TLS_PRIVKEY=/etc/letsencrypt/live/evolution.usluga-market.ru/privkey.pem
+METABASE_TLS_FULLCHAIN=/etc/letsencrypt/live/metabase.usluga-market.ru/fullchain.pem
+METABASE_TLS_PRIVKEY=/etc/letsencrypt/live/metabase.usluga-market.ru/privkey.pem
 ```
 
-Для **другого домена** достаточно сменить только эти четыре переменные (и при необходимости `server_name` в `nginx/conf.d/*.conf`).
+Для **другого домена** достаточно сменить соответствующие переменные (и при необходимости `server_name` в `nginx/conf.d/*.conf`).
 
-**Preflight:** перед стартом `nginx` compose запускает `00-tls-preflight.sh` **явно** через `sh` (не полагается на автозапуск из `/docker-entrypoint.d` и на executable bit — это важно для Windows при `core.fileMode=false`). Скрипт проверяет наличие и читаемость всех четырёх файлов в контейнере. Если чего-то нет — контейнер завершится с сообщением вида `reverse-proxy preflight: отсутствует файл: ...` и краткой подсказкой по переменным (в логах `docker logs`).
+**Preflight:** перед стартом `nginx` compose запускает `00-tls-preflight.sh` **явно** через `sh` (не полагается на автозапуск из `/docker-entrypoint.d` и на executable bit — это важно для Windows при `core.fileMode=false`). Скрипт проверяет наличие и читаемость всех шести TLS-файлов в контейнере (n8n, Evolution, Metabase). Если чего-то нет — контейнер завершится с сообщением вида `reverse-proxy preflight: отсутствует файл: ...` и краткой подсказкой по переменным (в логах `docker logs`).
 
 Локально можно положить структуру `letsencrypt/live/<домен>/` под `docker/reverse-proxy/letsencrypt/` или указать любые другие пути через переменные выше.
 
@@ -82,10 +89,11 @@ EVOLUTION_TLS_PRIVKEY=/etc/letsencrypt/live/evolution.usluga-market.ru/privkey.p
 ## Runbook / операции
 
 - Логи контейнера: `docker logs propradar-reverse-proxy` (при ошибке preflight смотрите первые строки после `docker compose up`)
-- После смены `conf.d/*.conf`: `docker compose exec reverse-proxy nginx -s reload` или перезапуск контейнера.
+- После смены `conf.d/*.conf` или переменных `*_TLS_*`: из корня репозитория `docker compose --profile proxy up -d --force-recreate reverse-proxy` или `docker compose exec reverse-proxy nginx -s reload` (если меняли только `*.conf` и конфиг уже смонтирован).
+- Smoke для Metabase: `curl -sI http://metabase.usluga-market.ru/` — ожидаются `301` и заголовок `Location` на `https://metabase.usluga-market.ru/`; затем в браузере `https://metabase.usluga-market.ru/` — должен открываться UI Metabase.
 - Если n8n «отваливаются» websocket: убедитесь, что заголовки `Upgrade` / `Connection` на месте (см. `n8n.conf`).
 
 ## Безопасность
 
 - PostgreSQL (`leads-db`) не должен слушать `0.0.0.0:5433` в интернете — см. `docs/DEPLOY_SERVER.md`.
-- Публично остаются только 80/443 reverse-proxy и те порты, что вы явно открыли на файрволе (например, Metabase **3031**, если нужен прямой доступ).
+- Публично остаются только 80/443 reverse-proxy и те порты, что вы явно открыли на файрволе (например, Metabase **3031**, если нужен прямой доступ к контейнеру минуя HTTPS **metabase.usluga-market.ru**).

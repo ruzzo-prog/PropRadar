@@ -18,12 +18,13 @@
 | Локальный uvicorn на Windows/хосте | вручную | **9000** |
 | PostgreSQL leads-db (хост, локальная разработка) | `docker/infra` | **5433** → 5432 |
 | Redis (`propradar-redis`) | `docker/infra` | не публикован на хост, только **`propradar`** |
-| Metabase UI | `docker/tools` | **3031** → 3000 |
+| Metabase UI (прямой проброс с хоста) | `docker/tools` | **3031** → 3000 |
+| Metabase по HTTPS (через reverse-proxy) | `docker/reverse-proxy` | **443** (`https://metabase.usluga-market.ru/`), внутри сети `metabase:3000` |
 | n8n (слушает в контейнере; **на хост не проброшен**) | `docker/tools` | **5678** (только внутри `propradar`) |
 | Evolution API (аналогично) | `docker/tools` | **8080** (только внутри `propradar`) |
 | Reverse-proxy HTTP/HTTPS | `docker/reverse-proxy` | 80, 443 |
 
-Публичный доступ к n8n и Evolution на сервере — через **HTTPS** на **`docker/reverse-proxy`** (домены и TLS — см. `docker/reverse-proxy/README.md`, переменные **`N8N_TLS_*`** / **`EVOLUTION_TLS_*`** и preflight перед стартом nginx).
+Публичный доступ к n8n, Evolution и Metabase на сервере — через **HTTPS** на **`docker/reverse-proxy`** (домены и TLS — см. `docker/reverse-proxy/README.md`, переменные **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`** и preflight перед стартом nginx).
 
 ## Redis и Evolution API
 
@@ -109,7 +110,30 @@ docker compose --profile proxy up -d
 
 ## Reverse-proxy и TLS
 
-См. `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight (`-f` / читаемость PEM), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
+Каноничные детали — `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight (наличие обычного файла и читаемость PEM), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
+
+### Metabase (`metabase.usluga-market.ru`)
+
+1. **Certbot (первичный выпуск, standalone):** порт **80** на хосте должен быть свободен (прокси не слушает 80), затем:
+   ```bash
+   sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
+     -d metabase.usluga-market.ru
+   ```
+2. **Переменные в корневом `.env`** (или абсолютные пути, если certbot кладёт сертификаты в `/etc/letsencrypt/...`; см. README про symlink и `readlink -f`):
+   - **`METABASE_TLS_FULLCHAIN`** — `fullchain.pem` для `metabase.usluga-market.ru`
+   - **`METABASE_TLS_PRIVKEY`** — `privkey.pem` для того же домена
+3. **Профиль `tools` и `proxy`:** контейнер **`metabase`** должен быть в сети **`propradar`** вместе с **`reverse-proxy`** (как при запуске из корня: `docker compose --profile infra --profile app --profile tools --profile proxy up -d`).
+4. **Применить конфиг прокси:** из корня репозитория после правок сертификатов или `nginx/conf.d`:
+   ```bash
+   docker compose --profile proxy up -d --force-recreate reverse-proxy
+   ```
+   Либо только перечитать nginx без пересоздания (если обновляли только `*.conf`): `docker compose exec reverse-proxy nginx -s reload`.
+5. **Smoke:** редирект HTTP→HTTPS и UI:
+   ```bash
+   curl -sI http://metabase.usluga-market.ru/
+   ```
+   Ожидается `301` и `Location: https://metabase.usluga-market.ru/...`. В браузере откройте `https://metabase.usluga-market.ru/` — должна загрузиться веб-форма Metabase.
+6. **Metabase и публичный URL:** задайте в окружении сервиса `metabase` базовый URL, соответствующий HTTPS за прокси (например переменные вида site URL для вашей версии Metabase — см. официальную документацию), чтобы ссылки и редиректы не указывали на `http://...:3031`.
 
 ## Healthchecks
 
