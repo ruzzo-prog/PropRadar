@@ -90,3 +90,24 @@ def test_fill_and_submit_maps_submit_timeout() -> None:
         _ml._fill_and_submit(email_el, pw_el, sub_el, "e", "p")
     assert ei.value.stage == "fill_submit"
     assert ei.value.reason == "submit_timeout"
+
+
+def test_submit_selectors_exclude_has_text_pseudo() -> None:
+    for sel in _ml.SUBMIT_SELECTORS:
+        assert ":has-text" not in sel
+
+
+def test_submit_candidates_includes_css_struct_role() -> None:
+    page = MagicMock()
+    inner = MagicMock()
+    inner.first = MagicMock()
+    mid = MagicMock()
+    mid.first = MagicMock()
+    inner.locator.return_value = mid
+    page.locator.return_value = inner
+    page.get_by_role.return_value.first = MagicMock()
+
+    labels = [label for label, _ in _ml._submit_candidates(page)]
+    assert sum(1 for x in labels if x.startswith("css:")) == len(_ml.SUBMIT_SELECTORS)
+    assert "struct:form_password_submit" in labels
+    assert "role:button_name_i18n" in labels

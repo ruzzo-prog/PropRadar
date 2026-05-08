@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,12 +40,17 @@ PASSWORD_SELECTORS = (
     "#password",
     'input[autocomplete="current-password"]',
 )
+# Без :has-text() — в ряде сборок/движков селектор нестабилен для auth.tnet.ge.
 SUBMIT_SELECTORS = (
     'button[type="submit"]',
     'input[type="submit"]',
-    'button:has-text("Войти")',
-    'button:has-text("შესვლა")',
-    'button:has-text("Login")',
+    '[type="submit"]',
+)
+
+# Роль-кнопка входа (i18n) — паттерн только для матчинга, в лог не пишем пользовательские значения.
+_SUBMIT_BUTTON_NAME_RE = re.compile(
+    r"^\s*(Войти|შესვლა|Login|Sign\s*in|Log\s*in)\s*$",
+    re.IGNORECASE,
 )
 
 
@@ -84,14 +92,40 @@ def _resolve_login_url() -> str:
     return DEFAULT_MYHOME_LOGIN_URL
 
 
-def _first_visible_field(page: Page, selectors: tuple[str, ...], role: str) -> Locator:
+def _role_candidates(page: Page, selectors: tuple[str, ...]) -> list[tuple[str, Locator]]:
+    return [(f"css:{sel}", page.locator(sel).first) for sel in selectors]
+
+
+def _submit_candidates(page: Page) -> list[tuple[str, Locator]]:
+    cands: list[tuple[str, Locator]] = _role_candidates(page, SUBMIT_SELECTORS)
+    cands.append(
+        (
+            "struct:form_password_submit",
+            page.locator('form:has(input[type="password"])').locator(
+                'button[type="submit"], input[type="submit"]',
+            ).first,
+        ),
+    )
+    cands.append(
+        (
+            "role:button_name_i18n",
+            page.get_by_role("button", name=_SUBMIT_BUTTON_NAME_RE).first,
+        ),
+    )
+    return cands
+
+
+def _first_visible_control(page: Page, role: str, candidates: list[tuple[str, Locator]]) -> Locator:
     last_err: PWTimeoutError | None = None
-    for sel in selectors:
-        loc = page.locator(sel).first
-        if loc.count() == 0:
+    for strategy_id, loc in candidates:
+        try:
+            if loc.count() == 0:
+                continue
+        except Exception:
             continue
         try:
             loc.wait_for(state="visible", timeout=15_000)
+            logger.info("myhome_login locate: role=%s strategy=%s", role, strategy_id)
             return loc
         except PWTimeoutError as exc:
             last_err = exc
@@ -102,9 +136,13 @@ def _first_visible_field(page: Page, selectors: tuple[str, ...], role: str) -> L
 
 
 def _locate_required_controls(page: Page) -> tuple[Locator, Locator, Locator]:
-    em = _first_visible_field(page, EMAIL_SELECTORS, "email")
-    pw_field = _first_visible_field(page, PASSWORD_SELECTORS, "password")
-    sub = _first_visible_field(page, SUBMIT_SELECTORS, "submit")
+    em = _first_visible_control(page, "email", _role_candidates(page, EMAIL_SELECTORS))
+    pw_field = _first_visible_control(
+        page,
+        "password",
+        _role_candidates(page, PASSWORD_SELECTORS),
+    )
+    sub = _first_visible_control(page, "submit", _submit_candidates(page))
     return em, pw_field, sub
 
 
@@ -199,6 +237,13 @@ def main() -> int:
     if not state_path.is_absolute():
         state_path = (Path.cwd() / state_path).resolve()
     state_path.parent.mkdir(parents=True, exist_ok=True)
+
+    pw_pkg_ver = "unknown"
+    try:
+        pw_pkg_ver = pkg_version("playwright")
+    except PackageNotFoundError:
+        pass
+    logger.info("myhome_login runtime: playwright_python_package=%s", pw_pkg_ver)
 
     creds_ok = bool(settings.myhome_email and settings.myhome_password)
     if not creds_ok and not sys.stdin.isatty():
