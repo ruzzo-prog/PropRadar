@@ -43,6 +43,8 @@
 
 ### Fixed
 
+- **P1 hotfix / Evolution API — сборка из корня (`docker/tools/docker-compose.yml`):** у **`evolution-api`** **`build.context`** исправлен с **`docker/tools`** на **`.`** (корень репозитория при запуске из корневого **`compose.yaml`**), чтобы **`docker compose --profile tools build evolution-api`** находил контекст и **`evolution-api.Dockerfile`**. **Симптом:** ошибка сборки при выполнении build из корня. **Проверки:** **`docker compose config --quiet`**, **`docker compose --profile tools build evolution-api`**, **`python -m pytest tests`** — **54 passed**, **2 skipped** (@tester **PASS**, 2026-05-08).
+
 - **P1 hotfix / playwright-worker (Xvfb, entrypoint):** в **`docker/app/playwright-worker-entrypoint.sh`** вместо **`xvfb-run … uvicorn`** — **Xvfb :99** в фоне, **`DISPLAY=:99`**, **`exec uvicorn`** как PID 1 (симптом: **unhealthy**, **uvicorn** отсутствовал в **`ps`**).
 
 - **Evolution API / `docker/tools` — `Database provider invalid`:** для **`evolution-api`** заданы переменные **`DATABASE_*`** и согласованный **`DATABASE_CONNECTION_URI`** (хост **`leads-db`** в Docker-сети **`propradar`**); fallback'и в **`docker/tools/docker-compose.yml`** выровнены; **`docker/tools/.env.example`** дополнен примерами и комментариями. **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.

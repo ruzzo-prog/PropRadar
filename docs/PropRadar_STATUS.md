@@ -2,6 +2,28 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-08 (hotfix §10) — P1: Evolution API — `build.context` для `docker compose … build evolution-api` из корня
+
+- **Симптом:** при **`docker compose --profile tools build evolution-api`** из **корня** репозитория сборка **`evolution-api`** могла завершаться ошибкой (неверный контекст сборки относительно merge **`compose.yaml`**).
+- **Причина:** во фрагменте **`docker/tools/docker-compose.yml`** у **`evolution-api`** был **`build.context: docker/tools`** вместо корня проекта (**`.`**).
+- **Исправление:** **`build.context: .`** — согласование с единым project directory из корня; **`dockerfile: evolution-api.Dockerfile`** без изменения смысла (путь относительно фрагмента tools).
+- **Процесс:** hotfix — **`Docs/AI_GOVERNANCE.md`** §10.
+- **Проверки:** **`docker compose config --quiet`** — OK; **`docker compose --profile tools build evolution-api`** — OK; **`python -m pytest tests`** — **54 passed**, **2 skipped** (@tester **PASS**).
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, **`docs/DEPLOY_SERVER.md`** (примечание к сборке Evolution).
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Compose config / build | ✅ проверки по runbook |
+| QA (`python -m pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 changelog + status + runbook |
+
+| Аспект | Было | Стало |
+| ------ | ----- | ----- |
+| **`build.context`** у **`evolution-api`** | **`docker/tools`** | **`.`** (корень при compose из корня) |
+| Сборка из корня | Риск ошибки путей | **`docker compose --profile tools build evolution-api`** ожидаемо работает |
+
+Прогресс документации hotfix build context: `[▓▓▓▓▓▓▓▓▓▓] 100%` (следующий гейт процесса — **`@process-guard` Diff Check** по канону).
+
 ## 2026-05-08 — Infra Redis + Evolution: AOF-том без внешнего порта, безопасный Redis-профиль tools
 
 - **Контекст:** нужен управляемый Redis для Evolution (кэш v2); без проброса порта на хост; без **cross-profile** зависимостей между **`infra`** и **`tools`**.

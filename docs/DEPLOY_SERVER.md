@@ -74,9 +74,12 @@
 
 Из корня репозитория (перед первым запуском: **`cp .env.example .env`**, объедините при необходимости с `.env.example.server`, заполните секреты; контейнер **`api`** читает **`../../.env`** относительно `docker/app/docker-compose.yml`, то есть **тот же корневой файл**).
 
-Образ Evolution API собирается из **`docker/tools/evolution-api.Dockerfile`** (Chromium для Puppeteer). Перед первым запуском **tools**, при необходимости, выполните:
+Образ Evolution API собирается из **`docker/tools/evolution-api.Dockerfile`** (Chromium для Puppeteer). Во фрагменте **`docker/tools/docker-compose.yml`** у сервиса **`evolution-api`** поле **`build.context`** должно быть **`.`** (корень репозитория при использовании корневого **`compose.yaml`**); иначе команда сборки из корня может завершиться ошибкой (исторический hotfix: ранее встречалось значение вроде **`docker/tools`**, несогласованное с merge из корня).
+
+Перед первым запуском **tools**, при необходимости, выполните:
 
 ```bash
+docker compose config --quiet
 docker compose --profile tools build evolution-api
 ```
 
