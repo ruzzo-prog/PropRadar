@@ -42,6 +42,10 @@ services:
       - tools
     image: atendai/evolution-api:latest
     restart: unless-stopped
+    # propradar-redis в docker/infra (profile infra): при едином compose из корня включайте --profile infra вместе с tools.
+    depends_on:
+      propradar-redis:
+        condition: service_healthy
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
@@ -49,6 +53,11 @@ services:
       DATABASE_PROVIDER: ${DATABASE_PROVIDER:-postgresql}
       DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI:-postgresql://leads:changeme@leads-db:5432/leads?schema=evolution_api}
       DATABASE_CONNECTION_CLIENT_NAME: ${DATABASE_CONNECTION_CLIENT_NAME:-prop-radar-evolution}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://propradar-redis:6379}
+      CACHE_REDIS_PREFIX_KEY: ${CACHE_REDIS_PREFIX_KEY:-propradar-evolution}
+      CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
+      CACHE_REDIS_SAVE_INSTANCES: ${CACHE_REDIS_SAVE_INSTANCES:-false}
     volumes:
       - evolution_instances:/evolution/instances
     networks:
