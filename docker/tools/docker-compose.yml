@@ -42,10 +42,8 @@ services:
       - tools
     image: atendai/evolution-api:latest
     restart: unless-stopped
-    # propradar-redis в docker/infra (profile infra): при едином compose из корня включайте --profile infra вместе с tools.
-    depends_on:
-      propradar-redis:
-        condition: service_healthy
+    # Redis (propradar-redis) только в docker/infra, profile infra — depends_on недопустим при --profile tools без infra.
+    # Кэш Evolution: поднимайте вместе --profile infra --profile tools; имя хоста в CACHE_REDIS_URI (сеть propradar).
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
