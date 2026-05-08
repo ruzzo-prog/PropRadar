@@ -63,7 +63,7 @@ def main() -> int:
     logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False)
+        browser = pw.chromium.launch(headless=True)
         context = browser.new_context(locale="ru-RU")
         page = context.new_page()
         page.goto("https://www.myhome.ge/ru/", wait_until="domcontentloaded", timeout=120_000)
