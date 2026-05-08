@@ -151,7 +151,7 @@ Smoke-тест      ← ТОЧКА КОНТРОЛЯ 3
 ## 9. Технические инварианты
 
 - **Polling (setInterval + fetch) — запрещён.** Только SSE или WebSocket
-- **Телефон продавца** — получать только через Playwright (reCAPTCHA v3 + JWT)
+- **Телефон продавца (myhome.ge):** обогащение поля телефона — **HTTP-first**: публичная HTML-страница объявления, извлечение из встроенного JSON (`__NEXT_DATA__`) и блоков **JSON-LD**; при отсутствии валидного номера — **fallback** через Playwright (reCAPTCHA v3, ответ ``phone/show``). Номера и токены в логи не пишутся; паузы между шагами браузерного сценария не сокращать без отдельного решения.
 - **Мониторинг объявлений** — через прямой HTTP к `api-statements.tnet.ge`
   с заголовком `X-Website-Key: myhome`, без ChromeDriver
 - **БД** — только `leads-db` (PostgreSQL, порт 5433). В `dispatch-db-dev` не писать

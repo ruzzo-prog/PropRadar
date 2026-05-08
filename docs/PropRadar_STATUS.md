@@ -9,7 +9,7 @@
 - **Границы scope:** адаптер myhome (**`phone_extractor.py`**, **`phone.py`**), канон **`Docs/AI_GOVERNANCE.md`** (раздел 9), **`Docs/INGRESS_ARCHITECTURE.md`**, **`docs/phone_extraction.md`**, **`CHANGELOG.md`**, тест **`tests/unit/test_phone_extractor.py`**. **`playwright-worker`** и **`scripts/myhome_login.py`** не изменялись.
 - **Проверки:** **Scanner** — **SKIP** (по выбору оркестратора на этом проходе); **`pytest tests/unit/test_phone_extractor.py`** — **20 passed**; интеграция live myhome — **SKIP**; **`@tester`** — **PASS** (2026-05-09).
 - **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, **`docs/phone_extraction.md`**.
-- **Следующий гейт по канону:** **`@process-guard` Diff Check**.
+- **Следующий гейт по канону:** **`@release-check`** (после **`@process-guard` Diff Check — PASS** по оркестратору, 2026-05-09).
 
 | Показатель | Статус |
 | ---------- | ------ |
@@ -17,6 +17,7 @@
 | QA (`pytest tests/unit/test_phone_extractor.py`) | 🧪 20 passed |
 | Интеграция live | ⏭️ SKIP |
 | **`@tester`** | 🧪 PASS (2026-05-09) |
+| **`@process-guard` Diff Check** | ✅ PASS (2026-05-09) |
 | Документация | 📜 changelog + status + `docs/phone_extraction.md` |
 
 | Аспект | Было | Стало |
@@ -31,7 +32,7 @@ flowchart TD
   B --> W
 ```
 
-Прогресс документации HTTP-first phone: `[▓▓▓▓▓▓▓▓▓▓] 100%` (**следующий шаг** — **`@process-guard` Diff Check**).
+Прогресс документации HTTP-first phone: `[▓▓▓▓▓▓▓▓▓▓] 100%` (**следующий шаг** — **`@release-check`**).
 
 ## 2026-05-09 — P0: myhome_login timing (`networkidle` + 3000ms) в `_run_auto_login`
 

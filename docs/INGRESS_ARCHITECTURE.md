@@ -52,6 +52,8 @@ flowchart TB
 
 **Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
 
+**Телефон (myhome, `phase=phone`):** в коде адаптера `MyHomePhoneEnricher` сначала выполняется **HTTP-запрос** к публичной странице карточки (`https://www.myhome.ge/.../pr/{id}/`) и разбор **`__NEXT_DATA__` / JSON-LD**; если номер не извлечён — используется прежний **Playwright**-сценарий с кликом «показать номер» и ответом `phone/show`. Оркестрация n8n (вызов воркера на **202**) не меняется.
+
 ---
 
 ## Схема n8n workflow (узлы и последовательность)
