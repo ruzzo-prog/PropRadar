@@ -2,6 +2,15 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — P0: myhome_login timing (`networkidle` + 3000ms) в `_run_auto_login`
+
+- **Симптом / цель:** `auth.tnet.ge` рендерит форму логина после JS (React SPA), из-за чего при `wait_until="domcontentloaded"` поля могли отсутствовать в момент поиска.
+- **Реализация:** в `_run_auto_login` файла **`scripts/myhome_login.py`** переход на страницу логина переведён на **`wait_until="networkidle"`**; перед `_locate_required_controls` добавлена пауза **`page.wait_for_timeout(3000)`**.
+- **Границы scope:** **`scripts/myhome_login.py`** (код), документация релиза — **`CHANGELOG.md`**, этот файл.
+- **Проверки:** **Scanner** — **PASS** (со слов человека); **`@tester`** — **PASS** (2026-05-09).
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check**.
+
 ## 2026-05-09 — P0: myhome_login EMAIL selector `input[name="Email"]` (точечный фикс)
 
 - **Симптом / цель:** на `auth.tnet.ge` поле email имеет `name="Email"` (с заглавной буквы), из-за чего существующие кандидаты `input[type="email"]` и `input[name="email"]` могли не срабатывать.

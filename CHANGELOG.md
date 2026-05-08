@@ -36,6 +36,8 @@
 
 - **P0 / myhome_login EMAIL-селектор `input[name="Email"]` (`scripts/myhome_login.py`):** **Scanner** — **PASS** (со слов человека); **`@tester`** — **PASS** (2026-05-09).
 
+- **P0 / myhome_login тайминг SPA перед поиском полей (`scripts/myhome_login.py`):** **`wait_until="networkidle"`** и **`page.wait_for_timeout(3000)`** перед **`_locate_required_controls`**; **Scanner** — **PASS** (со слов человека); **`@tester`** — **PASS** (2026-05-09).
+
 - **Reverse-proxy / Metabase HTTPS (`metabase.usluga-market.ru`):** **`docker compose config`**, preflight (**6** PEM: n8n, Evolution, Metabase), smoke **`curl -sI http://metabase.usluga-market.ru/`** (редирект на **https**) и UI в браузере — **`@tester`** — **PASS** (2026-05-08).
 
 - **Infra Redis + Evolution (кэш default off, старт npm):** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-08).
@@ -51,6 +53,7 @@
 
 ### Fixed
 
+- **P0 / `scripts/myhome_login.py` — тайминг React SPA перед поиском полей:** в `_run_auto_login` для перехода на auth.tnet.ge используется `wait_until="networkidle"` и добавлена пауза `page.wait_for_timeout(3000)` перед `_locate_required_controls`.
 - **P0 / `scripts/myhome_login.py` — EMAIL selector для auth.tnet.ge:** в `EMAIL_SELECTORS` добавлен кандидат `input[name="Email"]` (поле логина с `name` в верхнем регистре по DOM auth.tnet.ge) без изменения остальной логики входа.
 - **P0 / `scripts/myhome_login.py` — submit без `:has-text()` (коммит `9a10de0`):** **Цель:** убрать хрупкие submit-селекторы на **`:has-text()`** и усилить предсказуемость автологина. **Реализация:** устойчивые стратегии отправки формы; лог **выбранной стратегии** для сценариев с accessibility-ролями; в лог — **версия пакета Playwright**. **Scope:** `scripts/myhome_login.py`, `tests/unit/test_myhome_login.py`. **Проверки:** **Scanner** — **PASS** (со слов человека); **`pytest tests/unit/test_myhome_login.py`** — **PASS**; полный **`pytest tests`** — **PASS** при корректном **`PYTHONPATH`**. **Следующий гейт процесса:** `@process-guard` **Diff Check**.
 
