@@ -30,6 +30,7 @@ DEFAULT_MYHOME_LOGIN_URL = (
 
 EMAIL_SELECTORS = (
     'input[type="email"]',
+    'input[name="Email"]',
     'input[name="email"]',
     "#email",
     'input[autocomplete="username"]',
