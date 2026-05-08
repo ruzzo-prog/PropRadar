@@ -1,22 +1,52 @@
 # PropRadar — статус проекта
 
-Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` §8.
+Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
+
+## 2026-05-08 — playwright-worker: образ Playwright **v1.59.0**, MYHOME_* в шаблонах и `DEPLOY_SERVER`
+
+- **Контекст:** в репозитории отставал **`FROM`** базового образа относительно сервера; на корневом **`.env`** не были задокументированы **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** для автологина в контейнере **`playwright-worker`**.
+- **Реализация:** **`docker/app/playwright-worker.Dockerfile`** — **`v1.59.0-noble`**; **`.env.example`**, **`docker/app/.env.example`**, **`.env.example.server`** — плейсхолдеры (**`user@example.com`**, **`CHANGEME_STRONG_PASSWORD`**) и комментарии; **`docs/DEPLOY_SERVER.md`** — раздел **«Секреты playwright-worker»** (корневой **`.env`**, **`--force-recreate`** после добавления переменных).
+- **Границы scope:** **`docker/app/docker-compose.yml`**, **`src/**`**, остальные **Dockerfile**, логика enricher — без изменений.
+- **Проверка:** **`python -m pytest tests`** — **54 passed**, **2 skipped** (сессия **2026-05-08**).
+- **КТ2–КТ3:** со слов человека — **`git pull`** на сервере без повторной сборки образа; smoke (телефоны в БД) — **PASS**.
+
+| Показатель | Статус |
+| ---------- | ------ |
+| QA (`python -m pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 `CHANGELOG`, этот файл, `docs/DEPLOY_SERVER.md` |
 
 ## 2026-05-08 — n8n workflow **Pars MyHome** (`eElCijxLVTbmLIIF`): ветка обогащения через MCP
 
 - **Контекст:** доработка workflow **Pars MyHome** через MCP (**n8n Workflow SDK**): условный вызов **`playwright-worker`** после ingest.
 - **Узлы:** **IF Enrich Needed** — строгое условие `total_new > 0`; **HTTP Enrich Request** — `POST http://playwright-worker:8001/enrich`, тело **`adapter`** / **`phone`**, таймаут **10 с**, ошибки — **`onError`** **continueRegularOutput**; **Enrich Skip** — **NoOp**.
-- **Публикация:** активная версия **`activeVersionId`** `cbbc8fd3-8e2d-4156-afb4-7d3482e84ac7`. UI: [workflow в n8n](https://n8n.usluga-market.ru/workflow/eElCijxLVTbmLIIF).
-- **Проверка:** **`validate_workflow`** — **PASS**; **`pytest tests`** — **54 passed**, **2 skipped**.
+- **Публикация:** активная версия **`activeVersionId`** `816475ab-e49d-4b1a-8fc3-03c6a83e5743` (опубликована в сессии **2026-05-08**, см. hotfix ниже). UI: [workflow в n8n](https://n8n.usluga-market.ru/workflow/eElCijxLVTbmLIIF).
+- **Проверка:** **`validate_workflow`** — **PASS**; **`python -m pytest tests`** — **54 passed**, **2 skipped**.
 
 | Показатель | Статус |
 | ---------- | ------ |
 | Валидация workflow (SDK) | ✅ PASS |
-| QA (`pytest tests`) | 🧪 54 passed, 2 skipped |
+| QA (`python -m pytest tests`) | 🧪 54 passed, 2 skipped |
 | Документация | 📜 этот файл |
 
 
 Прогресс доработки Pars MyHome (enrich-ветка): `[▓▓▓▓▓▓▓▓▓▓] 100%`.
+
+## 2026-05-08 (hotfix) — P1: n8n **Pars MyHome** — ветка **IF Enrich Needed** / публикация версии
+
+- **Симптом:** при **`total_new` > 0** цепочка уходила в **Enrich Skip** вместо **HTTP Enrich Request** (пример: execution **15**, **`lastNodeExecuted`**: **Enrich Skip**).
+- **Причина:** **`activeVersionId`** отставал от актуального черновика (**`versionId`**): на проде выполнялась старая опубликованная версия **`cbbc8fd3-8e2d-4156-afb4-7d3482e84ac7`**, тогда как в черновике **`816475ab-e49d-4b1a-8fc3-03c6a83e5743`** связи **IF Enrich Needed** уже соответствовали ожиданию (**`main[0]`** → **HTTP Enrich Request**, **`main[1]`** → **Enrich Skip**); параметры IF не менялись.
+- **Исправление:** только MCP — **`publish_workflow`** для **`eElCijxLVTbmLIIF`** с **`versionId`** **`816475ab-e49d-4b1a-8fc3-03c6a83e5743`**; после публикации **`activeVersionId`** = **`816475ab-e49d-4b1a-8fc3-03c6a83e5743`**.
+- **Процесс:** emergency path — **`Docs/AI_GOVERNANCE.md`** канал hotfix (§10).
+- **Проверка (автомат):** **`python -m pytest tests`** — **54 passed**, **2 skipped** (сессия **2026-05-08**).
+- **Проверка (вручную):** один ручной прогон workflow — при **`total_new` > 0** должен выполниться **HTTP Enrich Request** с приёмом **202**; контрольные точки **2–3** остаются за человеком.
+
+| Показатель | Статус |
+| ---------- | ------ |
+| n8n publish (MCP) | ✅ **PASS** |
+| QA (`python -m pytest tests`) | 🧪 54 passed, 2 skipped |
+| Ручной smoke workflow | ⏳ человек |
+
+Прогресс hotfix IF Enrich / publish: `[▓▓▓▓▓▓▓▓▓▓] 100%` по автоматическим шагам; smoke — вне агента.
 
 ## 2026-05-08 (hotfix) — P1: playwright-worker, entrypoint (Xvfb / uvicorn)
 

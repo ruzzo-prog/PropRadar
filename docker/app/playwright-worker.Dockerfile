@@ -1,7 +1,7 @@
 # Playwright-worker: Chromium + Xvfb для headful Playwright (myhome phone/PDF/login).
 # Образ приложения parsers.Dockerfile не меняется.
 
-FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
+FROM mcr.microsoft.com/playwright/python:v1.59.0-noble
 
 WORKDIR /app
 

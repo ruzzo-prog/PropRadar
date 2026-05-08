@@ -15,6 +15,9 @@
 
 ### Changed
 
+- **playwright-worker (Docker):** базовый образ **`mcr.microsoft.com/playwright/python`** обновлён с **v1.49.1-noble** на **v1.59.0-noble** в **`docker/app/playwright-worker.Dockerfile`** (синхронизация с рабочим серверным образом).
+- **Деплой / секреты:** в **`.env.example`**, **`docker/app/.env.example`**, **`.env.example.server`** добавлены плейсхолдеры **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** и комментарии про обязательность для автологина **`playwright-worker`**; в **`docs/DEPLOY_SERVER.md`** — раздел **«Секреты playwright-worker»**.
+
 - **Playwright-worker (порт):** **`uvicorn`** в контейнере и **`docker/app/docker-compose.yml`** (публикация **8001:8001**, healthcheck) выровнены с документированным **`http://playwright-worker:8001`** (ingress, n8n runbook); ранее использовался **8090**.
 
 - **Docker compose фрагменты (`docker/*`):** у всех сервисов задан **profile** (`infra`, `app`, `tools`, `proxy`); прямой запуск `docker compose up` из подкаталога без `--profile` больше не поднимает сервисы — используйте корневой **`compose.yaml`** или добавляйте **`--profile …`**.
