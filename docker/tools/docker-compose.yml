@@ -40,7 +40,10 @@ services:
   evolution-api:
     profiles:
       - tools
-    image: atendai/evolution-api:latest
+    build:
+      context: .
+      dockerfile: evolution-api.Dockerfile
+    image: propradar-evolution-api
     restart: unless-stopped
     # Redis (propradar-redis) в docker/infra — без cross-profile depends_on.
     # CACHE_REDIS_ENABLED=true: pre-start ожидание TCP по CACHE_REDIS_URI (таймаут — non-zero exit).

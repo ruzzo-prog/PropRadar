@@ -32,6 +32,14 @@
 - Чтобы использовать Redis-кэш Evolution (**`CACHE_REDIS_ENABLED=true`**), поднимайте **одновременно** **`--profile infra`** и **`--profile tools`** из корня (**один** `compose.yaml`, сеть **`propradar`**), параметры см. **`docker/tools/.env.example`** (**`CACHE_REDIS_URI`** обычно **`redis://propradar-redis:6379`**).
 - Compose **не** связывает **`depends_on`** между **`tools`** и **`infra`** для этого сценария; готовность Redis обеспечивается скриптом ожидания в **`command`** сервиса **`evolution-api`** при включённом кэше.
 
+## Корневой `.env` и шаблоны
+
+- От корня репозитория: **`cp .env.example .env`**, затем подставьте секреты и URL (**не коммитить** боевые значения). Сервер может дополняться шаблоном **`.env.example.server`** (см. комментарии в репозитории).
+- В одном **`./.env`** собраны переменные для всех включаемых профилей (`infra`, `app`, **`tools`** с n8n/Metabase/Evolution, при необходимости `proxy` и др.); Compose читает этот файл из каталога проекта (**корень** репозитория).
+- Переменные Evolution продублированы во **`docker/tools/.env.example`** для ориентира при profile **`tools`**; набор ключей блока Evolution **должен совпадать** с корневым **`.env.example`**.
+
+После изменения переменных пересоздайте затронутые сервисы (`docker compose … up -d … --force-recreate` точечно).
+
 ## Переменные окружения: local vs server
 
 - **Локально (хост подключается к БД):** `DATABASE_URL=postgresql://USER:PASS@localhost:5433/DB` — шаблон в `.env.example.local` и корневом `.env.example`.
@@ -64,7 +72,13 @@
 
 **Рекомендуемый способ (единый project directory и `./.env` в корне репозитория):** файл **`compose.yaml`** в корне включает фрагменты `docker/infra`, `docker/app`, `docker/tools`, `docker/reverse-proxy`. Сервисы отнесены к **профилям** (`infra`, `app`, `tools`, `proxy`), чтобы поднимать только нужное.
 
-Из корня репозитория (перед первым запуском скопируйте или объедините переменные в **корневой** `.env` по шаблону `.env.example` / `.env.example.server`; контейнер **`api`** читает **`../../.env`** относительно `docker/app/docker-compose.yml`, то есть **тот же корневой файл**):
+Из корня репозитория (перед первым запуском: **`cp .env.example .env`**, объедините при необходимости с `.env.example.server`, заполните секреты; контейнер **`api`** читает **`../../.env`** относительно `docker/app/docker-compose.yml`, то есть **тот же корневой файл**).
+
+Образ Evolution API собирается из **`docker/tools/evolution-api.Dockerfile`** (Chromium для Puppeteer). Перед первым запуском **tools**, при необходимости, выполните:
+
+```bash
+docker compose --profile tools build evolution-api
+```
 
 ```bash
 docker network create propradar 2>/dev/null || true
@@ -72,7 +86,7 @@ docker network create propradar 2>/dev/null || true
 # Минимум для API + PostgreSQL (типичный сервер приложения):
 docker compose --profile infra --profile app up -d
 
-# Дополнительно инструменты (n8n, Metabase, Evolution):
+# Дополнительно инструменты (n8n, Metabase, Evolution; образ см. build выше):
 docker compose --profile tools up -d
 
 # Evolution с Redis-кэшем (CACHE_REDIS_ENABLED=true): Redis во фрагменте infra — поднимите
