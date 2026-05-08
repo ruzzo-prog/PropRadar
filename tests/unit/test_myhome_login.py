@@ -30,6 +30,8 @@ _spec.loader.exec_module(_ml)
         ("https://www.myhome.ge/en/login", False),
         ("https://www.myhome.ge/ru/signin", False),
         ("https://example.com/", False),
+        ("https://auth.myauto.ge/ru/?AccessToken=jwt-placeholder", True),
+        ("https://auth.myauto.ge/ru/?foo=1", False),
     ],
 )
 def test_url_indicates_logged_in(url: str, expected: bool) -> None:

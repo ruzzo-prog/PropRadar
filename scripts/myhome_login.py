@@ -12,7 +12,7 @@ import sys
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from playwright.sync_api import BrowserContext, Locator, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
@@ -151,6 +151,11 @@ def _url_indicates_logged_in(url: str) -> bool:
     parsed = urlparse(url)
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").lower()
+    # SSO TNET: после auth API — редирект на auth.myauto.ge с AccessToken в query;
+    # успех для сохранения сессии (значение токена в лог не попадает).
+    if "auth.myauto.ge" in host:
+        q = parse_qs(parsed.query or "")
+        return any(name.lower() == "accesstoken" for name in q)
     if "auth.tnet.ge" in host and "/user/login" in path:
         return False
     if "myhome.ge" not in host:
@@ -196,13 +201,13 @@ def _fill_and_submit(
 
 
 def _wait_auth_success(page: Page) -> None:
-    """Не полагаемся на networkidle: ждём устойчивый признак (URL на myhome.ge)."""
+    """Ждём успех: myhome.ge или SSO auth.myauto.ge с AccessToken (headless без финального JS)."""
     try:
         page.wait_for_load_state("domcontentloaded", timeout=45_000)
     except PWTimeoutError as exc:
         raise MyHomeLoginError("verify_auth", "load_state_timeout") from exc
     try:
-        page.wait_for_url(_url_indicates_logged_in, timeout=90_000)
+        page.wait_for_url(_url_indicates_logged_in, timeout=30_000)
     except PWTimeoutError as exc:
         raise MyHomeLoginError("verify_auth", "redirect_timeout") from exc
     if not _url_indicates_logged_in(page.url):

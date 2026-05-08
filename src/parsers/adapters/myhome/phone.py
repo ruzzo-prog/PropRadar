@@ -1,5 +1,4 @@
-"""Телефон объявления myhome.ge: сначала HTTP (``__NEXT_DATA__`` / JSON-LD страницы),
-затем fallback — Playwright и ``phone/show``.
+"""Телефон объявления myhome.ge: Playwright-клик по UI и разбор ответа ``phone/show``.
 
 На карточке подмешивается reCAPTCHA v3; токен и номер телефона в логи не пишутся.
 Отдельный вход на сайт не обязателен для типичных объявлений физлиц — состояние браузера
@@ -8,22 +7,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import httpx
 from playwright.sync_api import Page, Response, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
 
 from domain.lead import Lead
 from parsers.adapters.myhome.browser import dismiss_popup, save_timeout_shot
-from parsers.adapters.myhome.constants import BTN_SELECTORS, REQUEST_TIMEOUT_S, TW_MS
+from parsers.adapters.myhome.constants import BTN_SELECTORS, TW_MS
 from parsers.adapters.myhome.extract import listing_url
-from parsers.adapters.myhome.phone_extractor import get_phone
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
@@ -80,7 +76,7 @@ class MyHomePhoneEnrichReport:
 
 
 class MyHomePhoneEnricher:
-    """Очередь поля ``phone``: HTTP-first, при ``None`` — Playwright (прежние паузы на странице)."""
+    """Очередь телефона: только поле ``phone`` через Playwright."""
 
     def __init__(
         self,
@@ -105,8 +101,6 @@ class MyHomePhoneEnricher:
         if self._storage_state_path is not None and self._storage_state_path.exists():
             storage = json.loads(self._storage_state_path.read_text(encoding="utf-8"))
 
-        prefetch = self._prefetch_phones_via_http(items)
-
         with sync_playwright() as pw:
             if self._headless:
                 logger.info(
@@ -117,7 +111,7 @@ class MyHomePhoneEnricher:
                 context = browser.new_context(locale=self._locale, storage_state=storage)
                 page = context.new_page()
                 for lead in items:
-                    err = self._enrich_one(page, lead, prefetch)
+                    err = self._enrich_one(page, lead)
                     if err is None:
                         report.enriched += 1
                     else:
@@ -127,48 +121,12 @@ class MyHomePhoneEnricher:
                 browser.close()
         return report
 
-    def _prefetch_phones_via_http(self, items: list[Lead]) -> dict[str, str | None]:
-        async def runner() -> dict[str, str | None]:
-            out: dict[str, str | None] = {}
-            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S) as client:
-                for lead in items:
-                    ext = lead.external_id
-                    if lead.id is None:
-                        continue
-                    try:
-                        out[ext] = await get_phone(ext, client, locale=self._locale)
-                    except Exception as exc:
-                        logger.debug(
-                            "myhome http phone unexpected ext=%s type=%s",
-                            ext,
-                            type(exc).__name__,
-                        )
-                        out[ext] = None
-            return out
-
-        try:
-            return asyncio.run(runner())
-        except RuntimeError:
-            # Уже активен event loop (не типично для синхронного воркера) — только Playwright
-            return {}
-
-    def _enrich_one(
-        self,
-        page: Page,
-        lead: Lead,
-        prefetch: dict[str, str | None],
-    ) -> str | None:
+    def _enrich_one(self, page: Page, lead: Lead) -> str | None:
         lid = str(lead.id) if lead.id else "none"
         label = f"source=myhome id={lid} ext={lead.external_id}"
         try:
             if lead.id is None:
                 return f"no_lead_id:{lead.external_id}"
-
-            phone_cached = prefetch.get(lead.external_id)
-            if phone_cached:
-                merged = lead.model_copy(update={"phone": phone_cached})
-                self._repository.update_enriched_fields(merged)
-                return None
 
             url = listing_url(lead.external_id, locale=self._locale)
             page.goto(url, wait_until="domcontentloaded", timeout=TW_MS)

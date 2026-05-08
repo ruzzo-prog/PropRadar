@@ -2,37 +2,35 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
-## 2026-05-09 — MyHome: HTTP-first извлечение телефона из HTML
+## 2026-05-09 — P1: myhome_login — `_wait_auth_success` и SSO `auth.myauto.ge` + `AccessToken`
 
-- **Цель:** снизить долю обращений к Playwright для поля `phone`; при отсутствии номера в HTML сохранён прежний сценарий клика и ответ `phone/show`.
-- **Реализация:** **`src/parsers/adapters/myhome/phone_extractor.py`** (`get_phone(statement_id, httpx.AsyncClient)`); **`MyHomePhoneEnricher`** — предварительный HTTP по карточкам, затем Playwright только для лидов без номера; значения телефонов не логируются.
-- **Границы scope:** адаптер myhome (**`phone_extractor.py`**, **`phone.py`**), канон **`Docs/AI_GOVERNANCE.md`** (раздел 9), **`Docs/INGRESS_ARCHITECTURE.md`**, **`docs/phone_extraction.md`**, **`CHANGELOG.md`**, тест **`tests/unit/test_phone_extractor.py`**. **`playwright-worker`** и **`scripts/myhome_login.py`** не изменялись.
-- **Проверки:** **Scanner** — **SKIP** (по выбору оркестратора на этом проходе); **`pytest tests/unit/test_phone_extractor.py`** — **20 passed**; интеграция live myhome — **SKIP**; **`@tester`** — **PASS** (2026-05-09).
-- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, **`docs/phone_extraction.md`**.
-- **Следующий гейт по канону:** **`@release-check`** (после **`@process-guard` Diff Check — PASS** по оркестратору, 2026-05-09).
+- **Симптом / цель:** после сабмита логина TNET браузер уходит на **`auth.myauto.ge`** (промежуточный SSO); в headless JS-редирект на **myhome.ge** может не выполниться, из-за чего **`wait_for_url(myhome)`** с таймаутом **90 s** не завершался успехом, хотя auth API уже вернул **200** и сессию нужно сохранять.
+- **Реализация:** в **`scripts/myhome_login.py`** признак успеха в **`_url_indicates_logged_in`**: **myhome.ge** (прежняя логика) **или** **`auth.myauto.ge`** с параметром **`AccessToken`** в query; **`_wait_auth_success`** — ожидание этого признака, таймаут **30 s**.
+- **Границы scope:** только **`scripts/myhome_login.py`**, документация — **`CHANGELOG.md`**, этот файл.
+- **Проверки:** **`pytest tests/unit/test_myhome_login.py`** — **18 passed**; **`ruff`** по **`scripts/myhome_login.py`** — **PASS**; live smoke — человек.
 
 | Показатель | Статус |
 | ---------- | ------ |
-| Scanner | ⏭️ SKIP |
-| QA (`pytest tests/unit/test_phone_extractor.py`) | 🧪 20 passed |
-| Интеграция live | ⏭️ SKIP |
-| **`@tester`** | 🧪 PASS (2026-05-09) |
-| **`@process-guard` Diff Check** | ✅ PASS (2026-05-09) |
-| Документация | 📜 changelog + status + `docs/phone_extraction.md` |
+| Unit (`test_myhome_login`) | 🧪 18 passed |
+| Ruff (`myhome_login.py`) | 🛡️ PASS |
 
-| Аспект | Было | Стало |
-| ------ | ----- | ----- |
-| Источник номера | В основном Playwright + `phone/show` | Сначала HTTP-разбор карточки (**`__NEXT_DATA__`**, JSON-LD), затем прежний Playwright fallback |
+## 2026-05-09 — Откат: MyHome HTTP-first телефона (Cloudflare)
 
-```mermaid
-flowchart TD
-  H[HTTP GET карточки pr/id] --> P{Номер из JSON}
-  P -->|найден| W[Запись phone]
-  P -->|нет| B[Playwright: клик и phone/show]
-  B --> W
-```
+- **Причина:** фича **`phone_extractor`** (HTTP GET **`www.myhome.ge`**) в проде не работает: **Cloudflare Managed Challenge** блокирует `httpx`/curl (403); сценарий проверялся в браузере агента и в unit-тестах, **live с сервера до деплоя не подтверждался** — регресс процесса приёмки.
+- **Откат:** удалены **`src/parsers/adapters/myhome/phone_extractor.py`**, **`tests/unit/test_phone_extractor.py`**; **`src/parsers/adapters/myhome/phone.py`** возвращён к режиму **только Playwright** (клик + **`phone/show`**); **`docs/AI_GOVERNANCE.md`** §9 и **`docs/INGRESS_ARCHITECTURE.md`** снова описывают Playwright-only путь. **`docs/phone_extraction.md`** **не трогали** — остаётся как архив диагностики.
+- **Границы scope:** адаптер myhome, канон, ingress, **`CHANGELOG.md`**, этот файл; **без** правок **`playwright-worker`**, **`scripts/myhome_login.py`**, схемы БД.
+- **Проверки:** **`pytest tests/unit/test_myhome_enricher.py`** — **PASS**; полный **`pytest tests/unit`** — **70 passed** (сессия отката); **`ruff`** по **`phone.py`** — **PASS**. Полный Scanner — по решению человека.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`** (после QA и документирования).
 
-Прогресс документации HTTP-first phone: `[▓▓▓▓▓▓▓▓▓▓] 100%` (**следующий шаг** — **`@release-check`**).
+| Показатель | Статус |
+| ---------- | ------ |
+| Код откатан | ✅ |
+| Канон §9 / ingress | ✅ синхронизированы с Playwright-only |
+| Архив диагностики | 📜 `docs/phone_extraction.md` (без изменений) |
+
+## 2026-05-09 — (отменено) MyHome: HTTP-first извлечение телефона из HTML
+
+- **Статус записи:** **откат** (см. блок выше). Ранее: попытка HTTP разбора **`__NEXT_DATA__`** / JSON-LD перед Playwright — **неприменима** к прод из-за Cloudflare.
 
 ## 2026-05-09 — P0: myhome_login timing (`networkidle` + 3000ms) в `_run_auto_login`
 
