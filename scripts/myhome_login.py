@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+from playwright.sync_api import BrowserContext, Locator, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Locator, Page, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
 
 from config.settings import Settings
@@ -215,6 +215,8 @@ def main() -> int:
     try:
         with sync_playwright() as pw:
             browser = None
+            context: BrowserContext | None = None
+            page: Page | None = None
             try:
                 try:
                     browser = pw.chromium.launch(headless=True)
@@ -253,7 +255,7 @@ def main() -> int:
                                 err.stage,
                                 err.reason,
                             )
-                            if debug:
+                            if debug and page is not None:
                                 _debug_failure_shot(page, state_path)
                             exit_code = 1
                     else:
@@ -288,7 +290,7 @@ def main() -> int:
                                 )
                                 exit_code = 1
                 finally:
-                    if debug:
+                    if debug and context is not None:
                         try:
                             context.tracing.stop(
                                 path=str(state_path.parent / "myhome_login_trace.zip"),
@@ -306,7 +308,7 @@ def main() -> int:
                             "Сессия не сохранена: stage=trace_stop reason=stop_failed",
                         )
                         exit_code = 1
-                    else:
+                    elif context is not None:
                         try:
                             context.storage_state(path=str(state_path))
                         except Exception as exc:
