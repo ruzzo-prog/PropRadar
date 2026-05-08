@@ -238,58 +238,66 @@ def main() -> int:
                             exc_info=True,
                         )
                 try:
+                    _flow_log = (
+                        "Автовход не удался: stage=%s reason=%s"
+                        if creds_ok
+                        else "Ручной вход: stage=%s reason=%s"
+                    )
                     try:
                         page = context.new_page()
-                    except PlaywrightError as exc:
-                        raise MyHomeLoginError("browser_page", "new_page_failed") from exc
-                    if creds_ok:
-                        try:
-                            _run_auto_login(
-                                page,
-                                settings.myhome_email or "",
-                                settings.myhome_password or "",
-                            )
-                        except Exception as exc:
-                            err = _normalize_login_error(exc, default_stage="auto_login")
-                            logger.error(
-                                "Автовход не удался: stage=%s reason=%s",
-                                err.stage,
-                                err.reason,
-                            )
-                            if debug and page is not None:
-                                _debug_failure_shot(page, state_path)
-                            exit_code = 1
+                    except PlaywrightError:
+                        err = MyHomeLoginError("browser_page", "new_page_failed")
+                        logger.error(_flow_log, err.stage, err.reason)
+                        exit_code = 1
                     else:
-                        try:
-                            page.goto(
-                                "https://www.myhome.ge/ru/",
-                                wait_until="domcontentloaded",
-                                timeout=120_000,
-                            )
-                        except Exception as exc:
-                            err = _normalize_login_error(exc, default_stage="manual_goto")
-                            logger.error(
-                                "Ручной вход: stage=%s reason=%s",
-                                err.stage,
-                                err.reason,
-                            )
-                            exit_code = 1
-                        if exit_code == 0:
-                            print("Выполните вход вручную в окне браузера.")
-                            print(
-                                "После успешного входа нажмите Enter в этой консоли, "
-                                "чтобы сохранить сессию.",
-                            )
+                        if creds_ok:
                             try:
-                                input()
-                            except EOFError:
-                                err = MyHomeLoginError("manual_stdin", "eof")
+                                _run_auto_login(
+                                    page,
+                                    settings.myhome_email or "",
+                                    settings.myhome_password or "",
+                                )
+                            except Exception as exc:
+                                err = _normalize_login_error(exc, default_stage="auto_login")
+                                logger.error(
+                                    "Автовход не удался: stage=%s reason=%s",
+                                    err.stage,
+                                    err.reason,
+                                )
+                                if debug and page is not None:
+                                    _debug_failure_shot(page, state_path)
+                                exit_code = 1
+                        else:
+                            try:
+                                page.goto(
+                                    "https://www.myhome.ge/ru/",
+                                    wait_until="domcontentloaded",
+                                    timeout=120_000,
+                                )
+                            except Exception as exc:
+                                err = _normalize_login_error(exc, default_stage="manual_goto")
                                 logger.error(
                                     "Ручной вход: stage=%s reason=%s",
                                     err.stage,
                                     err.reason,
                                 )
                                 exit_code = 1
+                            if exit_code == 0:
+                                print("Выполните вход вручную в окне браузера.")
+                                print(
+                                    "После успешного входа нажмите Enter в этой консоли, "
+                                    "чтобы сохранить сессию.",
+                                )
+                                try:
+                                    input()
+                                except EOFError:
+                                    err = MyHomeLoginError("manual_stdin", "eof")
+                                    logger.error(
+                                        "Ручной вход: stage=%s reason=%s",
+                                        err.stage,
+                                        err.reason,
+                                    )
+                                    exit_code = 1
                 finally:
                     if debug and context is not None and tracing_started:
                         try:
