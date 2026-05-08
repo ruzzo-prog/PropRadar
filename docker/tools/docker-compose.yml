@@ -42,8 +42,8 @@ services:
       - tools
     image: atendai/evolution-api:latest
     restart: unless-stopped
-    # Redis (propradar-redis) только в docker/infra, profile infra — depends_on недопустим при --profile tools без infra.
-    # Кэш Evolution: поднимайте вместе --profile infra --profile tools; имя хоста в CACHE_REDIS_URI (сеть propradar).
+    # Redis (propradar-redis) только в docker/infra. При --profile tools без infra включённый Redis давал падение коннекта.
+    # Дефолт: Redis выключен. Включите CACHE_REDIS_ENABLED=true при совместном --profile infra --profile tools (+ CACHE_REDIS_URI).
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
@@ -51,7 +51,7 @@ services:
       DATABASE_PROVIDER: ${DATABASE_PROVIDER:-postgresql}
       DATABASE_CONNECTION_URI: ${DATABASE_CONNECTION_URI:-postgresql://leads:changeme@leads-db:5432/leads?schema=evolution_api}
       DATABASE_CONNECTION_CLIENT_NAME: ${DATABASE_CONNECTION_CLIENT_NAME:-prop-radar-evolution}
-      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-true}
+      CACHE_REDIS_ENABLED: ${CACHE_REDIS_ENABLED:-false}
       CACHE_REDIS_URI: ${CACHE_REDIS_URI:-redis://propradar-redis:6379}
       CACHE_REDIS_PREFIX_KEY: ${CACHE_REDIS_PREFIX_KEY:-propradar-evolution}
       CACHE_LOCAL_ENABLED: ${CACHE_LOCAL_ENABLED:-false}
