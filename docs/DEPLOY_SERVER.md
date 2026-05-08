@@ -17,12 +17,20 @@
 | API внутри сети `propradar` | hostname `api` | **8000** (`http://api:8000`) |
 | Локальный uvicorn на Windows/хосте | вручную | **9000** |
 | PostgreSQL leads-db (хост, локальная разработка) | `docker/infra` | **5433** → 5432 |
+| Redis (`propradar-redis`) | `docker/infra` | не публикован на хост, только **`propradar`** |
 | Metabase UI | `docker/tools` | **3031** → 3000 |
 | n8n (слушает в контейнере; **на хост не проброшен**) | `docker/tools` | **5678** (только внутри `propradar`) |
 | Evolution API (аналогично) | `docker/tools` | **8080** (только внутри `propradar`) |
 | Reverse-proxy HTTP/HTTPS | `docker/reverse-proxy` | 80, 443 |
 
 Публичный доступ к n8n и Evolution на сервере — через **HTTPS** на **`docker/reverse-proxy`** (домены и TLS — см. `docker/reverse-proxy/README.md`, переменные **`N8N_TLS_*`** / **`EVOLUTION_TLS_*`** и preflight перед стартом nginx).
+
+## Redis и Evolution API
+
+- Сервис **Redis** — во фрагменте **`docker/infra`** (**`propradar-redis`**, образ **`redis:7.4.9-alpine`**), только внутренний доступ по Docker-сети; наружу порт не открывается.
+- По умолчанию в **`docker/tools/.env.example`** для Evolution задано **`CACHE_REDIS_ENABLED=false`**: можно поднимать только **`--profile tools`** без Redis — контейнер **не ждёт** недоступный Redis.
+- Чтобы использовать Redis-кэш Evolution (**`CACHE_REDIS_ENABLED=true`**), поднимайте **одновременно** **`--profile infra`** и **`--profile tools`** из корня (**один** `compose.yaml`, сеть **`propradar`**), параметры см. **`docker/tools/.env.example`** (**`CACHE_REDIS_URI`** обычно **`redis://propradar-redis:6379`**).
+- Compose **не** связывает **`depends_on`** между **`tools`** и **`infra`** для этого сценария; готовность Redis обеспечивается скриптом ожидания в **`command`** сервиса **`evolution-api`** при включённом кэше.
 
 ## Переменные окружения: local vs server
 
@@ -66,6 +74,9 @@ docker compose --profile infra --profile app up -d
 
 # Дополнительно инструменты (n8n, Metabase, Evolution):
 docker compose --profile tools up -d
+
+# Evolution с Redis-кэшем (CACHE_REDIS_ENABLED=true): Redis во фрагменте infra — поднимите
+# хотя бы один раз вместе, например: docker compose --profile infra --profile tools up -d
 
 # TLS / nginx для публичных n8n и Evolution (после сертификатов):
 docker compose --profile proxy up -d

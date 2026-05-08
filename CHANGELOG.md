@@ -6,6 +6,8 @@
 
 ### Added
 
+- **Infra / Redis:** в **`docker/infra/docker-compose.yml`** сервис **`propradar-redis`** — образ **`redis:7.4.9-alpine`**, режим **`redis-server --appendonly yes`** (AOF), том **`propradar_redis_data`**, профиль **`infra`**; порты на хост **не публикуются** — доступ только из сети **`propradar`**; healthcheck через **`redis-cli ping`**.
+
 - **Playwright worker (**коммит `52429d9`, feat worker**):** отдельный сервис **`src/worker/main.py`** (FastAPI **:8001**) — **`POST /enrich`** (**202**), **`POST /login`**, **`GET /health`**; Docker — **`docker/app/playwright-worker.Dockerfile`**, сервис в **`docker/app/docker-compose.yml`** с профилями **`enricher`** / **`workers`** и томом под файлы сессии Playwright. После успешного **`POST /api/myhome/ingest`** оркестратор n8n вызывает **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`**; допустимый успешный ответ на стороне n8n — только **HTTP 202**, **polling** результата не выполняется. **`scripts/myhome_login.py`:** при ошибке автологина из **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** — немедленный **`exit 1`** без паузы на ручной ввод (серверный сценарий).
 
 - **Docker / корневой `compose.yaml`:** единая точка входа с `include` фрагментов `docker/infra`, `docker/app`, `docker/tools`, `docker/reverse-proxy`; профили **`infra`**, **`app`**, **`tools`**, **`proxy`**; project directory — корень репозитория (интерполяция `${VAR}` из корневого `.env`). Сервис **`api`**: `env_file` на **`../../.env`** (корень репо). Обновлены **`docs/DEPLOY_SERVER.md`**, **`README.md`**, примеры env.
@@ -14,6 +16,8 @@
 - **Деплой на сервер (VPS/Hetzner):** runbook `**docs/DEPLOY_SERVER.md**`; reverse-proxy слой в `**docker/reverse-proxy/**` (конфигурация репозитория); примеры окружения `**.env.example.local**` / `**.env.example.server**` (без секретов); в compose — `**healthcheck**` и `**depends_on**` для предсказуемого порядка старта; обновлены `**README.md**` и n8n-документация под серверный сценарий.
 
 ### Changed
+
+- **Evolution API / Redis-кэш (`docker/tools`):** безопасный дефолт **`CACHE_REDIS_ENABLED=false`** (режим только **tools** не требует Redis); при **`CACHE_REDIS_ENABLED=true`** — **`CACHE_REDIS_URI`** по умолчанию **`redis://propradar-redis:6379`**, перед стартом выполняется **ожидание TCP** Redis (до **120** с); старт приложения — **`npm run db:deploy`**, **`npm run db:generate`**, **`npm run start:prod`** (вместо несуществующего **`deploy_database.sh`**); **`depends_on`** между **`evolution-api`** и Redis **убран**, чтобы исключить **cross-profile** проблемы Compose (**Redis** живёт во **`infra`**, Evolution в **`tools`** — поднимать вместе: **`--profile infra --profile tools`**). **`docker/tools/.env.example`** — блок комментариев про сценарий **infra+tools**. **Scanner** / **`@tester`** — **PASS** (2026-05-08).
 
 - **playwright-worker (Docker):** базовый образ **`mcr.microsoft.com/playwright/python`** обновлён с **v1.49.1-noble** на **v1.59.0-noble** в **`docker/app/playwright-worker.Dockerfile`** (синхронизация с рабочим серверным образом).
 - **Деплой / секреты:** в **`.env.example`**, **`docker/app/.env.example`**, **`.env.example.server`** добавлены плейсхолдеры **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** и комментарии про обязательность для автологина **`playwright-worker`**; в **`docs/DEPLOY_SERVER.md`** — раздел **«Секреты playwright-worker»**.
@@ -25,6 +29,8 @@
 - **Reverse-proxy / TLS (n8n, Evolution):** конфиг nginx использует стабильные пути **`/etc/nginx/certs/{n8n,evolution}/`** внутри контейнера; на хосте пути к `fullchain.pem` / `privkey.pem` задаются через **`N8N_TLS_*`** и **`EVOLUTION_TLS_*`** (file bind-mount). Перед `nginx` выполняется preflight **`00-tls-preflight.sh`**, запуск **явно через `sh`**; проверки **`-f`** (обычный файл) и **читаемости** для всех четырёх PEM. Порты **5678** / **8080** на хост не публикуются (`docker/tools` без `ports` у n8n и evolution-api); внешний вход — **80/443** reverse-proxy. Подробности — `docker/reverse-proxy/README.md`; **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
 
 ### Verified
+
+- **Infra Redis + Evolution (кэш default off, старт npm):** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-08).
 
 - **Деплой-готовность (reverse-proxy, env-профили, runbook):** **Scanner** — **PASS** (подтверждение человека); `**@tester`** — **PASS** (сессия 2026-05-07).
 - **PropRadar API / myhome HTTP:** **Scanner** — **PASS**; `**pytest tests`** — **40 passed**, **2 skipped**; HTTP-эндпоинты `**/api/myhome/*`** с `**X-API-Key**`; n8n-runbook переведён на HTTP (`docs/n8n_myhome_workflow.md`); цепочка до `**@release-check**` — сессия 2026-05-06.

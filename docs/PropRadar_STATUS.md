@@ -2,6 +2,46 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-08 — Infra Redis + Evolution: AOF-том без внешнего порта, безопасный Redis-профиль tools
+
+- **Контекст:** нужен управляемый Redis для Evolution (кэш v2); без проброса порта на хост; без **cross-profile** зависимостей между **`infra`** и **`tools`**.
+- **Реализация:** **`docker/infra/docker-compose.yml`** — **`propradar-redis`**, **`redis:7.4.9-alpine`**, AOF (**`--appendonly yes`**), том **`propradar_redis_data`**, профиль **`infra`**; **`docker/tools/docker-compose.yml`** — **`CACHE_REDIS_ENABLED`** по умолчанию **`false`**; при **`true`** ожидание TCP Redis и старт через **`npm run db:deploy`**, **`db:generate`**, **`start:prod`** (**без** **`deploy_database.sh`**); **`depends_on`** между Evolution и Redis **убран**.
+- **Границы scope:** только compose/entrypoint/command и шаблоны env (код приложения не в задаче документирования).
+- **Проверка:** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия **2026-05-08**).
+- **Документация (данный шаг @document):** **`CHANGELOG.md`**, этот файл, **`docs/DEPLOY_SERVER.md`** — раздел **«Redis и Evolution API»**.
+- **Следующий гейт по канону:** **`@dispatcher`** → **`@process-guard` Diff Check**.
+
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS |
+| QA (`@tester`) | 🧪 PASS |
+| Redis (наружу) | 🛡️ порт не публикуется |
+| Документация | 📜 статус + changelog + runbook |
+
+
+```mermaid
+flowchart LR
+  subgraph infra["profile infra"]
+    R[(propradar-redis\nAOF + volume)]
+  end
+  subgraph tools["profile tools"]
+    E[evolution-api]
+  end
+  E -->|"CACHE_REDIS_ENABLED=true → wait TCP"| R
+```
+
+
+| Аспект | Было / риск | Стало |
+| ------ | ------------ | ------ |
+| Redis | Отсутствовал во фрагменте infra | **`propradar-redis`**, версия закреплена **7.4.9-alpine**, без **ports** на хост |
+| Evolution + Redis | Возможен **cross-profile depends_on** | Зависимость убрана; при **`CACHE_REDIS_ENABLED=true`** — ожидание Redis в **`command`** |
+| Старт БД Prism | Вызывался несуществующий скрипт | **`npm run db:deploy`** / **`db:generate`** / **`start:prod`** |
+| Дефолт tools-only | Redis мог блокировать старт | **`CACHE_REDIS_ENABLED=false`** — Redis не обязателен |
+
+
+Прогресс задачи Redis/Evolution (документация после PASS): `[▓▓▓▓▓▓▓▓▓░] 90%` (**Diff Check** — следующий шаг процесса).
+
 ## 2026-05-08 — playwright-worker: образ Playwright **v1.59.0**, MYHOME_* в шаблонах и `DEPLOY_SERVER`
 
 - **Контекст:** в репозитории отставал **`FROM`** базового образа относительно сервера; на корневом **`.env`** не были задокументированы **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** для автологина в контейнере **`playwright-worker`**.
