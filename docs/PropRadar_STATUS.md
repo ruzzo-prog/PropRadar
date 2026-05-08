@@ -2,6 +2,15 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — P0: myhome_login EMAIL selector `input[name="Email"]` (точечный фикс)
+
+- **Симптом / цель:** на `auth.tnet.ge` поле email имеет `name="Email"` (с заглавной буквы), из-за чего существующие кандидаты `input[type="email"]` и `input[name="email"]` могли не срабатывать.
+- **Реализация:** в `EMAIL_SELECTORS` файла **`scripts/myhome_login.py`** добавлен кандидат **`input[name="Email"]`** без изменений `PASSWORD_SELECTORS`, `SUBMIT_SELECTORS` и логики `_first_visible_control`.
+- **Границы scope:** **`scripts/myhome_login.py`** (код), документация релиза — **`CHANGELOG.md`**, этот файл.
+- **Проверки:** **Scanner** — **PASS** (со слов человека); **`@tester`** — **PASS** (2026-05-09).
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check**.
+
 ## 2026-05-08 — P0: myhome_login — устойчивый submit без `:has-text()` (коммит `9a10de0`)
 
 - **Симптом / цель:** снизить хрупкость сценария автологина на шаге отправки формы; убрать submit-селекторы на базе **`:has-text()`**, зависящие от локали и разметки.

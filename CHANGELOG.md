@@ -34,6 +34,8 @@
 
 - **P0 / myhome_login submit-селекторы (`scripts/myhome_login.py`, коммит `9a10de0`):** **Scanner** — **PASS** (со слов человека); **`pytest tests/unit/test_myhome_login.py`** — **PASS**; полный **`pytest tests`** — **PASS** при корректном **`PYTHONPATH`** — **`@tester`** — **PASS** (2026-05-08).
 
+- **P0 / myhome_login EMAIL-селектор `input[name="Email"]` (`scripts/myhome_login.py`):** **Scanner** — **PASS** (со слов человека); **`@tester`** — **PASS** (2026-05-09).
+
 - **Reverse-proxy / Metabase HTTPS (`metabase.usluga-market.ru`):** **`docker compose config`**, preflight (**6** PEM: n8n, Evolution, Metabase), smoke **`curl -sI http://metabase.usluga-market.ru/`** (редирект на **https**) и UI в браузере — **`@tester`** — **PASS** (2026-05-08).
 
 - **Infra Redis + Evolution (кэш default off, старт npm):** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-08).
@@ -49,6 +51,7 @@
 
 ### Fixed
 
+- **P0 / `scripts/myhome_login.py` — EMAIL selector для auth.tnet.ge:** в `EMAIL_SELECTORS` добавлен кандидат `input[name="Email"]` (поле логина с `name` в верхнем регистре по DOM auth.tnet.ge) без изменения остальной логики входа.
 - **P0 / `scripts/myhome_login.py` — submit без `:has-text()` (коммит `9a10de0`):** **Цель:** убрать хрупкие submit-селекторы на **`:has-text()`** и усилить предсказуемость автологина. **Реализация:** устойчивые стратегии отправки формы; лог **выбранной стратегии** для сценариев с accessibility-ролями; в лог — **версия пакета Playwright**. **Scope:** `scripts/myhome_login.py`, `tests/unit/test_myhome_login.py`. **Проверки:** **Scanner** — **PASS** (со слов человека); **`pytest tests/unit/test_myhome_login.py`** — **PASS**; полный **`pytest tests`** — **PASS** при корректном **`PYTHONPATH`**. **Следующий гейт процесса:** `@process-guard` **Diff Check**.
 
 - **P1 hotfix / `scripts/myhome_login.py` (scanner-driven fixes, финальный коммит `1f29087`):** **Симптом:** нестабильность сценария автологина Playwright под **Scanner** (инициализация/очистка контекста, трассировка, сохранение сессии). **Исправления:** единая **error handling**; **tracing lifecycle** и **сохранение сессии** при сбое **trace stop**; выравнивание ошибки **`new_page`** с login-flow; **нейтральный лог** при **`new_page_failed`**. **Scope:** `scripts/myhome_login.py`, `tests/unit/test_myhome_login.py`. **Проверки:** **Scanner** — **PASS** (по человеку); **`python -m pytest tests`** — **68 passed**, **2 skipped**; **ruff** целевых путей — **PASS**. **Следующий гейт процесса:** `@process-guard` **Diff Check**.
