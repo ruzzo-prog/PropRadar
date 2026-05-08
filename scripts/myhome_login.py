@@ -211,7 +211,6 @@ def main() -> int:
     logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
     exit_code = 0
-    trace_stop_failed = False
     try:
         with sync_playwright() as pw:
             browser = None
@@ -228,19 +227,21 @@ def main() -> int:
                     context = browser.new_context(locale="ru-RU")
                 except PlaywrightError as exc:
                     raise MyHomeLoginError("browser_context", "new_context_failed") from exc
+                tracing_started = False
                 if debug:
                     try:
                         context.tracing.start(screenshots=True, snapshots=True)
+                        tracing_started = True
                     except Exception:
                         logger.warning(
                             "myhome_login tracing start failed (stage=tracing_start)",
                             exc_info=True,
                         )
                 try:
-                    page = context.new_page()
-                except PlaywrightError as exc:
-                    raise MyHomeLoginError("browser_page", "new_page_failed") from exc
-                try:
+                    try:
+                        page = context.new_page()
+                    except PlaywrightError as exc:
+                        raise MyHomeLoginError("browser_page", "new_page_failed") from exc
                     if creds_ok:
                         try:
                             _run_auto_login(
@@ -290,25 +291,19 @@ def main() -> int:
                                 )
                                 exit_code = 1
                 finally:
-                    if debug and context is not None:
+                    if debug and context is not None and tracing_started:
                         try:
                             context.tracing.stop(
                                 path=str(state_path.parent / "myhome_login_trace.zip"),
                             )
                         except Exception:
-                            trace_stop_failed = True
                             logger.warning(
                                 "myhome_login trace stop failed (stage=trace_stop)",
                                 exc_info=True,
                             )
 
                 if exit_code == 0:
-                    if debug and trace_stop_failed:
-                        logger.error(
-                            "Сессия не сохранена: stage=trace_stop reason=stop_failed",
-                        )
-                        exit_code = 1
-                    elif context is not None:
+                    if context is not None:
                         try:
                             context.storage_state(path=str(state_path))
                         except Exception as exc:
