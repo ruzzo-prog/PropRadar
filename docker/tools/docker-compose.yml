@@ -73,7 +73,7 @@ services:
           fi
           echo "Redis is reachable."
         fi
-        . ./Docker/scripts/deploy_database.sh && npm run start:prod
+        npm run db:deploy && npm run db:generate && npm run start:prod
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
