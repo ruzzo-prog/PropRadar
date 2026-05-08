@@ -9,6 +9,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import Locator, Page, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
@@ -89,10 +90,24 @@ def _locate_required_controls(page: Page) -> tuple[Locator, Locator, Locator]:
 
 
 def _url_indicates_logged_in(url: str) -> bool:
-    u = url.lower()
-    if "auth.tnet.ge" in u and "/user/login" in u:
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").lower()
+    if "auth.tnet.ge" in host and "/user/login" in path:
         return False
-    return "myhome.ge" in u
+    if "myhome.ge" not in host:
+        return False
+    for marker in (
+        "/user/login",
+        "/login",
+        "/signin",
+        "/sign-in",
+        "/oauth",
+        "/auth/",
+    ):
+        if marker in path:
+            return False
+    return True
 
 
 def _fill_and_submit(
@@ -157,6 +172,7 @@ def main() -> int:
     logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
     exit_code = 0
+    trace_stop_failed = False
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         context = browser.new_context(locale="ru-RU")
@@ -186,29 +202,44 @@ def main() -> int:
                         _debug_failure_shot(page, state_path)
                     exit_code = 1
             else:
-                page.goto(
-                    "https://www.myhome.ge/ru/",
-                    wait_until="domcontentloaded",
-                    timeout=120_000,
-                )
-                print("Выполните вход вручную в окне браузера.")
-                print(
-                    "После успешного входа нажмите Enter в этой консоли, чтобы сохранить сессию.",
-                )
                 try:
-                    input()
-                except EOFError:
-                    logger.error("Нет интерактивного stdin.")
+                    page.goto(
+                        "https://www.myhome.ge/ru/",
+                        wait_until="domcontentloaded",
+                        timeout=120_000,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Ручной вход: не удалось открыть стартовую страницу (stage=manual_goto)",
+                    )
                     exit_code = 1
+                if exit_code == 0:
+                    print("Выполните вход вручную в окне браузера.")
+                    print(
+                        "После успешного входа нажмите Enter в этой консоли, "
+                        "чтобы сохранить сессию.",
+                    )
+                    try:
+                        input()
+                    except EOFError:
+                        logger.error("Нет интерактивного stdin.")
+                        exit_code = 1
         finally:
             if debug:
                 try:
                     context.tracing.stop(path=str(state_path.parent / "myhome_login_trace.zip"))
                 except Exception:
+                    trace_stop_failed = True
                     logger.warning("myhome_login trace stop failed", exc_info=True)
 
         if exit_code == 0:
-            context.storage_state(path=str(state_path))
+            if debug and trace_stop_failed:
+                logger.error(
+                    "Сессия не сохранена: остановка trace завершилась с ошибкой (stage=trace_stop)",
+                )
+                exit_code = 1
+            else:
+                context.storage_state(path=str(state_path))
         browser.close()
 
     if exit_code != 0:
