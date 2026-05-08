@@ -2,6 +2,37 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-08 — Bug 1: Evolution API — runtime (npm Prisma вместо `deploy_database.sh`)
+
+- **Симптом:** при старте сервиса **`evolution-api`** (профиль **`tools`**) контейнер мог падать на шаге инициализации БД / Prism — в т. ч. из‑за вызова **отсутствующего** в образе скрипта **`deploy_database.sh`**.
+- **Причина:** ожидаемый путь развёртывания схемы и генерации клиента Prism в актуальной линии Evolution — через **`package.json`** (**`npm run db:deploy`**, **`db:generate`**, **`start:prod`**), а не через жёстко прошитый **`deploy_database.sh`**.
+- **Исправление:** во фрагменте **`docker/tools/docker-compose.yml`** в **`command`** зафиксирована цепочка **`npm run db:deploy`** → **`npm run db:generate`** → **`exec npm run start:prod`**; **`set -euo pipefail`** — ранний выход при ошибке и без «тихих» unset-переменных.
+- **Границы scope:** только compose- **`command`** / оболочка для **`evolution-api`** (код приложения PropRadar не менялся в этом фиксе).
+- **Проверки:** **`docker compose config --quiet`** — OK; **`python -m pytest tests`** — **54 passed**, **2 skipped** (@tester **PASS**, 2026-05-08).
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, **`docs/DEPLOY_SERVER.md`** (runbook).
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Compose `config` | ✅ проверка по runbook |
+| QA (`python -m pytest tests`) | 🧪 54 passed, 2 skipped |
+| Документация | 📜 changelog + status + runbook |
+
+| Аспект | Было | Стало |
+| ------ | ----- | ----- |
+| Подготовка БД / Prism | **`deploy_database.sh`** (нет в образе / ломало старт) | **`npm run db:deploy`** и **`npm run db:generate`** |
+| Основной процесс | цепочка без **`exec`** на сервере | **`exec npm run start:prod`** как PID **1** |
+| Оболочка | **`set -eo pipefail`** | **`set -euo pipefail`** |
+
+```mermaid
+flowchart TD
+  A[entrypoint bash -c] --> B[Redis wait при CACHE_REDIS_ENABLED=true]
+  B --> C[npm run db:deploy]
+  C --> D[npm run db:generate]
+  D --> E["exec npm run start:prod"]
+```
+
+Прогресс документации Bug 1 (Evolution runtime): `[▓▓▓▓▓▓▓▓▓▓] 100%` (следующий гейт — **`@process-guard` Diff Check** по канону).
+
 ## 2026-05-08 (hotfix §10) — P1: Evolution API — `build.context` для `docker compose … build evolution-api` из корня
 
 - **Симптом:** при **`docker compose --profile tools build evolution-api`** из **корня** репозитория сборка **`evolution-api`** могла завершаться ошибкой (неверный контекст сборки относительно merge **`compose.yaml`**).

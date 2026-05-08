@@ -31,6 +31,7 @@
 - По умолчанию в **`docker/tools/.env.example`** для Evolution задано **`CACHE_REDIS_ENABLED=false`**: можно поднимать только **`--profile tools`** без Redis — контейнер **не ждёт** недоступный Redis.
 - Чтобы использовать Redis-кэш Evolution (**`CACHE_REDIS_ENABLED=true`**), поднимайте **одновременно** **`--profile infra`** и **`--profile tools`** из корня (**один** `compose.yaml`, сеть **`propradar`**), параметры см. **`docker/tools/.env.example`** (**`CACHE_REDIS_URI`** обычно **`redis://propradar-redis:6379`**).
 - Compose **не** связывает **`depends_on`** между **`tools`** и **`infra`** для этого сценария; при **`CACHE_REDIS_ENABLED=true`** контейнер **`evolution-api`** перед стартом приложения выполняет ожидание TCP-доступности Redis по **`CACHE_REDIS_URI`** (см. **`command`** во фрагменте **`docker/tools/docker-compose.yml`**).
+- **Старт Evolution (Prisma):** миграции и генерация выполняются командами **`npm run db:deploy`** и **`npm run db:generate`**, затем поднимается прод-сервер через **`exec npm run start:prod`** (те же шаги в **`docker/tools/docker-compose.yml`**). Устаревший вызов **`deploy_database.sh`** не используется — при ошибке в этой цепочке контейнер завершится на шаге оболочки (**`set -euo pipefail`**).
 
 ## Корневой `.env` и шаблоны
 

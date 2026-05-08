@@ -43,6 +43,8 @@
 
 ### Fixed
 
+- **Bug 1 / Evolution API — runtime и Prisma (`docker/tools/docker-compose.yml`):** **Симптом:** контейнер **`evolution-api`** мог завершаться с ошибкой на этапе подготовки БД (в т. ч. из‑за обращения к отсутствующему в образе **`deploy_database.sh`**). **Причина:** актуальный сценарий Evolution v2 выполняет миграции и генерацию Prisma через **npm**-скрипты; отдельный shell-скрипт с таким именем в цепочке старта не гарантирован. **Исправление:** в **`command`** — последовательно **`npm run db:deploy`**, **`npm run db:generate`**, затем **`exec npm run start:prod`** (корректный основной процесс контейнера); оболочка — **`set -euo pipefail`**. **Проверки:** **`docker compose config --quiet`**; **`python -m pytest tests`** — **54 passed**, **2 skipped** (@tester **PASS**, 2026-05-08).
+
 - **P1 hotfix / Evolution API — сборка из корня (`docker/tools/docker-compose.yml`):** у **`evolution-api`** **`build.context`** исправлен с **`docker/tools`** на **`.`** (корень репозитория при запуске из корневого **`compose.yaml`**), чтобы **`docker compose --profile tools build evolution-api`** находил контекст и **`evolution-api.Dockerfile`**. **Симптом:** ошибка сборки при выполнении build из корня. **Проверки:** **`docker compose config --quiet`**, **`docker compose --profile tools build evolution-api`**, **`python -m pytest tests`** — **54 passed**, **2 skipped** (@tester **PASS**, 2026-05-08).
 
 - **P1 hotfix / playwright-worker (Xvfb, entrypoint):** в **`docker/app/playwright-worker-entrypoint.sh`** вместо **`xvfb-run … uvicorn`** — **Xvfb :99** в фоне, **`DISPLAY=:99`**, **`exec uvicorn`** как PID 1 (симптом: **unhealthy**, **uvicorn** отсутствовал в **`ps`**).
