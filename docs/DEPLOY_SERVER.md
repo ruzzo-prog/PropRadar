@@ -110,7 +110,7 @@ docker compose --profile proxy up -d
 
 ## Reverse-proxy и TLS
 
-Каноничные детали — `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight (наличие обычного файла и читаемость PEM), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
+Каноничные детали — `docker/reverse-proxy/README.md`: параметризованные file-mount сертификатов, preflight для **шести** PEM-файлов (**n8n**, **Evolution**, **Metabase**: по `fullchain` и `privkey` внутри контейнера — переменные **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`**), явный запуск скрипта через `sh`. API за прокси по умолчанию не выводится; n8n вызывает `http://api:8000` внутри Docker.
 
 ### Metabase (`metabase.usluga-market.ru`)
 

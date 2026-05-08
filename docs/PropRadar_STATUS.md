@@ -2,6 +2,37 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-08 — Reverse-proxy / Metabase HTTPS (`metabase.usluga-market.ru`)
+
+- **Симптом / цель:** Metabase был доступен напрямую с хоста (**3031**→**3000** в типовой схеме), но не было симметричного с n8n/Evolution входа по **HTTPS** на выделенном FQDN; нужна терминация TLS на **`docker/reverse-proxy`** и предсказуемые проверки сертификатов перед стартом nginx.
+- **Реализация:** **`docker/reverse-proxy/nginx/conf.d/metabase.conf`** — `server_name` **`metabase.usluga-market.ru`**, редирект с **80**, прокси на **`metabase:3000`** с **443** и путями PEM **`/etc/nginx/certs/metabase/`**; **`docker/reverse-proxy/docker-compose.yml`** — переменные **`METABASE_TLS_FULLCHAIN`** / **`METABASE_TLS_PRIVKEY`** (mount в контейнер); **`nginx/docker-entrypoint.d/00-tls-preflight.sh`** — проверка пары PEM Metabase наряду с n8n и Evolution; README и runbook синхронизированы (**`docker/reverse-proxy/README.md`**, **`docs/DEPLOY_SERVER.md`**).
+- **Границы scope:** только reverse-proxy, compose-монты и preflight; образ и приложение Metabase во **`docker/tools`** — без изменений в этой задаче.
+- **Проверки (@tester):** валидация compose; preflight при некорректных/отсутствующих PEM — контролируемый отказ; smoke редиректа **HTTP→HTTPS** и загрузки UI — по командам runbook (**`curl -sI http://metabase.usluga-market.ru/`**, затем браузер **`https://metabase.usluga-market.ru/`**). **Итог:** **`@tester`** — **PASS** (2026-05-08).
+- **КТ2 (человек, сервер):** **`git pull`** в каталоге репозитория; в корневом **`.env`** задать **`METABASE_TLS_*`** (при необходимости абсолютные пути, учёт symlink certbot — см. README); убедиться, что подняты профили **`tools`** и **`proxy`**, сеть **`propradar`** с **`metabase`** и **`reverse-proxy`**; **`docker compose --profile proxy up -d --force-recreate reverse-proxy`** (или **`nginx -s reload`**, если меняли только **`*.conf`**).
+- **КТ3 (человек, smoke):** **`curl -sI http://metabase.usluga-market.ru/`** — **301** и **`Location`** на **https**; в браузере открыть **`https://metabase.usluga-market.ru/`**; при необходимости выставить в env сервиса **`metabase`** публичный base URL под HTTPS (см. документацию версии Metabase), чтобы ссылки не вели на **`http://…:3031`**.
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл, уточнение **`docs/DEPLOY_SERVER.md`** (preflight / шесть PEM).
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Preflight TLS (6 PEM) | 🛡️ n8n + Evolution + Metabase |
+| QA (`@tester`) | 🧪 PASS (2026-05-08) |
+| Runbook | 📜 `docs/DEPLOY_SERVER.md`, `docker/reverse-proxy/README.md` |
+
+| Аспект | Было | Стало |
+| ------ | ----- | ----- |
+| Публичный Metabase | В основном прямой порт **3031** / без FQDN-HTTPS в прокси | **HTTPS** на **`metabase.usluga-market.ru`** через nginx |
+| TLS mounts | Только **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`** | Добавлены **`METABASE_TLS_*`** и каталог **`certs/metabase`** |
+| Preflight | 4 PEM | **6** PEM (три сервиса) |
+
+```mermaid
+flowchart LR
+  U[Клиент] -->|443 HTTPS| N[reverse-proxy nginx]
+  N -->|metabase.usluga-market.ru| M[metabase:3000]
+  N -.->|preflight| P[6 PEM в контейнере]
+```
+
+Прогресс документации Metabase TLS: `[▓▓▓▓▓▓▓▓▓▓] 100%` (следующий гейт процесса — **`@process-guard` Diff Check** по канону).
+
 ## 2026-05-08 — Bug 1: Evolution API — runtime (npm Prisma вместо `deploy_database.sh`)
 
 - **Симптом:** при старте сервиса **`evolution-api`** (профиль **`tools`**) контейнер мог падать на шаге инициализации БД / Prism — в т. ч. из‑за вызова **отсутствующего** в образе скрипта **`deploy_database.sh`**.

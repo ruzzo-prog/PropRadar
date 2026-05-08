@@ -28,7 +28,11 @@
 
 - **Reverse-proxy / TLS (n8n, Evolution):** конфиг nginx использует стабильные пути **`/etc/nginx/certs/{n8n,evolution}/`** внутри контейнера; на хосте пути к `fullchain.pem` / `privkey.pem` задаются через **`N8N_TLS_*`** и **`EVOLUTION_TLS_*`** (file bind-mount). Перед `nginx` выполняется preflight **`00-tls-preflight.sh`**, запуск **явно через `sh`**; проверки **`-f`** (обычный файл) и **читаемости** для всех четырёх PEM. Порты **5678** / **8080** на хост не публикуются (`docker/tools` без `ports` у n8n и evolution-api); внешний вход — **80/443** reverse-proxy. Подробности — `docker/reverse-proxy/README.md`; **Scanner** / **`@tester`** — **PASS** (2026-05-07); следующий гейт процесса — **`@process-guard` Diff Check**.
 
+- **Reverse-proxy / TLS (Metabase, `metabase.usluga-market.ru`):** **Цель:** публичный **HTTPS** для Metabase по тому же паттерну, что n8n и Evolution (терминация на nginx, без обязательной публикации UI только на **3031**). **Реализация:** новый виртуальный хост **`docker/reverse-proxy/nginx/conf.d/metabase.conf`** (HTTP **80** — ACME **`/.well-known`**, редирект на HTTPS; HTTPS **443** — прокси на **`metabase:3000`** с заголовками forwarded); во фрагменте **`docker/reverse-proxy/docker-compose.yml`** — bind-mount **`METABASE_TLS_FULLCHAIN`** / **`METABASE_TLS_PRIVKEY`** → **`/etc/nginx/certs/metabase/{fullchain.pem,privkey.pem}`**; **`00-tls-preflight.sh`** — те же **`check_one`** для пары PEM Metabase и обновлённая подсказка по переменным при ошибке. Runbook и матрица портов — **`docs/DEPLOY_SERVER.md`**, переменные и smoke — **`docker/reverse-proxy/README.md`**. **Проверки:** **`docker compose config`**, сценарий preflight при отсутствии PEM — ожидаемый **`exit 1`**; smoke **HTTP→HTTPS** и браузер — по runbook (`curl -sI http://metabase.usluga-market.ru/`). **`@tester`** — **PASS** (2026-05-08).
+
 ### Verified
+
+- **Reverse-proxy / Metabase HTTPS (`metabase.usluga-market.ru`):** **`docker compose config`**, preflight (**6** PEM: n8n, Evolution, Metabase), smoke **`curl -sI http://metabase.usluga-market.ru/`** (редирект на **https**) и UI в браузере — **`@tester`** — **PASS** (2026-05-08).
 
 - **Infra Redis + Evolution (кэш default off, старт npm):** **Scanner** — **PASS**; **`@tester`** — **PASS** (сессия 2026-05-08).
 
