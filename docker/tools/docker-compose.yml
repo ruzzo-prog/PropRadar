@@ -42,8 +42,38 @@ services:
       - tools
     image: atendai/evolution-api:latest
     restart: unless-stopped
-    # Redis (propradar-redis) только в docker/infra. При --profile tools без infra включённый Redis давал падение коннекта.
-    # Дефолт: Redis выключен. Включите CACHE_REDIS_ENABLED=true при совместном --profile infra --profile tools (+ CACHE_REDIS_URI).
+    # Redis (propradar-redis) в docker/infra — без cross-profile depends_on.
+    # CACHE_REDIS_ENABLED=true: pre-start ожидание TCP по CACHE_REDIS_URI (таймаут — non-zero exit).
+    # Дефолт tools-only: Redis выключен.
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        if [ "$${CACHE_REDIS_ENABLED:-false}" = "true" ]; then
+          uri="$${CACHE_REDIS_URI:-redis://127.0.0.1:6379}"
+          if [[ ! "$$uri" =~ ^redis://([^:/@]+)(:([0-9]+))?(/.*)?$$ ]]; then
+            echo "Invalid CACHE_REDIS_URI: $$uri"
+            exit 1
+          fi
+          host="$${BASH_REMATCH[1]}"
+          port="$${BASH_REMATCH[3]:-6379}"
+          echo "Waiting for Redis at $$host:$$port (CACHE_REDIS_ENABLED=true)..."
+          deadline=$$(( $$(date +%s) + 120 ))
+          ok=0
+          while [ $$(date +%s) -le $$deadline ]; do
+            if { echo > /dev/tcp/$$host/$$port; } >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$$ok" != "1" ]; then
+            echo "Redis wait timeout ($$host:$$port)"
+            exit 1
+          fi
+          echo "Redis is reachable."
+        fi
+        npm run db:deploy && npm run db:generate && npm run start:prod
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}
