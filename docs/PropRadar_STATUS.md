@@ -2,6 +2,43 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-08 — myhome_login: стабилизация под Scanner (hotfix-серия, коммит `1f29087`)
+
+- **Симптом / цель:** стабилизировать автологин myhome в **`scripts/myhome_login.py`** и пройти **Scanner** в серверном/CI контуре.
+- **Реализация (серия правок, последний коммит `1f29087`):** guarded init/cleanup контекста под сканеры; выровненная **обработка ошибок**; корректный **lifecycle трассировки**; **persist сессии** при ошибке остановки trace; согласование ветки **`new_page`** с login-flow; **нейтральный лог** **`new_page_failed`**.
+- **Границы scope:** **`scripts/myhome_login.py`**, **`tests/unit/test_myhome_login.py`**.
+- **Проверки:** **Scanner** — **PASS** (со слов человека); **`@tester`**: **`python -m pytest tests`** — **68 passed**, **2 skipped**; **ruff** по целевым файлам — **PASS**.
+- **Документация (шаг @documentor):** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check**.
+
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS (со слов человека) |
+| QA (`python -m pytest tests`) | 🧪 68 passed, 2 skipped |
+| Статический анализ (`ruff`, scope) | 🛡️ PASS |
+| Документация | 📜 changelog + status |
+
+
+| Аспект | Было | Стало |
+| ------ | ----- | ----- |
+| Ошибки контекста / trace | Риск падений и шумных трасс под Scanner | Guarded cleanup, предсказуемый lifecycle trace |
+| Сессия при сбое trace | Возможна потеря сохранения | Персист сессии при fail **trace stop** |
+| Лог `new_page_failed` | Избыточная/шумная формулировка | Нейтральное сообщение |
+
+
+```mermaid
+flowchart TD
+  L[Контекст Playwright] --> T[Tracing on/off]
+  T --> N[new_page + login flow]
+  N -->|OK| S[Сохранение сессии]
+  N -->|new_page_failed| E[Нейтральный лог + ошибка]
+  T -->|trace stop fail| S
+```
+
+
+Прогресс документации myhome_login (hotfix): `[▓▓▓▓▓▓▓▓▓▓] 100%` (**следующий шаг** — **`@process-guard` Diff Check**).
+
 ## 2026-05-08 — Reverse-proxy / Metabase HTTPS (`metabase.usluga-market.ru`)
 
 - **Симптом / цель:** Metabase был доступен напрямую с хоста (**3031**→**3000** в типовой схеме), но не было симметричного с n8n/Evolution входа по **HTTPS** на выделенном FQDN; нужна терминация TLS на **`docker/reverse-proxy`** и предсказуемые проверки сертификатов перед стартом nginx.
