@@ -40,10 +40,7 @@ services:
   evolution-api:
     profiles:
       - tools
-    build:
-      context: .
-      dockerfile: evolution-api.Dockerfile
-    image: propradar-evolution-api
+    image: evoapicloud/evolution-api:latest
     restart: unless-stopped
     # Redis (propradar-redis) в docker/infra — без cross-profile depends_on.
     # CACHE_REDIS_ENABLED=true: pre-start ожидание TCP по CACHE_REDIS_URI (таймаут — non-zero exit).
@@ -51,7 +48,7 @@ services:
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
-        set -euo pipefail
+        set -eo pipefail
         if [ "$${CACHE_REDIS_ENABLED:-false}" = "true" ]; then
           uri="$${CACHE_REDIS_URI:-redis://127.0.0.1:6379}"
           if [[ ! "$$uri" =~ ^redis://([^:/@]+)(:([0-9]+))?(/.*)?$$ ]]; then
@@ -76,7 +73,7 @@ services:
           fi
           echo "Redis is reachable."
         fi
-        npm run db:deploy && npm run db:generate && npm run start:prod
+        . ./Docker/scripts/deploy_database.sh && npm run start:prod
     environment:
       SERVER_URL: ${SERVER_URL:-http://localhost:8080}
       AUTHENTICATION_API_KEY: ${AUTHENTICATION_API_KEY:-change-me}

@@ -30,7 +30,7 @@
 - Сервис **Redis** — во фрагменте **`docker/infra`** (**`propradar-redis`**, образ **`redis:7.4.9-alpine`**), только внутренний доступ по Docker-сети; наружу порт не открывается.
 - По умолчанию в **`docker/tools/.env.example`** для Evolution задано **`CACHE_REDIS_ENABLED=false`**: можно поднимать только **`--profile tools`** без Redis — контейнер **не ждёт** недоступный Redis.
 - Чтобы использовать Redis-кэш Evolution (**`CACHE_REDIS_ENABLED=true`**), поднимайте **одновременно** **`--profile infra`** и **`--profile tools`** из корня (**один** `compose.yaml`, сеть **`propradar`**), параметры см. **`docker/tools/.env.example`** (**`CACHE_REDIS_URI`** обычно **`redis://propradar-redis:6379`**).
-- Compose **не** связывает **`depends_on`** между **`tools`** и **`infra`** для этого сценария; готовность Redis обеспечивается скриптом ожидания в **`command`** сервиса **`evolution-api`** при включённом кэше.
+- Compose **не** связывает **`depends_on`** между **`tools`** и **`infra`** для этого сценария; при **`CACHE_REDIS_ENABLED=true`** контейнер **`evolution-api`** перед стартом приложения выполняет ожидание TCP-доступности Redis по **`CACHE_REDIS_URI`** (см. **`command`** во фрагменте **`docker/tools/docker-compose.yml`**).
 
 ## Корневой `.env` и шаблоны
 
@@ -74,13 +74,14 @@
 
 Из корня репозитория (перед первым запуском: **`cp .env.example .env`**, объедините при необходимости с `.env.example.server`, заполните секреты; контейнер **`api`** читает **`../../.env`** относительно `docker/app/docker-compose.yml`, то есть **тот же корневой файл**).
 
-Образ Evolution API собирается из **`docker/tools/evolution-api.Dockerfile`** (Chromium для Puppeteer). Во фрагменте **`docker/tools/docker-compose.yml`** у сервиса **`evolution-api`** поле **`build.context`** должно быть **`.`** (корень репозитория при использовании корневого **`compose.yaml`**); иначе команда сборки из корня может завершиться ошибкой (исторический hotfix: ранее встречалось значение вроде **`docker/tools`**, несогласованное с merge из корня).
+**Evolution API (Docker):** используется публичный образ **`evoapicloud/evolution-api`** (официальная цепочка публикаций Evolution API v2). Локальная сборка Dockerfile в репозитории не требуется. Персистентность данных инстансов — именованный volume **`evolution_instances`** → **`/evolution/instances`** (контейнерный процесс в образе работает под **`root`**, что устраняет типичный **`EACCES`** при записи в named volume без открытых **`777`** прав на файловую систему хоста).
+
+**Pairing Code / привязка WhatsApp:** это сценарий **connect-flow** в Evolution Manager либо HTTP-методы инстанса, описанные в официальной документации Evolution API (Manager «подключить инстанс» / pairing). В шаблонах **`.env.example`** отдельные переменные «включить pairing» не задаём — параметры берите из канала документации продукта, а ключ API — **`AUTHENTICATION_API_KEY`**.
 
 Перед первым запуском **tools**, при необходимости, выполните:
 
 ```bash
 docker compose config --quiet
-docker compose --profile tools build evolution-api
 ```
 
 ```bash
@@ -89,7 +90,7 @@ docker network create propradar 2>/dev/null || true
 # Минимум для API + PostgreSQL (типичный сервер приложения):
 docker compose --profile infra --profile app up -d
 
-# Дополнительно инструменты (n8n, Metabase, Evolution; образ см. build выше):
+# Дополнительно инструменты (n8n, Metabase, Evolution; образ evoapicloud/evolution-api):
 docker compose --profile tools up -d
 
 # Evolution с Redis-кэшем (CACHE_REDIS_ENABLED=true): Redis во фрагменте infra — поднимите
