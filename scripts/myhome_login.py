@@ -238,16 +238,15 @@ def main() -> int:
                             exc_info=True,
                         )
                 try:
-                    _flow_log = (
-                        "Автовход не удался: stage=%s reason=%s"
-                        if creds_ok
-                        else "Ручной вход: stage=%s reason=%s"
-                    )
                     try:
                         page = context.new_page()
                     except PlaywrightError:
                         err = MyHomeLoginError("browser_page", "new_page_failed")
-                        logger.error(_flow_log, err.stage, err.reason)
+                        logger.error(
+                            "myhome_login: stage=%s reason=%s",
+                            err.stage,
+                            err.reason,
+                        )
                         exit_code = 1
                     else:
                         if creds_ok:
