@@ -83,7 +83,7 @@ class MyHomePhoneEnricher:
         repository: LeadRepository,
         *,
         locale: str = "ru",
-        headless: bool = False,
+        headless: bool = True,
         storage_state_path: Path | None = None,
     ) -> None:
         self._repository = repository
@@ -102,11 +102,7 @@ class MyHomePhoneEnricher:
             storage = json.loads(self._storage_state_path.read_text(encoding="utf-8"))
 
         with sync_playwright() as pw:
-            if self._headless:
-                logger.info(
-                    "myhome phone enricher: headless=True игнорируется (P1 — видимый браузер)",
-                )
-            browser = pw.chromium.launch(headless=False)
+            browser = pw.chromium.launch(headless=self._headless)
             try:
                 context = browser.new_context(locale=self._locale, storage_state=storage)
                 page = context.new_page()
