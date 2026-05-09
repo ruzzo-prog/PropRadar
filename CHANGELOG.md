@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- **P1 / `src/parsers/adapters/myhome/phone.py` — MyHomePhoneEnricher без дисплея:** убран принудительный **`chromium.launch(headless=False)`** и лог про «игнорирование» **`headless=True`**; дефолт параметра конструктора **`headless=True`**; запуск **`headless=self._headless`**. Загрузка **`storage_state`** из **`MYHOME_SESSION_PATH`** / переданного пути — без изменений. **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-09). **Коммит:** **`c4dfd4d`**.
+
 - **`scripts/myhome_login.py` — `_wait_auth_success` / SSO TNET:** после успешного auth API браузер может остановиться на **`auth.myauto.ge`** с параметром **`AccessToken`** без финального редиректа на **myhome.ge** (типично в headless). Ожидание успеха расширено: **myhome.ge** (как раньше) или **auth.myauto.ge** с **`AccessToken`** в query; таймаут ожидания URL снижен до **30 s** (вместо 90 s). Значения токенов в лог не пишутся.
 
 ### Reverted

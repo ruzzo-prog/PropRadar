@@ -2,6 +2,21 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — P1: MyHomePhoneEnricher — headless по умолчанию (сервер без DISPLAY)
+
+- **Симптом / цель:** на **playwright-worker** без дисплея обогащение **`phone`** падало по **TimeoutError**: Chromium всегда стартовал с **`headless=False`**, при этом в лог писалось, что **`headless=True`** «игнорируется».
+- **Реализация:** в **`src/parsers/adapters/myhome/phone.py`** — дефолт **`headless=True`** в **`MyHomePhoneEnricher.__init__`**; **`pw.chromium.launch(headless=self._headless)`**; удалён вводящий в заблуждение **INFO**-лог. Логика **`phone/show`**, селекторы, таймауты, загрузка **`storage_state`** из файла сессии — **без изменений**.
+- **Границы scope:** только **`src/parsers/adapters/myhome/phone.py`**; вызовы с явным **`headless=False`** сохраняют локальный видимый браузер.
+- **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-09).
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`**; после деплоя — ручной смоук **одного** цикла обогащения **`phone`** на воркере с валидной **`myhome_session.json`**.
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Scanner | ✅ PASS (человек) |
+| QA (целевые unit) | 🧪 13 passed |
+| Коммит | `c4dfd4d` |
+
 ## 2026-05-09 — Документация: единый runbook LE для n8n / Evolution / Metabase (Hetzner)
 
 - **Сделано:** в **`docs/DEPLOY_SERVER.md`** добавлен раздел **«Единый процесс Let's Encrypt (n8n, Evolution, Metabase)»** — **UFW 80/443**, одна **A** на FQDN, три **`certbot certonly --standalone`**, шесть **`_*_TLS_*`** в корневом **`.env`** (`/etc/letsencrypt/live/<домен>/`), **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**, проверка **`curl -vI`** + **SSL/HTTP**; **`CHANGELOG.md`** — запись в **`### Documented`**.
