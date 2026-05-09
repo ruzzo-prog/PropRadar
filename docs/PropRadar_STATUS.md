@@ -2,20 +2,20 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
-## 2026-05-09 — P1: MyHomePhoneEnricher — headless по умолчанию (сервер без DISPLAY)
+## 2026-05-09 — P1: MyHome phone enricher — режим Chromium (итог: `headless=False` + Xvfb)
 
-- **Симптом / цель:** на **playwright-worker** без дисплея обогащение **`phone`** падало по **TimeoutError**: Chromium всегда стартовал с **`headless=False`**, при этом в лог писалось, что **`headless=True`** «игнорируется».
-- **Реализация:** в **`src/parsers/adapters/myhome/phone.py`** — дефолт **`headless=True`** в **`MyHomePhoneEnricher.__init__`**; **`pw.chromium.launch(headless=self._headless)`**; удалён вводящий в заблуждение **INFO**-лог. Логика **`phone/show`**, селекторы, таймауты, загрузка **`storage_state`** из файла сессии — **без изменений**.
-- **Границы scope:** только **`src/parsers/adapters/myhome/phone.py`**; вызовы с явным **`headless=False`** сохраняют локальный видимый браузер.
-- **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-09).
+- **Контекст:** **`playwright-worker`** в Docker с **Xvfb** (**`DISPLAY=:99`**, **`docker/app/playwright-worker-entrypoint.sh`**).
+- **Коммит `c4dfd4d`:** дефолт **`headless=True`** и **`launch(headless=self._headless)`** — на воркере с виртуальным дисплеем привело к **Cloudflare**/капче и **TimeoutError** на обогащении **`phone`** (в отличие от сценария «нет DISPLAY» на голом хосте).
+- **Hotfix `d0e03d1` (@engineer-repairman):** в **`src/parsers/adapters/myhome/phone.py`** — снова дефолт **`headless=False`**, **`pw.chromium.launch(headless=False)`**; логика **`phone/show`**, селекторы, таймауты, **`storage_state`** — без изменений. Параметр **`headless=`** у вызывающего кода на **`launch` сейчас не влияет** (жёстко **`False`** — осознанный P1-компромисс).
+- **Проверки:** **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-09).
 - **Документация:** **`CHANGELOG.md`**, этот файл.
-- **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`**; после деплоя — ручной смоук **одного** цикла обогащения **`phone`** на воркере с валидной **`myhome_session.json`**.
+- **Ретро (skill engineer-repairman):** в течение **1 рабочего дня** — **`@architect`** + **`@process-guard` (Plan Check)** на согласование стратегии headless vs Xvfb vs вызывающий API.
 
 | Показатель | Статус |
 | ---------- | ------ |
-| Scanner | ✅ PASS (человек) |
 | QA (целевые unit) | 🧪 13 passed |
-| Коммит | `c4dfd4d` |
+| Коммит (итог) | `d0e03d1` |
+| Предыдущий эксперимент | `c4dfd4d` (отменён по проду на воркере) |
 
 ## 2026-05-09 — Документация: единый runbook LE для n8n / Evolution / Metabase (Hetzner)
 
