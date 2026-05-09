@@ -1,4 +1,4 @@
-# Nginx reverse-proxy + TLS для n8n, Evolution API и Metabase (сеть propradar).
+# Nginx reverse-proxy + TLS для n8n, Evolution API, Metabase и Snapotter (сеть propradar).
 # TLS: file bind-mount с хоста (fullchain/privkey для каждого домена) — см. README.
 # Внутри контейнера пути фиксированы: /etc/nginx/certs/{n8n,evolution,metabase}/...
 # Предварительно: docker network create propradar
@@ -36,6 +36,8 @@ services:
       - ${EVOLUTION_TLS_PRIVKEY:-./letsencrypt/live/evolution.usluga-market.ru/privkey.pem}:/etc/nginx/certs/evolution/privkey.pem:ro
       - ${METABASE_TLS_FULLCHAIN:-./letsencrypt/live/metabase.usluga-market.ru/fullchain.pem}:/etc/nginx/certs/metabase/fullchain.pem:ro
       - ${METABASE_TLS_PRIVKEY:-./letsencrypt/live/metabase.usluga-market.ru/privkey.pem}:/etc/nginx/certs/metabase/privkey.pem:ro
+      - ${SNAPOTTER_TLS_FULLCHAIN:-./letsencrypt/live/snapotter.usluga-market.ru/fullchain.pem}:/etc/nginx/certs/snapotter/fullchain.pem:ro
+      - ${SNAPOTTER_TLS_PRIVKEY:-./letsencrypt/live/snapotter.usluga-market.ru/privkey.pem}:/etc/nginx/certs/snapotter/privkey.pem:ro
       - reverse_proxy_certbot_www:/var/www/certbot:ro
     networks:
       - propradar

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **HTTPS `snapotter.usluga-market.ru` / reverse-proxy:** `docker/reverse-proxy/nginx/conf.d/snapotter.conf` (upstream **`snapotter:1349`**), два bind-mount **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**, расширен **`00-tls-preflight.sh`** (восемь PEM). Сервис **`snapotter`** (**`snapotter/snapotter:latest`**, **`ANALYTICS_ENABLED=false`**, том **`snapotter_data`**, без публикации порта на хост) — **`docker/app/docker-compose.yml`**, профиль **`app`**. Полный runbook LE/TLS — **`docs/TLS_LETSENCRYPT.md`**; краткая шпаргалка обновлена в **`docker/reverse-proxy/README.md`**.
+
 ### Documented
 
 - **Сессия 2026-05-09 (Hetzner / reverse-proxy, LE для трёх доменов):** в **`docs/DEPLOY_SERVER.md`** — раздел **«Единый процесс Let's Encrypt (n8n, Evolution, Metabase)»**: предусловия (**UFW 80/443**, одна **A** на домен), три команды **`certbot certonly --standalone`**, все **шесть** переменных **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`** с путями **`/etc/letsencrypt/live/<домен>/`**, пересоздание **`reverse-proxy`** (`docker compose --profile proxy up -d --force-recreate reverse-proxy`), проверка **`curl -vI https://<домен>`** + **`grep`** по **SSL/HTTP**; блок **Metabase** сведён к ссылке на единый процесс + site URL.

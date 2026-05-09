@@ -2,6 +2,14 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — Reverse-proxy / Snapotter HTTPS (`snapotter.usluga-market.ru`)
+
+- **Контекст:** четвёртый публичный FQDN на том же VPS; терминация TLS на **`propradar-reverse-proxy`**, паттерн как у Metabase (**LE на хосте**, file bind-mount, preflight перед nginx).
+- **Реализация (репозиторий):** **`docker/reverse-proxy/nginx/conf.d/snapotter.conf`** — **`server_name`** **`snapotter.usluga-market.ru`**, upstream **`snapotter:1349`**; **`docker/reverse-proxy/docker-compose.yml`** — **`SNAPOTTER_TLS_FULLCHAIN`** / **`SNAPOTTER_TLS_PRIVKEY`**; **`00-tls-preflight.sh`** — восемь PEM; образовый сервис **`snapotter`** (**`snapotter/snapotter:latest`**, **`ANALYTICS_ENABLED=false`**, том **`snapotter_data`**, сеть **`propradar`**, порт на хост не публиковать) — **`docker/app/docker-compose.yml`**, профиль **`app`** (корневой **`compose.yaml`** по-прежнему только **`include`** фрагментов — сервис объявлен во фрагменте **`docker/app`**). Существующие vhost для **n8n**, **Evolution**, **Metabase** и шесть существующих volume-mount TLS не менялись.
+- **Операции на сервере (человек, вне git):** DNS **A**, **`certbot certonly --standalone`** для **`snapotter.usluga-market.ru`** с освобождением **80/tcp**, запись **`SNAPOTTER_TLS_*`** в корневой **`.env`**, **`docker compose --profile app up -d snapotter`**, **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**.
+- **Проверки (@tester):** **`docker compose --profile infra --profile app --profile proxy config`** — **PASS** (2026-05-09); без профиля **`infra`** валидация падает на **`depends_on`** **`api`** → **`leads-db`** — это ожидаемо. Сценарий «нет PEM для Snapotter» / битые пути — ожидаемый **`exit 1`** preflight (на сервере или стенде). **Smoke HTTPS** (**301** по HTTP, **SSL verify ok**, ответ приложения) — **после выпуска LE и деплоя (человек)**.
+- **Документация:** **`docs/TLS_LETSENCRYPT.md`** (каноническое описание контура LE), **`CHANGELOG.md`**, **`docker/reverse-proxy/README.md`**, этот файл.
+
 ## 2026-05-09 — MyHome phone enricher: `playwright-stealth` 2.x + согласованный `headless=True`
 
 - **Цель:** снизить срабатывание **Cloudflare**/капчи на **www.myhome.ge** при обогащении **`phone`** в **headless** Chromium (**Playwright 1.59.x** на **playwright-worker**).

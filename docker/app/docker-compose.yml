@@ -90,7 +90,20 @@ services:
     networks:
       - propradar
 
+  snapotter:
+    profiles:
+      - app
+    image: snapotter/snapotter:latest
+    restart: unless-stopped
+    environment:
+      ANALYTICS_ENABLED: "false"
+    volumes:
+      - snapotter_data:/data
+    networks:
+      - propradar
+
 volumes:
+  snapotter_data:
   adapter_playwright_sessions:
 
 networks:
