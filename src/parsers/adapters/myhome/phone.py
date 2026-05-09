@@ -15,6 +15,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, Response, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
+from playwright_stealth import Stealth
 
 from domain.lead import Lead
 from parsers.adapters.myhome.browser import dismiss_popup, save_timeout_shot
@@ -83,7 +84,7 @@ class MyHomePhoneEnricher:
         repository: LeadRepository,
         *,
         locale: str = "ru",
-        headless: bool = False,
+        headless: bool = True,
         storage_state_path: Path | None = None,
     ) -> None:
         self._repository = repository
@@ -102,10 +103,11 @@ class MyHomePhoneEnricher:
             storage = json.loads(self._storage_state_path.read_text(encoding="utf-8"))
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=False)
+            browser = pw.chromium.launch(headless=self._headless)
             try:
                 context = browser.new_context(locale=self._locale, storage_state=storage)
                 page = context.new_page()
+                Stealth().apply_stealth_sync(page)
                 for lead in items:
                     err = self._enrich_one(page, lead)
                     if err is None:
