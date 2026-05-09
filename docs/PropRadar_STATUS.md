@@ -2,20 +2,19 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
-## 2026-05-09 — P1: MyHome phone enricher — режим Chromium (итог: `headless=False` + Xvfb)
+## 2026-05-09 — MyHome phone enricher: `playwright-stealth` 2.x + согласованный `headless=True`
 
-- **Контекст:** **`playwright-worker`** в Docker с **Xvfb** (**`DISPLAY=:99`**, **`docker/app/playwright-worker-entrypoint.sh`**).
-- **Коммит `c4dfd4d`:** дефолт **`headless=True`** и **`launch(headless=self._headless)`** — на воркере с виртуальным дисплеем привело к **Cloudflare**/капче и **TimeoutError** на обогащении **`phone`** (в отличие от сценария «нет DISPLAY» на голом хосте).
-- **Hotfix `d0e03d1` (@engineer-repairman):** в **`src/parsers/adapters/myhome/phone.py`** — снова дефолт **`headless=False`**, **`pw.chromium.launch(headless=False)`**; логика **`phone/show`**, селекторы, таймауты, **`storage_state`** — без изменений. Параметр **`headless=`** у вызывающего кода на **`launch` сейчас не влияет** (жёстко **`False`** — осознанный P1-компромисс).
-- **Проверки:** **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-09).
+- **Цель:** снизить срабатывание **Cloudflare**/капчи на **www.myhome.ge** при обогащении **`phone`** в **headless** Chromium (**Playwright 1.59.x** на **playwright-worker**).
+- **Реализация:** в **`pyproject.toml`** — **`playwright-stealth>=2.0.3`**; в **`src/parsers/adapters/myhome/phone.py`** — импорт **`Stealth`**, после **`context.new_page()`** вызов **`Stealth().apply_stealth_sync(page)`** до цикла по лидам (до **`goto`**); дефолт **`headless=True`**, **`pw.chromium.launch(headless=self._headless)`**. Логика **`phone/show`**, селекторы, таймауты, **`storage_state`** — без изменений; **`docker/app/playwright-worker.Dockerfile`** не менялся (**`pip install -e .`**).
+- **История headless/Xvfb:** ранее **`c4dfd4d`** / **`d0e03d1`** подбирали только режим headless/launch без anti-detect; **`d0e03d1`** зафиксировал **headless=False** из-за капчи — заменено на стратегию **stealth + headless** по диагностике и утверждённому **Fix Plan**.
+- **Проверки (авто):** **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed**; **`ruff`** **`phone.py`** — **PASS** (2026-05-09).
+- **Проверки (ручные, до прод-подписи):** **`https://www.myhome.ge/pr/24644149/`** без капчи; успешное получение телефона через воркер.
 - **Документация:** **`CHANGELOG.md`**, этот файл.
-- **Ретро (skill engineer-repairman):** в течение **1 рабочего дня** — **`@architect`** + **`@process-guard` (Plan Check)** на согласование стратегии headless vs Xvfb vs вызывающий API.
 
 | Показатель | Статус |
 | ---------- | ------ |
 | QA (целевые unit) | 🧪 13 passed |
-| Коммит (итог) | `d0e03d1` |
-| Предыдущий эксперимент | `c4dfd4d` (отменён по проду на воркере) |
+| LIVE (CF / телефон) | ⏳ человек после деплоя |
 
 ## 2026-05-09 — Документация: единый runbook LE для n8n / Evolution / Metabase (Hetzner)
 
