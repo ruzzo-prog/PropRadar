@@ -153,6 +153,10 @@ class MyHomePhoneEnricher:
 
             url = listing_url(lead.external_id, locale=self._locale)
             page.goto(url, wait_until="domcontentloaded", timeout=TW_MS)
+            if "Just a moment" in page.title() or "Turnstile" in page.content():
+                logger.warning("cloudflare_block ext=%s", lead.external_id)
+                save_timeout_shot(page, lead)
+                return "CloudflareBlock"
             page.wait_for_load_state("networkidle", timeout=TW_MS)
 
             dismiss_popup(page)
