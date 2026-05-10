@@ -17,6 +17,7 @@ from playwright.sync_api import Page, Response, sync_playwright
 from playwright.sync_api import TimeoutError as PWTimeoutError
 from playwright_stealth import Stealth
 
+from config.settings import Settings
 from domain.lead import Lead
 from parsers.adapters.myhome.browser import dismiss_popup, save_timeout_shot
 from parsers.adapters.myhome.constants import BTN_SELECTORS, TW_MS
@@ -24,6 +25,11 @@ from parsers.adapters.myhome.extract import listing_url
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
+
+_MYHOME_PHONE_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+)
 
 
 def parse_phone_response(response: Response) -> str:
@@ -102,10 +108,29 @@ class MyHomePhoneEnricher:
         if self._storage_state_path is not None and self._storage_state_path.exists():
             storage = json.loads(self._storage_state_path.read_text(encoding="utf-8"))
 
+        app_settings = Settings()
+        launch_proxy = None
+        if app_settings.playwright_proxy_server:
+            launch_proxy = {"server": app_settings.playwright_proxy_server}
+            if app_settings.playwright_proxy_user is not None:
+                launch_proxy["username"] = app_settings.playwright_proxy_user
+            if app_settings.playwright_proxy_pass is not None:
+                launch_proxy["password"] = app_settings.playwright_proxy_pass
+
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=self._headless)
+            launch_kw: dict = {
+                "headless": self._headless,
+                "args": ["--disable-blink-features=AutomationControlled"],
+            }
+            if launch_proxy is not None:
+                launch_kw["proxy"] = launch_proxy
+            browser = pw.chromium.launch(**launch_kw)
             try:
-                context = browser.new_context(locale=self._locale, storage_state=storage)
+                context = browser.new_context(
+                    locale=self._locale,
+                    storage_state=storage,
+                    user_agent=_MYHOME_PHONE_USER_AGENT,
+                )
                 page = context.new_page()
                 Stealth().apply_stealth_sync(page)
                 for lead in items:

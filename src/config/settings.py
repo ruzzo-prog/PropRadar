@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field, HttpUrl, PostgresDsn
+from pydantic import AliasChoices, Field, HttpUrl, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -66,4 +66,16 @@ class Settings(BaseSettings):
     myhome_pdf_public_base_url: str | None = Field(
         default=None,
         validation_alias="MYHOME_PDF_PUBLIC_BASE_URL",
+    )
+    playwright_proxy_server: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLAYWRIGHT_PROXY_SERVER"),
+    )
+    playwright_proxy_user: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLAYWRIGHT_PROXY_USER"),
+    )
+    playwright_proxy_pass: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PLAYWRIGHT_PROXY_PASS"),
     )
