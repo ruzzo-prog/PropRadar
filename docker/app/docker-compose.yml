@@ -99,6 +99,12 @@ services:
       ANALYTICS_ENABLED: "false"
     volumes:
       - snapotter_data:/data
+    # CX32: 4vCPU/8GB — snapotter ограничен 2CPU/3G, AI на CPU без лимита роняет сервер
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3G
     networks:
       - propradar
 

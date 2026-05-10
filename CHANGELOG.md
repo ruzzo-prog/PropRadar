@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **P1 / SnapOtter (Hetzner CX32):** в **`docker/app/docker-compose.yml`** для сервиса **`snapotter`** заданы **`deploy.resources.limits`** — **`cpus: "2.0"`**, **`memory: 3G`** (комментарий: 4 vCPU / 8 GB RAM, без лимита AI на CPU грузил все ядра и ломал UX). После **`git pull`** на сервере: **`docker compose --profile app up -d snapotter`** (или эквивалент с нужными профилями), затем мониторинг CPU/RAM контейнера.
+
 ### Added
 
 - **HTTPS `snapotter.usluga-market.ru` / reverse-proxy:** `docker/reverse-proxy/nginx/conf.d/snapotter.conf` (upstream **`snapotter:1349`**), два bind-mount **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**, расширен **`00-tls-preflight.sh`** (восемь PEM). Сервис **`snapotter`** (**`snapotter/snapotter:latest`**, **`ANALYTICS_ENABLED=false`**, том **`snapotter_data`**, без публикации порта на хост) — **`docker/app/docker-compose.yml`**, профиль **`app`**. Полный runbook LE/TLS — **`docs/TLS_LETSENCRYPT.md`**; краткая шпаргалка обновлена в **`docker/reverse-proxy/README.md`**.

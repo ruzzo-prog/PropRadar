@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — P1 hotfix: SnapOtter — лимиты CPU/RAM (CX32)
+
+- **Симптом:** контейнер **`propradar-snapotter-1`** при обработке AI-инструментов занимал **100% CPU** (все ядра), падал, ухудшал UX; остальные сервисы без претензий.
+- **Реализация:** **`docker/app/docker-compose.yml`** — для **`snapotter`** блок **`deploy.resources.limits`**: **`cpus: "2.0"`**, **`memory: 3G`**, комментарий в YAML про **CX32 4vCPU/8GB** и риск «AI на CPU без лимита».
+- **Деплой (человек):** после выкладки — пересоздать сервис compose (**`docker compose … up -d snapotter`**); убедиться, что лимиты применились (**`docker inspect`** / cgroup).
+- **Документация:** **`CHANGELOG.md`**, этот файл; **`docs/TLS_LETSENCRYPT.md`** не менялся (вне scope).
+
 ## 2026-05-09 — Reverse-proxy / Snapotter HTTPS (`snapotter.usluga-market.ru`)
 
 - **Контекст:** четвёртый публичный FQDN на том же VPS; терминация TLS на **`propradar-reverse-proxy`**, паттерн как у Metabase (**LE на хосте**, file bind-mount, preflight перед nginx).
