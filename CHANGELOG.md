@@ -4,13 +4,9 @@
 
 ## [Unreleased]
 
-### Changed
+### Removed
 
-- **P1 / SnapOtter (Hetzner CX32):** в **`docker/app/docker-compose.yml`** для сервиса **`snapotter`** заданы **`deploy.resources.limits`** — **`cpus: "2.0"`**, **`memory: 3G`** (комментарий: 4 vCPU / 8 GB RAM, без лимита AI на CPU грузил все ядра и ломал UX). После **`git pull`** на сервере: **`docker compose --profile app up -d snapotter`** (или эквивалент с нужными профилями), затем мониторинг CPU/RAM контейнера.
-
-### Added
-
-- **HTTPS `snapotter.usluga-market.ru` / reverse-proxy:** `docker/reverse-proxy/nginx/conf.d/snapotter.conf` (upstream **`snapotter:1349`**), два bind-mount **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**, расширен **`00-tls-preflight.sh`** (восемь PEM). Сервис **`snapotter`** (**`snapotter/snapotter:latest`**, **`ANALYTICS_ENABLED=false`**, том **`snapotter_data`**, без публикации порта на хост) — **`docker/app/docker-compose.yml`**, профиль **`app`**. Полный runbook LE/TLS — **`docs/TLS_LETSENCRYPT.md`**; краткая шпаргалка обновлена в **`docker/reverse-proxy/README.md`**.
+- **SnapOtter / `snapotter.usluga-market.ru` (полный откат из репо):** решение человека — AI на CPU нестабилен; не-AI инструменты (resize/compress/convert) переносятся на **Python/Pillow**. Удалены сервис **`snapotter`** и том **`snapotter_data`** из **`docker/app/docker-compose.yml`**, **`docker/reverse-proxy/nginx/conf.d/snapotter.conf`**, монты **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**, **`check_one`** snapotter и упоминания **`SNAPOTTER_TLS_*`** в **`00-tls-preflight.sh`**. Документация: **`docs/TLS_LETSENCRYPT.md`**, **`docker/reverse-proxy/README.md`**, **`CHANGELOG.md`**, **`docs/PropRadar_STATUS.md`**. **На сервере (человек):** остановить и удалить контейнер и volume данных SnapOtter; убрать **`SNAPOTTER_TLS_*`** из **`.env`**; **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**. Сертификат LE для **`snapotter.usluga-market.ru`** на диске **оставить**.
 
 ### Documented
 

@@ -26,10 +26,8 @@ check_one /etc/nginx/certs/evolution/fullchain.pem "Evolution TLS fullchain"
 check_one /etc/nginx/certs/evolution/privkey.pem "Evolution TLS privkey"
 check_one /etc/nginx/certs/metabase/fullchain.pem "Metabase TLS fullchain"
 check_one /etc/nginx/certs/metabase/privkey.pem "Metabase TLS privkey"
-check_one /etc/nginx/certs/snapotter/fullchain.pem "Snapotter TLS fullchain"
-check_one /etc/nginx/certs/snapotter/privkey.pem "Snapotter TLS privkey"
 
 if [ "$missing" -ne 0 ]; then
-	printf '%s\n' "reverse-proxy preflight: задайте пути на хосте: N8N_TLS_FULLCHAIN, N8N_TLS_PRIVKEY, EVOLUTION_TLS_FULLCHAIN, EVOLUTION_TLS_PRIVKEY, METABASE_TLS_FULLCHAIN, METABASE_TLS_PRIVKEY, SNAPOTTER_TLS_FULLCHAIN, SNAPOTTER_TLS_PRIVKEY (см. docker/reverse-proxy/README.md и docs/TLS_LETSENCRYPT.md)." >&2
+	printf '%s\n' "reverse-proxy preflight: задайте пути на хосте: N8N_TLS_FULLCHAIN, N8N_TLS_PRIVKEY, EVOLUTION_TLS_FULLCHAIN, EVOLUTION_TLS_PRIVKEY, METABASE_TLS_FULLCHAIN, METABASE_TLS_PRIVKEY (см. docker/reverse-proxy/README.md и docs/TLS_LETSENCRYPT.md)." >&2
 	exit 1
 fi

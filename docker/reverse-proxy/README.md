@@ -1,6 +1,6 @@
 # Reverse-proxy (Nginx) для PropRadar
 
-TLS-терминация и внешний HTTPS для **n8n**, **Evolution API**, **Metabase** и **Snapotter**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы **`n8n`**, **`evolution-api`**, **`metabase:3000`** из `docker/tools/docker-compose.yml` и **`snapotter:1349`** из `docker/app/docker-compose.yml`. Порты **5678** и **8080** на хосте не публикуются — доступ только через этот прокси (80/443) по доменам **n8n.usluga-market.ru**, **evolution.usluga-market.ru**, **metabase.usluga-market.ru** и **snapotter.usluga-market.ru** (Metabase по-прежнему может быть доступен напрямую с хоста на **3031** → 3000, если порт опубликован во фрагменте `tools`).
+TLS-терминация и внешний HTTPS для **n8n**, **Evolution API** и **Metabase**. Контейнер подключается к внешней сети Docker `propradar` и проксирует на сервисы **`n8n`**, **`evolution-api`**, **`metabase:3000`** из `docker/tools/docker-compose.yml`. Порты **5678** и **8080** на хосте не публикуются — доступ только через этот прокси (80/443) по доменам **n8n.usluga-market.ru**, **evolution.usluga-market.ru** и **metabase.usluga-market.ru** (Metabase по-прежнему может быть доступен напрямую с хоста на **3031** → 3000, если порт опубликован во фрагменте `tools`).
 
 Порядок стеков и матрица портов на сервере — `docs/DEPLOY_SERVER.md`.
 
@@ -11,7 +11,7 @@ TLS-терминация и внешний HTTPS для **n8n**, **Evolution API
 ## Быстрый старт
 
 1. Сеть (один раз): `docker network create propradar`
-2. Запущены `docker/tools` и при необходимости `docker/infra` + `docker/app` (для `api` и/или сервиса **`snapotter`** с профилем **`app`**). Для n8n: `N8N_HOST=n8n.usluga-market.ru`, `N8N_PROTOCOL=https`, порт как в документации вашей версии n8n. Для Evolution: `SERVER_URL=https://evolution.usluga-market.ru`. Для Metabase за прокси задайте публичный URL с тем же хостом, что в `server_name` (например `MB_SITE_URL=https://metabase.usluga-market.ru` — см. документацию Metabase по переменным окружения для вашей версии).
+2. Запущены `docker/tools` и при необходимости `docker/infra` + `docker/app` (для `api`). Для n8n: `N8N_HOST=n8n.usluga-market.ru`, `N8N_PROTOCOL=https`, порт как в документации вашей версии n8n. Для Evolution: `SERVER_URL=https://evolution.usluga-market.ru`. Для Metabase за прокси задайте публичный URL с тем же хостом, что в `server_name` (например `MB_SITE_URL=https://metabase.usluga-market.ru` — см. документацию Metabase по переменным окружения для вашей версии).
 
 ### Первичный выпуск TLS (certbot standalone)
 
@@ -24,8 +24,6 @@ sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-ema
   -d evolution.usluga-market.ru
 sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
   -d metabase.usluga-market.ru
-sudo certbot certonly --standalone --email <YOUR_EMAIL> --agree-tos --no-eff-email \
-  -d snapotter.usluga-market.ru
 ```
 
 После успешной выдачи сертификатов поднимите прокси из этой папки:
@@ -44,8 +42,7 @@ docker compose up -d
 
 - `/etc/nginx/certs/n8n/fullchain.pem` и `/etc/nginx/certs/n8n/privkey.pem`;
 - `/etc/nginx/certs/evolution/fullchain.pem` и `/etc/nginx/certs/evolution/privkey.pem`;
-- `/etc/nginx/certs/metabase/fullchain.pem` и `/etc/nginx/certs/metabase/privkey.pem`;
-- `/etc/nginx/certs/snapotter/fullchain.pem` и `/etc/nginx/certs/snapotter/privkey.pem`.
+- `/etc/nginx/certs/metabase/fullchain.pem` и `/etc/nginx/certs/metabase/privkey.pem`.
 
 На **хосте** пути к реальным `fullchain.pem` / `privkey.pem` задаются переменными окружения для **file bind-mount** (любой домен, любой каталог на хосте):
 
@@ -57,8 +54,6 @@ docker compose up -d
 | **`EVOLUTION_TLS_PRIVKEY`** | приватный ключ Evolution | `./letsencrypt/live/evolution.usluga-market.ru/privkey.pem` |
 | **`METABASE_TLS_FULLCHAIN`** | fullchain для Metabase | `./letsencrypt/live/metabase.usluga-market.ru/fullchain.pem` |
 | **`METABASE_TLS_PRIVKEY`** | приватный ключ Metabase | `./letsencrypt/live/metabase.usluga-market.ru/privkey.pem` |
-| **`SNAPOTTER_TLS_FULLCHAIN`** | fullchain для Snapotter | `./letsencrypt/live/snapotter.usluga-market.ru/fullchain.pem` |
-| **`SNAPOTTER_TLS_PRIVKEY`** | приватный ключ Snapotter | `./letsencrypt/live/snapotter.usluga-market.ru/privkey.pem` |
 
 Пути по умолчанию **относительны** к каталогу `docker/reverse-proxy`. На Linux в проде удобно задать абсолютные пути в `.env` рядом с compose, например:
 
@@ -69,13 +64,11 @@ EVOLUTION_TLS_FULLCHAIN=/etc/letsencrypt/live/evolution.usluga-market.ru/fullcha
 EVOLUTION_TLS_PRIVKEY=/etc/letsencrypt/live/evolution.usluga-market.ru/privkey.pem
 METABASE_TLS_FULLCHAIN=/etc/letsencrypt/live/metabase.usluga-market.ru/fullchain.pem
 METABASE_TLS_PRIVKEY=/etc/letsencrypt/live/metabase.usluga-market.ru/privkey.pem
-SNAPOTTER_TLS_FULLCHAIN=/etc/letsencrypt/live/snapotter.usluga-market.ru/fullchain.pem
-SNAPOTTER_TLS_PRIVKEY=/etc/letsencrypt/live/snapotter.usluga-market.ru/privkey.pem
 ```
 
 Для **другого домена** достаточно сменить соответствующие переменные (и при необходимости `server_name` в `nginx/conf.d/*.conf`).
 
-**Preflight:** перед стартом `nginx` compose запускает `00-tls-preflight.sh` **явно** через `sh` (не полагается на автозапуск из `/docker-entrypoint.d` и на executable bit — это важно для Windows при `core.fileMode=false`). Скрипт проверяет наличие и читаемость **восьми** TLS-файлов (четыре домена × `fullchain` + `privkey`: n8n, Evolution, Metabase, Snapotter). Если чего-то нет — контейнер завершится с сообщением вида `reverse-proxy preflight: отсутствует файл: ...` и краткой подсказкой по переменным (в логах `docker logs`). Полный конспект контура — **`docs/TLS_LETSENCRYPT.md`**.
+**Preflight:** перед стартом `nginx` compose запускает `00-tls-preflight.sh` **явно** через `sh` (не полагается на автозапуск из `/docker-entrypoint.d` и на executable bit — это важно для Windows при `core.fileMode=false`). Скрипт проверяет наличие и читаемость **шести** TLS-файлов (три домена × `fullchain` + `privkey`: n8n, Evolution, Metabase). Если чего-то нет — контейнер завершится с сообщением вида `reverse-proxy preflight: отсутствует файл: ...` и краткой подсказкой по переменным (в логах `docker logs`). Полный конспект контура — **`docs/TLS_LETSENCRYPT.md`**.
 
 Локально можно положить структуру `letsencrypt/live/<домен>/` под `docker/reverse-proxy/letsencrypt/` или указать любые другие пути через переменные выше.
 

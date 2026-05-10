@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-09 — Откат SnapOtter (полный вывод из репозитория)
+
+- **Причина:** на **`snapotter.usluga-market.ru`** AI-инструменты на CPU не работали стабильно (падения при обработке); не-AI сценарии (**resize / compress / convert**) закрываются через **Pillow** в Python-стеке — решение человека, полная очистка контура SnapOtter.
+- **Реализация (репозиторий):** удалены **`snapotter`** и **`snapotter_data`** из **`docker/app/docker-compose.yml`**; **`docker/reverse-proxy/nginx/conf.d/snapotter.conf`**; строки **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**; **`check_one`** и подсказка stderr для snapotter в **`00-tls-preflight.sh`**; из **`docs/TLS_LETSENCRYPT.md`** убраны переменные и раздел про Snapotter; **`docker/reverse-proxy/README.md`**, **`CHANGELOG.md`**, этот файл.
+- **Операции на сервере (человек, вне git):** остановить и удалить контейнер и **volume** данных SnapOtter; удалить **`SNAPOTTER_TLS_*`** из корневого **`.env`**; **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**. Сертификат LE для **`snapotter.usluga-market.ru`** **не удалять** (не мусорит).
+- **Исторические записи ниже** (HTTPS Snapotter, лимиты CPU) после применения этого коммита на сервере **не отражают** текущий контур.
+
 ## 2026-05-09 — P1 hotfix: SnapOtter — лимиты CPU/RAM (CX32)
 
 - **Симптом:** контейнер **`propradar-snapotter-1`** при обработке AI-инструментов занимал **100% CPU** (все ядра), падал, ухудшал UX; остальные сервисы без претензий.
