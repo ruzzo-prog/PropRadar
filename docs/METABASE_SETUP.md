@@ -2,6 +2,17 @@
 
 Инструкция для оператора: поднять Metabase в `docker/tools`, подключить **leads-db**, собрать дашборд по SQL из `metabase/propradar_dashboard.json`.
 
+## Оглавление
+
+- [Предусловия](#предусловия)
+- [Порты и хосты](#порты-и-хосты)
+- [Запуск tools](#запуск-tools)
+- [Первый вход в Metabase](#первый-вход-в-metabase)
+- [Подключение базы leads](#подключение-базы-leads)
+- [Дашборд и SQL](#дашборд-и-sql)
+- [Автоматизация дашборда (Metabase API)](#автоматизация-дашборда-metabase-api)
+- [Критерии готовности](#критерии-готовности)
+
 ## Предусловия
 
 - Сеть Docker **`propradar`** создана: `docker network create propradar` (один раз).
@@ -33,6 +44,12 @@ docker compose -f docker/tools/docker-compose.yml exec metabase ping -c1 proprad
 
 ```bash
 docker compose -f docker/tools/docker-compose.yml up -d
+```
+
+Альтернатива (тот же стек через корневой `compose.yaml` и профиль **`tools`**):
+
+```bash
+docker compose --profile tools up -d metabase
 ```
 
 Ожидаем **`exit 0`**. UI: **http://localhost:3031**

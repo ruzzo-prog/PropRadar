@@ -67,6 +67,8 @@ X-API-Key: <значение PROPRADAR_API_KEY>
 
 Базовый путь: **`/api/myhome`**. Примеры для `http://localhost:9000` и ключа `secret` (подставьте свой).
 
+Пакетное обогащение **detail → phone → PDF** по очередям в БД выполняется скриптом **`scripts/run_myhome_enricher.py`** (не отдельным маршрутом API); эндпоинты ниже закрывают сценарий **n8n → CLI через API** (fetch / ingest / sync / mark).
+
 ### `GET /api/myhome/fetch-ids`
 
 Параметры query:
@@ -75,7 +77,6 @@ X-API-Key: <значение PROPRADAR_API_KEY>
 |----------|---------------|----------|
 | `limit` | `all` | `all` для полной выборки или число (`100`) для первых N ID. |
 | `max_pages` | `500` | Лимит страниц API (предохранитель). |
-| `max_pages` | `500` | Лимит страниц API. |
 
 Пример:
 

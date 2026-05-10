@@ -5,6 +5,16 @@
 Система парсит объявления от частных продавцов, устанавливает контакт через WhatsApp,
 собирает структурированные данные и передаёт готовые лиды агентствам недвижимости.
 
+## Оглавление
+
+- [Пайплайн](#пайплайн)
+- [Стек](#стек)
+- [Структура репозитория](#структура-репозитория)
+  - [Локальная среда (кратко)](#локальная-среда-кратко)
+- [Источники данных](#источники-данных)
+- [Процесс разработки](#процесс-разработки)
+- [Статус](#статус)
+
 ---
 
 ## Пайплайн
@@ -63,7 +73,11 @@ PropRadar/
 3. Python: `powershell -ExecutionPolicy Bypass -File .\scripts\setup_venv.ps1`, затем из корня с активированным venv: `uvicorn api.main:app --reload --host 127.0.0.1 --port 9000` (локальный профиль). Вариант через Docker для API: `docker/app` — сервис `api`, с хоста `http://127.0.0.1:8000`, внутри сети `http://api:8000`. Шаблоны env: `.env.example.local` / `.env.example.server`. На **Windows** зависимость `**tzdata`** в `**pyproject.toml`** нужна для `**zoneinfo**` (IANA-зоны, в т.ч. **Asia/Tbilisi** при обогащении myhome); на типичных Unix-системах часто достаточно системной базы зон.
 4. Инструменты (опционально): `docker/tools` — n8n **5678**, Metabase **3031**, Evolution **8080**. Не смешивать с чужими проектами; БД проекта только **leads-db**, не `dispatch-db-dev`.
 5. Парсер myhome (точка входа n8n): `python scripts/run_myhome_parser.py` — JSON-отчёт в stdout; интеграционный smoke к API: `MYHOME_INTEGRATION=1 pytest tests/integration/test_myhome_integration.py`.
-6. Обогащение myhome (**API-first**): `python scripts/run_myhome_enricher.py` выполняет три фазы — детали через `**GET /v1/statements/{id}`** (очередь: `**source=myhome`**, `**status=new**`, `**address IS NULL OR price_gel IS NULL**`), затем телефон через Playwright + `**phone/show**` (очередь: `**phone` IS NULL или `''**`), затем PDF через `**page.pdf()**` в каталог `**MYHOME_PDF_OUTPUT_DIR**` (очередь: `**pdf_url` пустой**, адрес уже заполнен). JSON-ответ включает счётчики `detail_*`, `phone_*`, `pdf_*`. Опционально `python scripts/myhome_login.py` и `**MYHOME_SESSION_PATH`** для storage state. Канон полей API — `**src/parsers/adapters/myhome/myhome_api_schema.csv`**. Переменные `MYHOME_*` см. `.env.example`. После миграции **006** для уже существующих строк с пустым `**price_gel`** — однократный прогон `**python scripts/backfill_price_gel.py**` (только **new** и `**price_gel IS NULL`**, флаг `**--limit**`).
+6. Обогащение myhome — **два типовых пути:**
+   - **Пакетный CLI** (хост / cron / одноразовый прогон): `python scripts/run_myhome_enricher.py` из корня с **`PYTHONPATH=src`** (как в остальных скриптах). Нужны **`DATABASE_URL`** (PostgreSQL **leads-db**) и переменные **`MYHOME_*`** из `Settings` (см. `.env.example`): в т.ч. **`MYHOME_API_BASE_URL`**, для телефона — **`MYHOME_SESSION_PATH`** (storage state после `scripts/myhome_login.py`), для PDF — **`MYHOME_PDF_OUTPUT_DIR`**, при публичных ссылках — **`MYHOME_PDF_PUBLIC_BASE_URL`**. Три фазы подряд: детали через **`GET /v1/statements/{id}`** (очередь: **`source=myhome`**, **`status=new`**, **`address IS NULL OR price_gel IS NULL`**), затем телефон Playwright + **`phone/show`** (очередь: **`phone` IS NULL или `''`**), затем **`page.pdf()`** в **`MYHOME_PDF_OUTPUT_DIR`** (очередь: **`pdf_url` пустой**, адрес уже заполнен). Успешный **stdout** — один JSON с полями **`detail_enriched`**, **`detail_failed`**, **`detail_errors`**, **`phone_enriched`**, **`phone_failed`**, **`phone_errors`**, **`pdf_enriched`**, **`pdf_failed`**, **`pdf_errors`**.
+   - **Фон через Docker `playwright-worker`:** один запуск — одна фаза: **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"detail"|"phone"|"pdf"}`**; оркестратору (**n8n**) достаточно кода **202** (без polling). Типовой workflow после ingest ставит только **`phase=phone`**; **`detail`** / **`pdf`** — отдельные узлы или отдельные расписания, либо см. CLI выше. См. **`docs/playwright_worker.md`**, **`docs/n8n_myhome_workflow.md`**, **`docs/INGRESS_ARCHITECTURE.md`**.
+   
+   Канон полей API — **`src/parsers/adapters/myhome/myhome_api_schema.csv`**. После миграции **006** для уже существующих строк с пустым **`price_gel`** — однократный прогон **`python scripts/backfill_price_gel.py`** (только **new** и **`price_gel IS NULL`**, флаг **`--limit`**).
 7. Metabase: из корня `docker compose --profile tools up -d metabase`, UI **[http://localhost:3031](http://localhost:3031)** — см. **`[docs/METABASE_SETUP.md](docs/METABASE_SETUP.md)`**.
 8. Дашборд Metabase через API (после первого входа и подключения БД **«PropRadar Leads»**): `python scripts/setup_metabase_dashboard.py` (переменные `**METABASE_*`** в `.env`). SQL в **`metabase/propradar_dashboard.json`** рассчитан на проекцию **`leads_client`** (миграции **007**, **008** и при необходимости **009** после **006**; контракт столбцов — поле **`schema_reference`** в JSON); операторские заметки по вёрстке таблицы на дашборде — в **`docs/METABASE_SETUP.md`** и в поле **`operator_instructions_ru`** JSON.
 
@@ -77,7 +91,7 @@ PropRadar/
 
 - **Список и карточка:** REST `**api-statements.tnet.ge`**, заголовок `**X-Website-Key: myhome`**; обогащение деталями по `**GET /v1/statements/{id}**` (очередь в БД: `**source=myhome**`, `**status=new**`, `**address` NULL или `**price_gel` NULL**).
 - **Телефон:** Playwright, `**phone/show`** (очередь: `**phone` IS NULL или `''`**); сессия — `**MYHOME_SESSION_PATH**` / `**scripts/myhome_login.py**`.
-- **PDF:** Playwright `**page.pdf()`** в `**MYHOME_PDF_OUTPUT_DIR`** (очередь: `**pdf_url` пустой**, адрес уже есть); типичный каталог `**data/myhome_pdf/`** перечислен в `**.gitignore**`.
+- **PDF:** Playwright **`page.pdf()`** в **`MYHOME_PDF_OUTPUT_DIR`** (очередь: **`pdf_url` пустой**, адрес уже есть); типичный каталог **`data/myhome_pdf/`** перечислен в **`.gitignore`**. Сейчас PDF строится **печатью страницы карточки**; у CDN myhome под одним **image id** бывают **разные превью** (с логотипом и без) — для «чистого» PDF операторски выбирают нужный URL/вариант; отдельной настройки в коде нет (**backlog**, см. **`docs/playwright_worker.md`**).
 - Канон имён полей ответа API — `**src/parsers/adapters/myhome/myhome_api_schema.csv`**; переменные `**MYHOME_*`** — в `**.env.example**`.
 
 ```mermaid

@@ -35,7 +35,7 @@
 | `OLX / Telegram / Facebook` | Источники объявлений | В плане |
 | `Evolution API` (Docker, self-hosted) | WhatsApp-канал | Активный |
 | `n8n` (self-hosted) | Оркестратор воркфлоу | Активный |
-| `Metabase` (Docker, порт 3030) | Дашборд и визуализация | Активный |
+| `Metabase` (Docker, прямой UI на хосте **3031** → контейнер **3000**, см. `docker/tools`) | Дашборд и визуализация | Активный |
 
 Ни один адаптер не является источником истины по бизнес-логике.
 
@@ -193,5 +193,5 @@ Smoke-тест      ← ТОЧКА КОНТРОЛЯ 3
 - `owner`: Architecture / человек
 - `status`: Active Canon
 - `version`: 1.0.0
-- `last_updated`: 2026-05-04
+- `last_updated`: 2026-05-10
 - `approved_by`: Human Review

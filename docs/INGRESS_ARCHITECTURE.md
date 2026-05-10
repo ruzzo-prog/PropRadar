@@ -1,12 +1,12 @@
 # Ingress и контуры PropRadar
 
-Канон интеграций и границ системы в связке с `Docs/AI_GOVERNANCE.md`. Документ описывает, как внешний контур (myhome.ge, n8n, Evolution/WhatsApp) стыкуется с **PropRadar API** и **leads-db**, без дублирования полного governance-текста.
+Канон интеграций и границ системы в связке с `docs/AI_GOVERNANCE.md`. Документ описывает, как внешний контур (myhome.ge, n8n, Evolution/WhatsApp) стыкуется с **PropRadar API** и **leads-db**, без дублирования полного governance-текста.
 
 ---
 
 ## Четыре домена системы
 
-Дословно из канона (`Docs/AI_GOVERNANCE.md`, раздел «Четыре домена системы»):
+Дословно из канона (`docs/AI_GOVERNANCE.md`, раздел «Четыре домена системы»):
 
 ```
 [1] ПАРСИНГ          — сбор объявлений с платформ, дедупликация
@@ -52,7 +52,9 @@ flowchart TB
 
 **Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
 
-**Телефон (myhome, `phase=phone`):** в коде адаптера **`MyHomePhoneEnricher`** поле телефона обогащается через **Playwright** (открытие карточки, клик «показать номер», ответ **`phone/show`**). Оркестрация n8n (вызов воркера на **HTTP 202**, без polling) не меняется.
+**Фазы воркера (`POST /enrich`):** помимо **`phone`**, тот же контракт поддерживает **`phase`** **`detail`** (HTTP-детали в БД через myhome Statements API, как очередь в **`run_myhome_enricher`**) и **`pdf`** (Playwright **`page.pdf()`**). Рекомендуемый успех для HTTP-клиента n8n — по-прежнему только **202**; результат по лидам смотреть в БД / логах воркера. Типовой workflow описывает **`phone`** сразу после ingest; **`detail`** / **`pdf`** — отдельные узлы расписания или пакетный CLI **`scripts/run_myhome_enricher.py`** (см. `README.md`, `docs/playwright_worker.md`).
+
+**Телефон (myhome, `phase=phone`):** в коде адаптера **`MyHomePhoneEnricher`** поле телефона обогащается через **Playwright** (открытие карточки, клик «показать номер», ответ **`phone/show`**; применяется **playwright-stealth**, см. код). Оркестрация n8n (вызов воркера на **HTTP 202**, без polling) не меняется.
 
 ---
 
@@ -64,7 +66,7 @@ flowchart TB
 | 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |
 | 2b | **HTTP Request** | `POST …/api/myhome/ingest`. |
-| 2c | **HTTP Request** | `POST http://playwright-worker:8001/enrich`, тело JSON **`{"adapter":"myhome","phase":"phone"}`**; успешное завершение узла — только код **202**; **polling** не используется. |
+| 2c | **HTTP Request** | `POST http://playwright-worker:8001/enrich`, тело JSON **`{"adapter":"myhome","phase":" … "}`**, где **`phase`** — **`phone`** (типово после ingest) или **`detail`** / **`pdf`** (опционально, отдельные узлы/расписание); успех узла для n8n — только **202**; **polling** не используется. |
 | 3 | **HTTP Request** | `POST …/api/myhome/sync-status` — discover исчезнувших. |
 | 4 | **Split In Batches / Loop** | Обход элементов `disappeared`. |
 | 5 | **HTTP Request** | Отправка в WhatsApp через Evolution (контракт версии Evolution — локально). |
@@ -130,7 +132,7 @@ flowchart TB
 | **`leads`** | Основная доменная таблица ядра: источник истины по лидам, статусам, обогащённым полям и JSON statement. Запись при парсинге/обогащении/sync. |
 | **`leads_client`** | Проекция для **клиентской выдачи** (дашборды, выборки для операторов): денормализованные поля, синхронизируются с `leads` триггером/функцией (см. миграции в репозитории). Не подменяет инварианты ядра. |
 
-Согласно `Docs/AI_GOVERNANCE.md`, единственный допустимый рабочий экземпляр БД для бизнес-состояния — **leads-db** (PostgreSQL); порт на хосте в docker-infra — **5433** → 5432 в контейнере.
+Согласно `docs/AI_GOVERNANCE.md`, единственный допустимый рабочий экземпляр БД для бизнес-состояния — **leads-db** (PostgreSQL); порт на хосте в docker-infra — **5433** → 5432 в контейнере.
 
 ---
 
@@ -170,13 +172,13 @@ flowchart TB
 
 | Документ | Содержание |
 |----------|------------|
-| [`Docs/AI_GOVERNANCE.md`](AI_GOVERNANCE.md) | Канон агентов, домены, инварианты, процесс изменений. |
-| [`Docs/PropRadar_STATUS.md`](PropRadar_STATUS.md) | Оперативный статус проекта. |
-| [`docs/API.md`](../docs/API.md) | HTTP API, аутентификация, коды ошибок, примеры curl. |
-| [`docs/n8n_myhome_workflow.md`](../docs/n8n_myhome_workflow.md) | Пошаговый n8n workflow, переменные, troubleshooting. |
+| [`docs/AI_GOVERNANCE.md`](AI_GOVERNANCE.md) | Канон агентов, домены, инварианты, процесс изменений. |
+| [`docs/PropRadar_STATUS.md`](PropRadar_STATUS.md) | Оперативный статус проекта. |
+| [`docs/API.md`](API.md) | HTTP API, аутентификация, коды ошибок, примеры curl. |
+| [`docs/n8n_myhome_workflow.md`](n8n_myhome_workflow.md) | Пошаговый n8n workflow, переменные, troubleshooting. |
 | OpenAPI | `GET /docs`, `GET /openapi.json` на запущенном API. |
 
-На диске Windows каталог канонической документации — **`Docs/`**; в тексте `AI_GOVERNANCE` может встречаться написание `docs/` — это один и тот же набор файлов по смыслу, пути в ссылках выше приведены к фактической структуре репозитория.
+Канонические markdown-файлы в репозитории лежат в каталоге **`docs/`** (относительно корня git).
 
 ---
 

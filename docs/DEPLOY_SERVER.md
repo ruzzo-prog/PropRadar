@@ -2,6 +2,19 @@
 
 Канон по маршрутизации и границам ответственности — `docs/INGRESS_ARCHITECTURE.md` (если расходится с этим runbook, приоритет у канона). Здесь — практические шаги для хоста с Docker.
 
+## Оглавление
+
+- [Локальный workflow](#локальный-workflow-обязательный)
+- [Порты (матрица)](#порты-согласованная-матрица)
+- [Redis и Evolution API](#redis-и-evolution-api)
+- [Корневой `.env` и шаблоны](#корневой-env-и-шаблоны)
+- [Переменные окружения: local vs server](#переменные-окружения-local-vs-server)
+- [Секреты playwright-worker](#секреты-playwright-worker)
+- [Безопасность PostgreSQL](#безопасность-postgresql-без-5433-в-мир)
+- [Типовой порядок compose на сервере](#типовой-порядок-compose-на-сервере)
+- [Reverse-proxy и TLS](#reverse-proxy-и-tls)
+- [Healthchecks](#healthchecks)
+
 ## Локальный workflow (обязательный)
 
 1. **Windows / локальная разработка и тесты:** клон репозитория, `scripts/setup_venv.ps1`, копируете в корень `.env` содержимое `.env.example.local` (или `.env.example` как базу для хоста), поднимаете `docker/infra` (PostgreSQL на `localhost:5433`), при необходимости `docker/tools` (n8n, Metabase **3031**, Evolution). API для разработки на хосте: `uvicorn api.main:app --reload --host 127.0.0.1 --port 9000` (порт **9000** — локальный профиль; в Docker контейнер `api` слушает **8000**, с хоста доступен как **8000**).
@@ -22,6 +35,8 @@
 | Metabase по HTTPS (через reverse-proxy) | `docker/reverse-proxy` | **443** (`https://metabase.usluga-market.ru/`), внутри сети `metabase:3000` |
 | n8n (слушает в контейнере; **на хост не проброшен**) | `docker/tools` | **5678** (только внутри `propradar`) |
 | Evolution API (аналогично) | `docker/tools` | **8080** (только внутри `propradar`) |
+| Playwright-worker (хост → контейнер, см. `docker/app/docker-compose.yml`) | `docker/app` | **8001** → **8001** |
+| Playwright-worker внутри сети | hostname `playwright-worker` | **8001** (`http://playwright-worker:8001`) |
 | Reverse-proxy HTTP/HTTPS | `docker/reverse-proxy` | 80, 443 |
 
 Публичный доступ к n8n, Evolution и Metabase на сервере — через **HTTPS** на **`docker/reverse-proxy`** (домены и TLS — см. `docker/reverse-proxy/README.md`, переменные **`N8N_TLS_*`**, **`EVOLUTION_TLS_*`**, **`METABASE_TLS_*`** и preflight перед стартом nginx).

@@ -1,6 +1,12 @@
 # PropRadar — статус проекта
 
-Единственный источник оперативного статуса по `Docs/AI_GOVERNANCE.md` раздел 8.
+Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
+
+## 2026-05-10 — Документация: аудит runbook (enricher, worker, n8n, TLS)
+
+- **Сделано:** синхронизированы **`README.md`** (оглавление, два пути обогащения CLI vs `playwright-worker`, фактические ключи JSON **`run_myhome_enricher`**, превью/PDF); **`docs/AI_GOVERNANCE.md`** (порт Metabase **3031**, метаданные); **`docs/INGRESS_ARCHITECTURE.md`** (фазы **`detail`/`phone`/`pdf`**, ссылки **`docs/`**); **`docs/n8n_myhome_workflow.md`**, **`docs/playwright_worker.md`**, **`docs/phone_extraction.md`** (операционная пауза телефона до **мобильного прокси GE IP**, stealth); **`docs/API.md`**, **`docs/DEPLOY_SERVER.md`**, **`docs/METABASE_SETUP.md`**, **`docs/TLS_LETSENCRYPT.md`** (структура/порты). Содержимое **`docs/myhome_login.md`** не менялось.
+- **Проверка:** **Scanner** — **PASS** (человек); дифф **только** `*.md` + указанный scope; регресс кода из правок документации не ожидается.
+- **Оперативно:** парсинг телефонов myhome на датацентровом IP считается **на паузе** до прокси с **гео GE**; PDF/превью — задокументирован **gap** вариантов CDN под одним **image id**.
 
 ## 2026-05-09 — Откат SnapOtter (полный вывод из репозитория)
 

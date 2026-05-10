@@ -14,6 +14,7 @@
 8. [Примеры сообщений для разных локалей](#примеры-сообщений-для-разных-локалей)
 9. [Troubleshooting](#troubleshooting)
 10. [Экспорт workflow (опционально)](#экспорт-workflow-опционально)
+11. [Связка API, worker и CLI](#связка-api-playwright-worker-и-run_myhome_enricherpy)
 
 ---
 
@@ -27,7 +28,7 @@
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
 | 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
-| 2c      | Асинхронное обогащение (phone)   | `POST` **`http://playwright-worker:8001/enrich`** (или URL из env), тело **`{"adapter":"myhome","phase":"phone"}`**; ожидается только **HTTP 202**, опроса статуса (**polling**) нет |
+| 2c      | Асинхронное обогащение (worker)   | `POST` **`http://playwright-worker:8001/enrich`** (или URL из env), тело **`{"adapter":"myhome","phase":"…"}`** — типово **`phone`** сразу после ingest; допустимы **`detail`** и **`pdf`** (отдельные узлы/расписание). Успех узла n8n — только **HTTP 202**, **polling** нет |
 | 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
 | 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
 | 5       | Mark rejected в БД               | `POST` `**/api/myhome/mark-rejected**` с `ids` и `reason`                  |
@@ -92,6 +93,15 @@ PROPRADAR_API_URL=http://api:8000
 
 
 **Альтернатива (legacy):** запуск CLI через **Execute Command** на хосте с клоном репозитория — не описывается здесь; при необходимости см. историю git до перехода на HTTP API.
+
+---
+
+## Связка API, playwright-worker и `run_myhome_enricher.py`
+
+- **`DATABASE_URL`** настраивается для контейнеров **`api`** и **`playwright-worker`** (корневой `.env` на сервере), **не** через переменные n8n.
+- **`MYHOME_SESSION_PATH`**, каталоги **`MYHOME_PDF_*`**, логин **`MYHOME_EMAIL`** / **`MYHOME_PASSWORD`** — на стороне воркера и/или хоста с CLI (см. `docs/playwright_worker.md`, `docs/DEPLOY_SERVER.md`).
+- Один фоновой запуск воркера — **одна фаза**: тело **`{"adapter":"myhome","phase":"detail"|"phone"|"pdf"}`** (реализация **`src/worker/main.py`**). Типовой сценарий ниже вызывает **`phone`** после **`ingest`**; **`detail`** часто закрывается тем же батчем, что ingest/API, а **`pdf`** может вынесен на отдельный schedule или на пакетный CLI.
+- Пакетный прогон **трёх фаз подряд** на хосте: **`python scripts/run_myhome_enricher.py`** — JSON в stdout с полями **`detail_enriched`**, **`detail_failed`**, **`detail_errors`**, **`phone_*`**, **`pdf_*`** (см. `README.md`).
 
 ---
 
@@ -171,14 +181,14 @@ PROPRADAR_API_URL=http://api:8000
 
 ### Узел 2c — HTTP Request: Playwright worker (`POST /enrich`)
 
-Выполняется **после успешного** **`POST /api/myhome/ingest`** (узел 2b): постановка фоновой задачи обогащения (фаза **`phone`**) в **`playwright-worker`**.
+Выполняется **после успешного** **`POST /api/myhome/ingest`** (узел 2b): постановка фоновой задачи обогащения в **`playwright-worker`**.
 
 - **Тип:** `HTTP Request`
 - **Method:** `POST`
 - **URL:** базовый адрес из **`PLAYWRIGHT_WORKER_URL`** (без завершающего `/`) + **`/enrich`**, например выражение **`={{ $env.PLAYWRIGHT_WORKER_URL }}/enrich`**; если переменная не задана — укажите литерал **`http://playwright-worker:8001/enrich`** для контейнерного сценария в сети **`propradar`**.
 - **Headers:** `Content-Type: application/json`
-- **Body (JSON):** **`{"adapter":"myhome","phase":"phone"}`**
-- **Ожидаемый успешный ответ:** код **202 Accepted**; тело ответа для принятия решений в workflow **не используется**.
+- **Body (JSON):** по умолчанию **`{"adapter":"myhome","phase":"phone"}`**. Допустимы **`"phase":"detail"`** и **`"phase":"pdf"`** — вынесите в **отдельные** HTTP-узлы (другой cron, другой порядок) при необходимости; контракт успеха для n8n тот же — **только 202**.
+- **Ожидаемый успешный ответ:** код **202 Accepted**; тело ответа для принятия решений в workflow **не используется** (готовность по лидам — в БД / логах воркера).
 - **Polling / повторный GET статуса:** не предусмотрены контрактом — узел завершается после получения **202**.
 - **Ошибки:** коды вне **202** или сетевой сбой обрабатывайте политикой retry/error workflow n8n отдельно от ingest и discover.
 - **Скриншот (опционально):** `docs/assets/n8n/nodes/02c-playwright-enrich.png`
