@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +26,8 @@ from parsers.adapters.myhome.extract import listing_url
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
+
+_PHONE_BTN_TEXT_RE = re.compile(r"\+?[0-9]{9,13}")
 
 _MYHOME_PHONE_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -56,23 +59,37 @@ def click_show_phone(page: Page, external_id: str) -> str:
     tw = 15_000
     btn = None
     for sel in BTN_SELECTORS:
-        loc = page.locator(sel).first
-        if loc.count() > 0:
-            btn = loc
-            logger.debug("phone_btn in_dom sel=%r ext=%s", sel, external_id)
+        loc = page.locator(sel)
+        n = loc.count()
+        for i in range(n):
+            cand = loc.nth(i)
+            box = cand.bounding_box()
+            if box is not None and box["width"] > 0 and box["height"] > 0:
+                btn = cand
+                logger.debug("phone_btn visible sel=%r nth=%s ext=%s", sel, i, external_id)
+                break
+        if btn is not None:
             break
     if btn is None:
         raise PWTimeoutError(f"phone button not in DOM ext={external_id}")
 
     with page.expect_response(
-        lambda r: "phone/show" in r.url and r.status == 200,
+        lambda r: "phone/show" in r.url,
         timeout=tw,
     ) as resp_info:
         handle = btn.element_handle(timeout=tw)
         if handle is None:
             raise PWTimeoutError(f"phone button no element_handle ext={external_id}")
         page.evaluate("el => el.click()", handle)
-    return parse_phone_response(resp_info.value)
+    response = resp_info.value
+    if response.status == 204:
+        page.wait_for_timeout(1000)
+        text = btn.inner_text()
+        m = _PHONE_BTN_TEXT_RE.search(text)
+        if not m:
+            raise RuntimeError("phone_btn_digits_missing")
+        return m.group(0)
+    return parse_phone_response(response)
 
 
 @dataclass
