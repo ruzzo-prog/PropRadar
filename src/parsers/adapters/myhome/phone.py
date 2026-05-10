@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
@@ -54,41 +55,45 @@ def parse_phone_response(response: Response) -> str:
     return raw.strip()
 
 
+def _wait_for_phone_btn_and_recaptcha(page: Page, timeout_ms: int) -> object:
+    """Поллинг кнопки телефона + готовности reCAPTCHA; возвращает locator или бросает PWTimeoutError."""
+    import time as _time
+    deadline = _time.monotonic() + timeout_ms / 1000
+    while _time.monotonic() < deadline:
+        page.wait_for_timeout(2000)
+        for sel in BTN_SELECTORS:
+            loc = page.locator(sel)
+            for i in range(loc.count()):
+                cand = loc.nth(i)
+                box = cand.bounding_box()
+                if box and box["width"] > 0 and box["height"] > 0:
+                    rc_ready = page.evaluate("() => typeof window.grecaptcha !== 'undefined'")
+                    if rc_ready:
+                        return cand
+    raise PWTimeoutError("phone_btn_or_recaptcha_not_ready")
+
+
 def click_show_phone(page: Page, external_id: str) -> str:
     """Нажать «показать номер», дождаться ``phone/show``, вернуть номер."""
-    tw = 15_000
-    btn = None
-    for sel in BTN_SELECTORS:
-        loc = page.locator(sel)
-        n = loc.count()
-        for i in range(n):
-            cand = loc.nth(i)
-            box = cand.bounding_box()
-            if box is not None and box["width"] > 0 and box["height"] > 0:
-                btn = cand
-                logger.debug("phone_btn visible sel=%r nth=%s ext=%s", sel, i, external_id)
-                break
-        if btn is not None:
-            break
-    if btn is None:
-        raise PWTimeoutError(f"phone button not in DOM ext={external_id}")
+    tw = 30_000
+    btn = _wait_for_phone_btn_and_recaptcha(page, timeout_ms=TW_MS)
+    logger.debug("phone_btn ready ext=%s", external_id)
 
     with page.expect_response(
         lambda r: "phone/show" in r.url,
         timeout=tw,
     ) as resp_info:
-        handle = btn.element_handle(timeout=tw)
-        if handle is None:
-            raise PWTimeoutError(f"phone button no element_handle ext={external_id}")
-        page.evaluate("el => el.click()", handle)
+        btn.click(timeout=tw)
     response = resp_info.value
     if response.status == 204:
         page.wait_for_timeout(1000)
-        text = btn.inner_text()
-        m = _PHONE_BTN_TEXT_RE.search(text)
+        # Button text changed to the full number — search page body instead of stale locator
+        body_text = page.locator("body").inner_text(timeout=10_000)
+        # Phone may appear with spaces e.g. "+995 577 686 840"; try spaced pattern first
+        m = re.search(r"\+?995[\s\d]{9,14}", body_text) or _PHONE_BTN_TEXT_RE.search(body_text)
         if not m:
             raise RuntimeError("phone_btn_digits_missing")
-        return m.group(0)
+        return re.sub(r"\s+", "", m.group(0))
     return parse_phone_response(response)
 
 
@@ -124,6 +129,17 @@ class MyHomePhoneEnricher:
         storage = None
         if self._storage_state_path is not None and self._storage_state_path.exists():
             storage = json.loads(self._storage_state_path.read_text(encoding="utf-8"))
+        if storage:
+            tnet_token = next(
+                (c for c in storage.get("cookies", []) if c["name"] == "AccessToken"),
+                None,
+            )
+            if tnet_token:
+                mh_cookie = copy.deepcopy(tnet_token)
+                mh_cookie["domain"] = "www.myhome.ge"
+                mh_cookie["path"] = "/"
+                mh_cookie["sameSite"] = "None"
+                storage["cookies"].append(mh_cookie)
 
         app_settings = Settings()
         launch_proxy = None
@@ -135,9 +151,16 @@ class MyHomePhoneEnricher:
                 launch_proxy["password"] = app_settings.playwright_proxy_pass
 
         with sync_playwright() as pw:
+            _GOOGLE_BYPASS = (
+                "*.google.com,*.gstatic.com,*.googleapis.com,"
+                "*.recaptcha.net,recaptcha.google.com"
+            )
             launch_kw: dict = {
                 "headless": self._headless,
-                "args": ["--disable-blink-features=AutomationControlled"],
+                "args": [
+                    "--disable-blink-features=AutomationControlled",
+                    f"--proxy-bypass-list={_GOOGLE_BYPASS}",
+                ],
             }
             if launch_proxy is not None:
                 launch_kw["proxy"] = launch_proxy
@@ -169,12 +192,11 @@ class MyHomePhoneEnricher:
                 return f"no_lead_id:{lead.external_id}"
 
             url = listing_url(lead.external_id, locale=self._locale)
-            page.goto(url, wait_until="domcontentloaded", timeout=TW_MS)
+            page.goto(url, wait_until="commit", timeout=TW_MS)
             if "Just a moment" in page.title() or "Turnstile" in page.content():
                 logger.warning("cloudflare_block ext=%s", lead.external_id)
                 save_timeout_shot(page, lead)
                 return "CloudflareBlock"
-            page.wait_for_load_state("networkidle", timeout=TW_MS)
 
             dismiss_popup(page)
             page.wait_for_timeout(3000)
