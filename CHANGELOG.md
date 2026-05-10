@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`src/parsers/adapters/myhome/phone.py` — сеть по `phone/show` и парс телефона:** ожидание ответа по URL **`phone/show`** без ограничения **`status == 200`**; выбор видимой кнопки телефона — перебор **`nth(i)`** с проверкой **`bounding_box`**, без привязки к **`.first`**; для ответа **HTTP 204** — ожидание **1000 ms**, номер берётся из **`inner_text`** выбранной видимой кнопки, извлечение по **`\+?[0-9]{9,13}`**; для ответов с телом сохранена ветка **`parse_phone_response(response)`**. **Вне scope этого фикса:** прокси, **`user_agent`**, stealth, **`storage_state`**, навигация. **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-10).
+
 ### Removed
 
 - **SnapOtter / `snapotter.usluga-market.ru` (полный откат из репо):** решение человека — AI на CPU нестабилен; не-AI инструменты (resize/compress/convert) переносятся на **Python/Pillow**. Удалены сервис **`snapotter`** и том **`snapotter_data`** из **`docker/app/docker-compose.yml`**, **`docker/reverse-proxy/nginx/conf.d/snapotter.conf`**, монты **`SNAPOTTER_TLS_*`** в **`docker/reverse-proxy/docker-compose.yml`**, **`check_one`** snapotter и упоминания **`SNAPOTTER_TLS_*`** в **`00-tls-preflight.sh`**. Документация: **`docs/TLS_LETSENCRYPT.md`**, **`docker/reverse-proxy/README.md`**, **`CHANGELOG.md`**, **`docs/PropRadar_STATUS.md`**. **На сервере (человек):** остановить и удалить контейнер и volume данных SnapOtter; убрать **`SNAPOTTER_TLS_*`** из **`.env`**; **`docker compose --profile proxy up -d --force-recreate reverse-proxy`**. Сертификат LE для **`snapotter.usluga-market.ru`** на диске **оставить**.

@@ -2,11 +2,41 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-10 — MyHome phone: `phone/show` без фильтра 200, кнопка `nth`+`bounding_box`, ветка 204
+
+- **Цель:** снизить хрупкость шага после клика по видимому контролу телефона: корректно ждать сетевой ответ **`phone/show`**, выбирать реально видимую кнопку и различать **204** против ответов с телом для разбора.
+- **Реализация:** в **`src/parsers/adapters/myhome/phone.py`** — **`expect_response`** для URL **`phone/show`** **без** фильтра **`status == 200`**; кнопка — перебор **`nth(i)`** с **`bounding_box`** вместо **`.first`**; при статусе **204** — ожидание **1000 ms**, номер из **`inner_text`** выбранной видимой кнопки, шаблон **`\+?[0-9]{9,13}`**; при иных статусах с телом сохранено **`parse_phone_response(response)`**.
+- **Границы scope по коду:** только указанная логика **`phone/show`** / выбора видимого контроля / разбора ответа. **Не трогалось:** прокси, **`user_agent`**, stealth, **`storage_state`**, навигация карточки.
+- **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed**.
+- **Документация (этот проход):** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`** — по процессу репозитория.
+
+### Резюме для человека
+
+После деплоя в адаптере телефона myhome аккуратнее обрабатываются ответ **`phone/show`**, видимость кликабельной кнопки и особый случай **«пустое тело, 204»**: номер читают с уже показанной кнопки, основной парсер JSON не ломали.
+
+| Аспект | Было (упрощённо) | Стало |
+| ------ | ---------------- | ----- |
+| Ожидание **`phone/show`** | Фильтр **`status == 200`** | Ожидание по URL **без** фильтра **200** |
+| Кнопка телефона | **`.first`** | Перебор **`nth(i)`** + **`bounding_box`** |
+| **HTTP 204** | — | Пауза **1000 ms**, номер из **`inner_text`** видимой кнопки, **`\+?[0-9]{9,13}`** |
+| Иные ответы с телом | **`parse_phone_response(response)`** | Сохранено |
+
+| Показатель | Статус |
+| ---------- | ------ |
+| Код (**`phone.py`**, указанный scope) | ✅ по описанию релиза |
+| Scanner | ✅ PASS |
+| Целевые unit | 🧪 13 passed |
+| Документы этого шага | 📜 статус + changelog |
+
+Прогресс фикса (док-фиксация): `[▓▓▓▓▓▓▓▓▓▓] 100%`.
+
 ## 2026-05-10 — MyHome phone enricher: прокси Playwright, Windows UA, CloudflareBlock
 
 - **Цель:** снизить срабатывание **Cloudflare** на **www.myhome.ge** при обогащении **`phone`** в **`playwright-worker`** (трафик не с датацентрового egress при заданном прокси).
 - **Реализация:** **`src/config/settings.py`** — поля **`playwright_proxy_server`**, **`playwright_proxy_user`**, **`playwright_proxy_pass`** (**`PLAYWRIGHT_PROXY_*`**); **`src/parsers/adapters/myhome/phone.py`** — при заданном сервере **`proxy`** в **`chromium.launch`**, **`args`** с **`--disable-blink-features=AutomationControlled`**, фиксированный Windows Chrome **`user_agent`** в **`new_context`**; после **`page.goto`** ранний выход при признаках challenge (**`Just a moment`** в **`title`** или **`Turnstile`** в **`page.content()`**): **`cloudflare_block`**, **`save_timeout_shot`**, ошибка **`CloudflareBlock`** (без **`TimeoutError`** только из-за этого пути).
-- **Границы scope по коду релиза:** **`settings.py`**, **`phone.py`**; логика кнопки телефона, селекторы, **`TW_MS`**, **`storage_state`** — без изменений. Секреты прокси — только окружение (не коммит).
+- **Границы scope по коду релиза:** **`settings.py`**, **`phone.py`**; в рамках того коммита: логика кнопки телефона, селекторы, **`TW_MS`**, **`storage_state`** — без изменений. Секреты прокси — только окружение (не коммит).
+- **Актуализация позже тем же числом:** отдельная запись **выше** фиксирует правки только цепочки **`phone/show`**, **`nth(i)`** + **`bounding_box`**, ветку **HTTP 204** — без затрагивания прокси/**`user_agent`**/stealth/**`storage_state`**/навигации карточки.
 - **Проверка:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-10).
 - **Документация:** **`CHANGELOG.md`**, этот файл.
 - **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`**; деплой и smoke (**egress через прокси**, **myhome.ge** без капчи, приёмка телефона) — **человек**.
