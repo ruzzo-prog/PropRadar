@@ -2,6 +2,15 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-10 — MyHome phone enricher: прокси Playwright, Windows UA, CloudflareBlock
+
+- **Цель:** снизить срабатывание **Cloudflare** на **www.myhome.ge** при обогащении **`phone`** в **`playwright-worker`** (трафик не с датацентрового egress при заданном прокси).
+- **Реализация:** **`src/config/settings.py`** — поля **`playwright_proxy_server`**, **`playwright_proxy_user`**, **`playwright_proxy_pass`** (**`PLAYWRIGHT_PROXY_*`**); **`src/parsers/adapters/myhome/phone.py`** — при заданном сервере **`proxy`** в **`chromium.launch`**, **`args`** с **`--disable-blink-features=AutomationControlled`**, фиксированный Windows Chrome **`user_agent`** в **`new_context`**; после **`page.goto`** ранний выход при признаках challenge (**`Just a moment`** в **`title`** или **`Turnstile`** в **`page.content()`**): **`cloudflare_block`**, **`save_timeout_shot`**, ошибка **`CloudflareBlock`** (без **`TimeoutError`** только из-за этого пути).
+- **Границы scope по коду релиза:** **`settings.py`**, **`phone.py`**; логика кнопки телефона, селекторы, **`TW_MS`**, **`storage_state`** — без изменений. Секреты прокси — только окружение (не коммит).
+- **Проверка:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-10).
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Следующий гейт по канону:** **`@process-guard` Diff Check** → **`@release-check`**; деплой и smoke (**egress через прокси**, **myhome.ge** без капчи, приёмка телефона) — **человек**.
+
 ## 2026-05-10 — Документация: аудит runbook (enricher, worker, n8n, TLS)
 
 - **Сделано:** синхронизированы **`README.md`** (оглавление, два пути обогащения CLI vs `playwright-worker`, фактические ключи JSON **`run_myhome_enricher`**, превью/PDF); **`docs/AI_GOVERNANCE.md`** (порт Metabase **3031**, метаданные); **`docs/INGRESS_ARCHITECTURE.md`** (фазы **`detail`/`phone`/`pdf`**, ссылки **`docs/`**); **`docs/n8n_myhome_workflow.md`**, **`docs/playwright_worker.md`**, **`docs/phone_extraction.md`** (операционная пауза телефона до **мобильного прокси GE IP**, stealth); **`docs/API.md`**, **`docs/DEPLOY_SERVER.md`**, **`docs/METABASE_SETUP.md`**, **`docs/TLS_LETSENCRYPT.md`** (структура/порты). Содержимое **`docs/myhome_login.md`** не менялось.
