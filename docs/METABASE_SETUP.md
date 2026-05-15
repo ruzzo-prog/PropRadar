@@ -78,7 +78,7 @@ docker compose --profile tools up -d metabase
 
 ## Дашборд и SQL
 
-Файл **`metabase/propradar_dashboard.json`** — валидный JSON с **семью** карточками и готовым **SQL под PostgreSQL 15**. Запросы в репозитории ориентированы на проекцию **`leads_client`**: сначала **`007_create_leads_client_table.sql`**, затем **`008_recreate_leads_client_v2.sql`**, затем **`009_add_city_name_to_leads_client.sql`** (контракт после 009: **PK `(source, external_id)`**, **28** столбцов, включая **`city_name`** и **`owner_name`**, без **`lead_id`** и служебных полей старой проекции). Поле **`schema_reference`** в JSON фиксирует актуальный контракт и правило дат **`COALESCE(published_at, synced_at)`**.
+Файл **`metabase/propradar_dashboard.json`** — валидный JSON с **одиннадцатью** карточками и готовым **SQL под PostgreSQL 15**. Запросы в репозитории ориентированы на проекцию **`leads_client`**: сначала **`007_create_leads_client_table.sql`**, затем **`008_recreate_leads_client_v2.sql`**, затем **`009_add_city_name_to_leads_client.sql`** (контракт после 009: **PK `(source, external_id)`**, **28** столбцов, включая **`city_name`** и **`owner_name`**, без **`lead_id`** и служебных полей старой проекции). Поле **`schema_reference`** в JSON фиксирует актуальный контракт и правило дат **`COALESCE(published_at, synced_at)`**.
 
 В Community/OSS обычно **нет** одного пункта меню «Импорт этого JSON целиком». Рекомендуемый порядок:
 
@@ -117,9 +117,12 @@ docker compose --profile tools up -d metabase
 1. Задайте в окружении (см. корневой `.env.example`): **`METABASE_URL`**, **`METABASE_USER`**, **`METABASE_PASSWORD`**; при необходимости **`LEADS_DATABASE_NAME`** (по умолчанию совпадает с именем подключения в Metabase).
 2. Из корня репозитория с установленными зависимостями (`pip install -e .`):  
    `python scripts/setup_metabase_dashboard.py`
-3. Повторный запуск при уже существующем дашборде с этим именем завершится с **предупреждением** и **кодом 0** (дубль не создаётся).
+3. Повторный запуск при уже существующем дашборде **«PropRadar — Лиды»** **обновляет** через API только карточки **position 7** («Последние лиды», PUT SQL) и **position 11** («Карта лидов», создать при отсутствии). Карточки **1–6** и **8–10** не меняются.
+4. Если дашборда ещё нет — создаются все карточки из bundle (**1–11**) и дашборд с раскладкой.
 
 Карточки и SQL берутся из **`metabase/propradar_dashboard.json`**. Версия Metabase должна поддерживать используемые эндпоинты (`/api/session`, `/api/card`, `/api/dashboard`, …).
+
+**Карта (position 11):** native SQL к таблице **`leads`**, поля **`latitude`** / **`longitude`**, подписи район / комнаты / цена GEL; визуализация **`map`** (pin).
 
 ### Соответствие `title_ru` скрипту автосборки
 
@@ -130,7 +133,9 @@ docker compose --profile tools up -d metabase
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.
 - **http://localhost:3031** открывается.
 - База **leads** подключена, тест соединения **успешен**.
-- На дашборде отображаются **семь** карточек (по bundle); запросы выполняются без ошибки PostgreSQL (ожидаются миграции **007**, **008** и **009** для актуального контракта **`leads_client`**).
+- На дашборде отображаются **одиннадцать** карточек (по bundle); запросы выполняются без ошибки PostgreSQL (ожидаются миграции **007**, **008** и **009** для актуального контракта **`leads_client`**).
+- **«Последние лиды»:** колонки ID, адрес, район, микрорайон, телефон, цены, площадь, **комнаты**.
+- **«Карта лидов»:** точки myhome с координатами на карте.
 
 ## Остановка (опционально)
 

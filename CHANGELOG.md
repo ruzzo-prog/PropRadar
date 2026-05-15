@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Metabase:** карточка **«Карта лидов»** (position 11, map по **`leads.geo_lat`/`geo_lng`**); **`setup_metabase_dashboard.py`** — идемпотентный **PUT** карточки 7 и upsert карточки 11 при существующем дашборде; обновлён SQL **«Последние лиды»** (колонка **rooms**, укороченный набор полей).
+
 ### Fixed
 
 - **P1 myhome mapping (rooms, images, JSON snapshot):** **`parse_list_item`** — **`list.room`** → **`leads.rooms`**; **`statement_snapshot.py`** — снимок **`myhome_statement_json`**: без **`large`** в **`images`** (только **`thumb`**/**`blur`**, **`is_main`** первым), удаление 15 шумных ключей, **`comment`** без HTML; только **новые** записи. **Gap:** **`room_type_id` → rooms** — вне scope. **Проверки:** **`pytest tests/unit/`** — PASS.

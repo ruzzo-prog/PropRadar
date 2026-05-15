@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-15 — Metabase: «Последние лиды» + карта лидов
+
+- **Bundle:** `metabase/propradar_dashboard.json` — position **7** (таблица с **rooms**), position **11** (**Карта лидов**, **`leads`**, map).
+- **Деплой:** `python scripts/setup_metabase_dashboard.py` (`METABASE_*` в env) — при существующем дашборде обновляет только карточки **7** и **11**.
+- **Проверка:** UI **http://localhost:3031** — таблица и карта на дашборде **«PropRadar — Лиды»**.
+- **Документация:** `docs/METABASE_SETUP.md`, `CHANGELOG.md`.
+
 ## 2026-05-15 — P1 myhome: rooms, images snapshot, очистка JSONB
 
 - **Фикс 1:** **`parse_list_item`** (`parser.py`) — **`list.room`** → **`leads.rooms`** при ingest списка.
