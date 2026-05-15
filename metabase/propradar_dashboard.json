@@ -51,10 +51,10 @@
     {
       "position": 7,
       "title_ru": "Последние лиды",
-      "description_ru": "Таблица: ID (external_id), источник (source), адрес и район, город (city_name), имя владельца (owner_name), контакт, цены, площадь, комнаты (rooms), этаж/этажность, комментарий (comment). Время — COALESCE(published_at, synced_at). Сортировка по времени убыв.",
+      "description_ru": "Таблица: ID, адрес, район, микрорайон, телефон, цены USD/GEL, площадь, комнаты. Сортировка по COALESCE(published_at, synced_at) убыв.",
       "display": "table",
       "operator_instructions_ru": "Регулируемая высота и прокрутка таблицы задаются в интерфейсе Metabase, а не в этом JSON: на дашборде растяните карточку по высоте за край; в настройках вопроса/визуализации таблицы проверьте опции отображения (зависят от версии Metabase, OSS может ограничивать «внутренний» scroll). Для фиксированной области с overflow используйте визуализацию с поддержкой scroll при вашей сборке или ограничивайте LIMIT в SQL.",
-      "sql": "SELECT external_id AS \"ID\",\n       source AS \"Источник\",\n       status AS \"Статус\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       city_name AS \"Город\",\n       owner_name AS \"Имя владельца\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты\",\n       floor AS \"Этаж\",\n       total_floors AS \"Этажность\",\n       LEFT(comment, 200) AS \"Комментарий\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
+      "sql": "SELECT external_id AS \"ID\",\n       address AS \"Адрес\",\n       district_name AS \"Район\",\n       urban_name AS \"Микрорайон\",\n       phone AS \"Телефон\",\n       price_usd AS \"Цена USD\",\n       price_gel AS \"Цена GEL\",\n       area_m2 AS \"Площадь (м²)\",\n       rooms AS \"Комнаты\"\nFROM leads_client\nORDER BY COALESCE(published_at, synced_at) DESC NULLS LAST\nLIMIT 20;"
     },
     {
       "position": 8,
@@ -76,6 +76,13 @@
       "description_ru": "MAX(updated_at) по отклонённым лидам myhome (прокси «последней пометки rejected»); не журнал n8n. При отсутствии строк может быть пусто.",
       "display": "scalar",
       "sql": "SELECT MAX(updated_at) AS last_sync\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected';"
+    },
+    {
+      "position": 11,
+      "title_ru": "Карта лидов",
+      "description_ru": "Точки на карте по координатам geo_lat/geo_lng. Подписи: район, комнаты, цена GEL.",
+      "display": "map",
+      "sql": "SELECT geo_lat AS latitude,\n       geo_lng AS longitude,\n       district AS \"Район\",\n       rooms AS \"Комнаты\",\n       price_gel AS \"Цена GEL\"\nFROM leads\nWHERE geo_lat IS NOT NULL\n  AND geo_lng IS NOT NULL\n  AND source = 'myhome'\nORDER BY created_at DESC\nLIMIT 500;"
     }
   ]
 }

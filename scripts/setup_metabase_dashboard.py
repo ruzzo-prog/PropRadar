@@ -6,7 +6,11 @@
   METABASE_PASSWORD  — пароль (не логировать)
   LEADS_DATABASE_NAME — опционально, по умолчанию «PropRadar Leads»
 
-Идемпотентность: если дашборд с таким именем уже есть — WARNING и exit 0.
+Режимы:
+  - Дашборда нет: создаются все карточки из bundle (позиции 1–11) и дашборд.
+  - Дашборд есть: идемпотентно обновляются только карточки position 7 и 11
+    (PUT /api/card/:id или создание + добавление на дашборд).
+
 SQL и типы карточек читаются из metabase/propradar_dashboard.json.
 """
 
@@ -21,20 +25,28 @@ from typing import Any
 import httpx
 
 DASHBOARD_NAME = "PropRadar — Лиды"
+_MANAGED_POSITIONS = frozenset({7, 11})
 _LOGGER = logging.getLogger("setup_metabase_dashboard")
 
 # Сетка дашборда (row, col, size_x, size_y), 12 колонок; ключ — position из propradar_dashboard.json
 _LAYOUT_BY_POSITION: dict[int, tuple[int, int, int, int]] = {
-    1: (3, 0, 6, 4),  # Воронка лидов (bar)
-    2: (0, 0, 4, 3),  # Лиды сегодня
-    3: (0, 4, 4, 3),  # Новых за 7 дней
-    4: (0, 8, 4, 3),  # Средняя цена USD
-    5: (1, 0, 4, 3),  # Средняя цена GEL
-    6: (3, 6, 6, 4),  # Лиды по дням (line)
-    7: (7, 0, 12, 8),  # Последние лиды (table)
-    8: (15, 0, 4, 3),  # Исчезнувшие (scalar)
-    9: (16, 0, 12, 4),  # Причины отклонения (bar)
-    10: (15, 4, 4, 3),  # Последний запуск синхронизации (scalar)
+    1: (3, 0, 6, 4),
+    2: (0, 0, 4, 3),
+    3: (0, 4, 4, 3),
+    4: (0, 8, 4, 3),
+    5: (1, 0, 4, 3),
+    6: (3, 6, 6, 4),
+    7: (7, 0, 12, 8),
+    8: (15, 0, 4, 3),
+    9: (16, 0, 12, 4),
+    10: (15, 4, 4, 3),
+    11: (20, 0, 12, 10),
+}
+
+_MAP_VISUALIZATION_SETTINGS: dict[str, Any] = {
+    "map.type": "pin",
+    "map.latitude_column": "latitude",
+    "map.longitude_column": "longitude",
 }
 
 
@@ -46,6 +58,37 @@ def _load_bundle() -> dict[str, Any]:
     path = _repo_root() / "metabase" / "propradar_dashboard.json"
     with path.open(encoding="utf-8") as fh:
         return json.load(fh)
+
+
+def _card_spec_by_position(bundle: dict[str, Any], position: int) -> dict[str, Any]:
+    for spec in bundle.get("cards", []):
+        if not isinstance(spec, dict):
+            continue
+        try:
+            pos = int(spec.get("position", 0))
+        except (TypeError, ValueError):
+            continue
+        if pos == position:
+            return spec
+    msg = f"В bundle нет карточки position={position}"
+    raise KeyError(msg)
+
+
+def _sorted_bundle_cards(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = bundle.get("cards", [])
+    if not isinstance(raw, list):
+        return []
+    items: list[tuple[int, dict[str, Any]]] = []
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        try:
+            pos = int(c.get("position", 0))
+        except (TypeError, ValueError):
+            continue
+        items.append((pos, c))
+    items.sort(key=lambda t: t[0])
+    return [c for _, c in items]
 
 
 def _list_dashboards(client: httpx.Client) -> list[dict[str, Any]]:
@@ -110,21 +153,31 @@ def _find_database_id(client: httpx.Client, name: str) -> int:
     raise RuntimeError(msg)
 
 
-def _sorted_bundle_cards(bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    raw = bundle.get("cards", [])
-    if not isinstance(raw, list):
-        return []
-    items: list[tuple[int, dict[str, Any]]] = []
-    for c in raw:
-        if not isinstance(c, dict):
-            continue
-        try:
-            pos = int(c.get("position", 0))
-        except (TypeError, ValueError):
-            continue
-        items.append((pos, c))
-    items.sort(key=lambda t: t[0])
-    return [c for _, c in items]
+def _visualization_settings_for_display(display: str) -> dict[str, Any]:
+    if display == "map":
+        return dict(_MAP_VISUALIZATION_SETTINGS)
+    return {}
+
+
+def _native_card_body(
+    *,
+    database_id: int,
+    name: str,
+    description: str,
+    sql_text: str,
+    display: str,
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": description,
+        "dataset_query": {
+            "type": "native",
+            "native": {"query": sql_text, "template-tags": {}},
+            "database": database_id,
+        },
+        "display": display,
+        "visualization_settings": _visualization_settings_for_display(display),
+    }
 
 
 def _create_native_card(
@@ -136,17 +189,13 @@ def _create_native_card(
     sql_text: str,
     display: str,
 ) -> int:
-    body: dict[str, Any] = {
-        "name": name,
-        "description": description,
-        "dataset_query": {
-            "type": "native",
-            "native": {"query": sql_text, "template-tags": {}},
-            "database": database_id,
-        },
-        "display": display,
-        "visualization_settings": {},
-    }
+    body = _native_card_body(
+        database_id=database_id,
+        name=name,
+        description=description,
+        sql_text=sql_text,
+        display=display,
+    )
     r = client.post("/api/card", json=body)
     if r.status_code >= 400:
         _LOGGER.error("Metabase отклонил создание карточки «%s»: %s", name, r.status_code)
@@ -159,29 +208,103 @@ def _create_native_card(
     return cid
 
 
-def _put_dashboard_dashcards(
+def _update_native_card(
     client: httpx.Client,
-    dashboard_id: int,
-    layout: list[tuple[int, int, int, int, int]],
+    card_id: int,
+    *,
+    database_id: int,
+    name: str,
+    description: str,
+    sql_text: str,
+    display: str,
 ) -> None:
-    """Metabase 0.50+: карточки задаются через PUT /api/dashboard/:id (поле dashcards)."""
+    gr = client.get(f"/api/card/{card_id}")
+    if gr.status_code >= 400:
+        raise RuntimeError(f"GET /api/card/{card_id}: {gr.text[:300]}")
+    card = gr.json()
+    if not isinstance(card, dict):
+        raise RuntimeError("Ответ GET /api/card не объект")
+    card.update(
+        _native_card_body(
+            database_id=database_id,
+            name=name,
+            description=description,
+            sql_text=sql_text,
+            display=display,
+        ),
+    )
+    pr = client.put(f"/api/card/{card_id}", json=card)
+    if pr.status_code >= 400:
+        _LOGGER.error("PUT /api/card/%s: %s", card_id, pr.text[:500])
+        raise RuntimeError(f"Не удалось обновить карточку «{name}»")
+
+
+def _get_dashboard(client: httpx.Client, dashboard_id: int) -> dict[str, Any]:
     gr = client.get(f"/api/dashboard/{dashboard_id}")
     gr.raise_for_status()
     dash = gr.json()
     if not isinstance(dash, dict):
         raise RuntimeError("Ответ GET /api/dashboard не объект JSON")
+    return dash
+
+
+def _dashcards_list(dash: dict[str, Any]) -> list[dict[str, Any]]:
     existing = dash.get("dashcards")
-    if not isinstance(existing, list):
-        oc = dash.get("ordered_cards")
-        existing = oc if isinstance(oc, list) else []
-    tab_id: int | None = None
+    if isinstance(existing, list):
+        return existing
+    oc = dash.get("ordered_cards")
+    return oc if isinstance(oc, list) else []
+
+
+def _dashboard_tab_id(dash: dict[str, Any]) -> int | None:
     tabs = dash.get("tabs")
     if isinstance(tabs, list) and tabs and isinstance(tabs[0], dict):
         raw = tabs[0].get("id")
         if raw is not None:
-            tab_id = int(raw)
-    new_cards: list[dict[str, Any]] = []
-    nid = -1
+            return int(raw)
+    return None
+
+
+def _find_card_id_on_dashboard_by_title(
+    client: httpx.Client,
+    dashboard_id: int,
+    title: str,
+) -> int | None:
+    dash = _get_dashboard(client, dashboard_id)
+    for dc in _dashcards_list(dash):
+        if not isinstance(dc, dict):
+            continue
+        raw_cid = dc.get("card_id")
+        if raw_cid is None:
+            continue
+        cid = int(raw_cid)
+        cr = client.get(f"/api/card/{cid}")
+        if cr.status_code >= 400:
+            continue
+        card = cr.json()
+        if isinstance(card, dict) and card.get("name") == title:
+            return cid
+    return None
+
+
+def _next_dashcard_id(dashcards: list[dict[str, Any]]) -> int:
+    ids = [int(dc["id"]) for dc in dashcards if isinstance(dc, dict) and isinstance(dc.get("id"), int)]
+    return (min(ids) - 1) if ids else -1
+
+
+def _put_dashboard_dashcards(
+    client: httpx.Client,
+    dashboard_id: int,
+    layout: list[tuple[int, int, int, int, int]],
+    *,
+    replace: bool = False,
+) -> None:
+    """Metabase 0.50+: карточки задаются через PUT /api/dashboard/:id (поле dashcards)."""
+    dash = _get_dashboard(client, dashboard_id)
+    existing = _dashcards_list(dash)
+    tab_id = _dashboard_tab_id(dash)
+    base = [] if replace else list(existing)
+    nid = _next_dashcard_id(base)
     for card_id, row, col, sx, sy in layout:
         dc: dict[str, Any] = {
             "id": nid,
@@ -196,13 +319,123 @@ def _put_dashboard_dashcards(
         }
         if tab_id is not None:
             dc["dashboard_tab_id"] = tab_id
-        new_cards.append(dc)
+        base.append(dc)
         nid -= 1
-    dash["dashcards"] = existing + new_cards
+    dash["dashcards"] = base
     pr = client.put(f"/api/dashboard/{dashboard_id}", json=dash)
     if pr.status_code >= 400:
         _LOGGER.error("PUT /api/dashboard/%s: %s", dashboard_id, pr.text[:500])
         raise RuntimeError("Не удалось обновить дашборд (dashcards)")
+
+
+def _upsert_managed_card(
+    client: httpx.Client,
+    *,
+    dashboard_id: int,
+    database_id: int,
+    spec: dict[str, Any],
+) -> None:
+    pos = int(spec["position"])
+    title = str(spec.get("title_ru", f"position_{pos}"))
+    sql_text = str(spec["sql"])
+    display = str(spec.get("display", "table"))
+    desc = str(spec.get("description_ru", ""))
+
+    card_id = _find_card_id_on_dashboard_by_title(client, dashboard_id, title)
+    if card_id is not None:
+        _LOGGER.info("Обновление карточки «%s» id=%s (PUT)", title, card_id)
+        _update_native_card(
+            client,
+            card_id,
+            database_id=database_id,
+            name=title,
+            description=desc,
+            sql_text=sql_text,
+            display=display,
+        )
+        return
+
+    _LOGGER.info("Создание карточки «%s» (position=%s)", title, pos)
+    card_id = _create_native_card(
+        client,
+        database_id=database_id,
+        name=title,
+        description=desc,
+        sql_text=sql_text,
+        display=display,
+    )
+    geom = _LAYOUT_BY_POSITION.get(pos)
+    if geom is None:
+        raise RuntimeError(f"Нет раскладки для карточки position={pos}")
+    row, col, sx, sy = geom
+    _put_dashboard_dashcards(client, dashboard_id, [(card_id, row, col, sx, sy)])
+
+
+def _sync_existing_dashboard(
+    client: httpx.Client,
+    dashboard_id: int,
+    bundle: dict[str, Any],
+    database_id: int,
+) -> None:
+    _LOGGER.info(
+        "Дашборд «%s» уже существует (id=%s). Синхронизация карточек %s.",
+        DASHBOARD_NAME,
+        dashboard_id,
+        sorted(_MANAGED_POSITIONS),
+    )
+    for pos in sorted(_MANAGED_POSITIONS):
+        spec = _card_spec_by_position(bundle, pos)
+        _upsert_managed_card(
+            client,
+            dashboard_id=dashboard_id,
+            database_id=database_id,
+            spec=spec,
+        )
+
+
+def _create_full_dashboard(
+    client: httpx.Client,
+    bundle: dict[str, Any],
+    database_id: int,
+) -> int:
+    card_specs = _sorted_bundle_cards(bundle)
+    _LOGGER.info("В bundle загружено карточек: %s", len(card_specs))
+
+    card_ids_by_position: dict[int, int] = {}
+    for spec in card_specs:
+        pos = int(spec["position"])
+        title = str(spec.get("title_ru", f"position_{pos}"))
+        _LOGGER.info("Processing card %s %s", pos, title)
+        cid = _create_native_card(
+            client,
+            database_id=database_id,
+            name=title,
+            description=str(spec.get("description_ru", "")),
+            sql_text=str(spec["sql"]),
+            display=str(spec.get("display", "table")),
+        )
+        card_ids_by_position[pos] = cid
+        _LOGGER.info("Создана карточка «%s» (position=%s) id=%s", title, pos, cid)
+
+    dr = client.post("/api/dashboard", json={"name": DASHBOARD_NAME, "parameters": []})
+    if dr.status_code >= 400:
+        _LOGGER.error("Создание дашборда: %s", dr.text[:500])
+        raise RuntimeError("POST /api/dashboard failed")
+    dashboard_id = dr.json().get("id")
+    if not isinstance(dashboard_id, int):
+        raise RuntimeError("Ответ POST /api/dashboard без id")
+    _LOGGER.info("Создан дашборд «%s» id=%s", DASHBOARD_NAME, dashboard_id)
+
+    layout_payload: list[tuple[int, int, int, int, int]] = []
+    for pos in sorted(card_ids_by_position.keys()):
+        geom = _LAYOUT_BY_POSITION.get(pos)
+        if geom is None:
+            raise RuntimeError(f"Нет раскладки для карточки position={pos}")
+        row, col, sx, sy = geom
+        layout_payload.append((card_ids_by_position[pos], row, col, sx, sy))
+    _put_dashboard_dashcards(client, dashboard_id, layout_payload, replace=True)
+    _LOGGER.info("На дашборд добавлено карточек: %s", len(layout_payload))
+    return dashboard_id
 
 
 def main() -> int:
@@ -229,66 +462,14 @@ def main() -> int:
             return 1
         client.headers["X-Metabase-Session"] = str(token)
 
-        existing = _find_dashboard_id(client, DASHBOARD_NAME)
-        if existing is not None:
-            _LOGGER.warning(
-                "Дашборд «%s» уже существует (id=%s). Повторное создание пропущено.",
-                DASHBOARD_NAME,
-                existing,
-            )
-            return 0
-
         database_id = _find_database_id(client, db_name)
         _LOGGER.info("Используется база Metabase id=%s name=%s", database_id, db_name)
 
-        card_specs = _sorted_bundle_cards(bundle)
-        _LOGGER.info("В bundle загружено карточек: %s", len(card_specs))
-
-        card_ids_by_position: dict[int, int] = {}
-        for spec in card_specs:
-            try:
-                pos = int(spec["position"])
-            except (KeyError, TypeError, ValueError) as exc:
-                _LOGGER.error("Карточка без корректного position: %s", exc)
-                raise RuntimeError("bundle: невалидное поле position") from exc
-            title = str(spec.get("title_ru", f"position_{pos}"))
-            _LOGGER.info("Processing card %s %s", pos, title)
-            sql_text = str(spec["sql"])
-            display = str(spec.get("display", "table"))
-            desc = str(spec.get("description_ru", ""))
-            cid = _create_native_card(
-                client,
-                database_id=database_id,
-                name=title,
-                description=desc,
-                sql_text=sql_text,
-                display=display,
-            )
-            card_ids_by_position[pos] = cid
-            _LOGGER.info("Создана карточка «%s» (position=%s) id=%s", title, pos, cid)
-
-        dash_body = {"name": DASHBOARD_NAME, "parameters": []}
-        dr = client.post("/api/dashboard", json=dash_body)
-        if dr.status_code >= 400:
-            _LOGGER.error("Создание дашборда: %s", dr.text[:500])
-            return 1
-        dashboard_id = dr.json().get("id")
-        if not isinstance(dashboard_id, int):
-            _LOGGER.error("Ответ POST /api/dashboard без id")
-            return 1
-        _LOGGER.info("Создан дашборд «%s» id=%s", DASHBOARD_NAME, dashboard_id)
-
-        layout_payload: list[tuple[int, int, int, int, int]] = []
-        for pos in sorted(card_ids_by_position.keys()):
-            geom = _LAYOUT_BY_POSITION.get(pos)
-            if geom is None:
-                _LOGGER.error("Нет layout для position=%s — добавьте в _LAYOUT_BY_POSITION", pos)
-                raise RuntimeError(f"Нет раскладки для карточки position={pos}")
-            row, col, sx, sy = geom
-            cid = card_ids_by_position[pos]
-            layout_payload.append((cid, row, col, sx, sy))
-        _put_dashboard_dashcards(client, dashboard_id, layout_payload)
-        _LOGGER.info("На дашборд добавлено карточек: %s", len(layout_payload))
+        existing = _find_dashboard_id(client, DASHBOARD_NAME)
+        if existing is not None:
+            _sync_existing_dashboard(client, existing, bundle, database_id)
+        else:
+            _create_full_dashboard(client, bundle, database_id)
 
     _LOGGER.info("Готово. Откройте Metabase и проверьте дашборд «%s».", DASHBOARD_NAME)
     return 0
