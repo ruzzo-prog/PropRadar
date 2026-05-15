@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-15 — phone_http: параллелизм 5 потоков (claim 1 / задача)
+
+- **Реализация:** `phone_http.py` — `enrich_batch` не делает один `claim(limit=N)`; пул **`MYHOME_PHONE_HTTP_WORKERS`** (default **5**), на задачу **`claim(1)`** + изолированный enrich; лог с **`thread=`**.
+- **Worker:** `_job_lock` сохранён (один job на контейнер); параллелизм только внутри HTTP enricher.
+- **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — PASS (в т.ч. concurrent).
+- **Smoke / деплой:** rebuild **`playwright-worker`**, в `.env` **`MYHOME_PHONE_HTTP_WORKERS=5`** — **человек**.
+
 ## 2026-05-15 — Metabase: «Последние лиды» + карта лидов
 
 - **Bundle:** `metabase/propradar_dashboard.json` — position **7** (таблица с **rooms**), position **11** (**Карта лидов**, **`leads`**, map).

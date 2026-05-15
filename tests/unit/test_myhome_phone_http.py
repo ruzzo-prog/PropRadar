@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uuid import UUID, uuid4
@@ -437,6 +439,85 @@ def test_two_captcha_init_failure_closes_both_httpx_clients() -> None:
             client_kw={"timeout": 60.0},
         )
     assert closed == 2
+
+
+def test_enrich_batch_claim_limit_one_per_slot() -> None:
+    repo = MagicMock(spec=LeadRepository)
+    repo.claim_pending_phone_enrichment.return_value = [
+        Lead(
+            id=uuid4(),
+            source="myhome",
+            external_id="1",
+            status=LeadStatus.NEW,
+            score=0,
+            source_listing_uuid=uuid4(),
+        ),
+    ]
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url="https://api-statements.tnet.ge",
+        session_path=None,
+        twocaptcha_api_key="key",
+        recaptcha_site_key="site",
+        max_workers=5,
+    )
+    with (
+        patch(
+            "parsers.adapters.myhome.phone_http.load_access_token",
+            return_value="jwt",
+        ),
+        patch.object(enricher, "_enrich_one_isolated", return_value=None) as enrich_mock,
+    ):
+        report = enricher.enrich_batch("myhome", limit=5)
+    assert report.enriched == 5
+    assert repo.claim_pending_phone_enrichment.call_count == 5
+    for call in repo.claim_pending_phone_enrichment.call_args_list:
+        assert call.kwargs.get("limit") == 1
+
+
+def test_enrich_batch_runs_up_to_max_workers_concurrently() -> None:
+    lock = threading.Lock()
+    in_flight = 0
+    peak = 0
+
+    def _track_enrich(*_a, **_k):
+        nonlocal in_flight, peak
+        with lock:
+            in_flight += 1
+            peak = max(peak, in_flight)
+        time.sleep(0.08)
+        with lock:
+            in_flight -= 1
+        return None
+
+    lead = Lead(
+        id=uuid4(),
+        source="myhome",
+        external_id="p",
+        status=LeadStatus.NEW,
+        score=0,
+        source_listing_uuid=uuid4(),
+    )
+    repo = MagicMock(spec=LeadRepository)
+    repo.claim_pending_phone_enrichment.return_value = [lead]
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url="https://api-statements.tnet.ge",
+        session_path=None,
+        twocaptcha_api_key="key",
+        recaptcha_site_key="site",
+        max_workers=5,
+    )
+    with (
+        patch(
+            "parsers.adapters.myhome.phone_http.load_access_token",
+            return_value="jwt",
+        ),
+        patch.object(enricher, "_enrich_one_isolated", side_effect=_track_enrich),
+    ):
+        report = enricher.enrich_batch("myhome", limit=5)
+    assert report.enriched == 5
+    assert peak >= 5
 
 
 def test_increment_retry_on_phone_show_error() -> None:

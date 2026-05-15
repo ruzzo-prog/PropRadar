@@ -77,6 +77,7 @@ def _run_myhome_phone_http(
             "phone_http_failed": 0,
             "phone_http_errors": ["twocaptcha_api_key_missing"],
         }
+    # Параллелизм phone HTTP — внутри enricher (claim 1 лид / задача пула); _job_lock — один job на контейнер.
     enricher = MyHomePhoneHttpEnricher(
         repo,
         base_url=str(settings.myhome_api_base_url),

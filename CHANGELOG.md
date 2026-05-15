@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **phone_http P1 — 5 параллельных потоков:** `enrich_batch` — до `limit` задач в `ThreadPoolExecutor`, каждая **`claim_pending_phone_enrichment(limit=1)`** → 2captcha → phone/show; лог **`phone_http_ok … thread=… latency_ms=…`**; `MYHOME_PHONE_HTTP_WORKERS` (default 5). **`_job_lock`** в worker без изменений.
+
 ### Added
 
 - **Metabase:** карточка **«Карта лидов»** (position 11, map по **`leads.geo_lat`/`geo_lng`**); **`setup_metabase_dashboard.py`** — идемпотентный **PUT** карточки 7 и upsert карточки 11 при существующем дашборде; обновлён SQL **«Последние лиды»** (колонка **rooms**, укороченный набор полей).

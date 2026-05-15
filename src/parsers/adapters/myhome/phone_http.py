@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -328,9 +329,50 @@ class MyHomePhoneHttpEnricher:
                 myhome_client.close()
 
     def enrich_batch(self, source: str, *, limit: int) -> MyHomePhoneHttpEnrichReport:
-        """Claim из БД и обработка батча."""
-        leads = self._repository.claim_pending_phone_enrichment(source, limit=limit)
-        return self.enrich_leads(leads, source=source)
+        """Параллельный батч: до ``limit`` задач, каждая делает ``claim(limit=1)`` и enrich."""
+        report = MyHomePhoneHttpEnrichReport()
+        slots = max(1, min(limit, 500))
+        if slots <= 0:
+            return report
+
+        try:
+            access_token = load_access_token(self._session_path)
+        except PhoneShowError as exc:
+            report.failed = slots
+            report.errors.append(str(exc))
+            return report
+
+        client_kw = httpx_client_kwargs_from_settings()
+
+        def _claim_and_enrich_one() -> tuple[bool, str | None]:
+            leads = self._repository.claim_pending_phone_enrichment(source, limit=1)
+            if not leads:
+                return False, None
+            err = self._enrich_one_isolated(
+                leads[0],
+                access_token=access_token,
+                source=source,
+                client_kw=client_kw,
+            )
+            return True, err
+
+        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+            futures = [pool.submit(_claim_and_enrich_one) for _ in range(slots)]
+            for fut in as_completed(futures):
+                try:
+                    claimed, err = fut.result()
+                except Exception as exc:  # noqa: BLE001
+                    report.failed += 1
+                    report.errors.append(f"worker:{type(exc).__name__}")
+                    continue
+                if not claimed:
+                    continue
+                if err is None:
+                    report.enriched += 1
+                else:
+                    report.failed += 1
+                    report.errors.append(err)
+        return report
 
     def _record_retry(self, lead: Lead, source: str, err: str) -> str:
         if lead.id is None:
@@ -377,7 +419,12 @@ class MyHomePhoneHttpEnricher:
             merged = lead.model_copy(update={"phone": phone})
             self._repository.update_enriched_fields(merged)
             latency_ms = int((time.monotonic() - started) * 1000)
-            logger.info("phone_http_ok ext=%s latency_ms=%s", lead.external_id, latency_ms)
+            logger.info(
+                "phone_http_ok ext=%s thread=%s latency_ms=%s",
+                lead.external_id,
+                threading.get_ident(),
+                latency_ms,
+            )
             return None
         except PhoneShowError as exc:
             logger.warning(
