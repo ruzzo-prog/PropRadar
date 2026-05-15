@@ -44,7 +44,7 @@ detail.statement.hidden,myhome_statement_json,mixed,true,False
 detail.statement.hot_water_type,myhome_statement_json,mixed,true,None
 detail.statement.hot_water_type_id,myhome_statement_json,mixed,true,None
 detail.statement.id,external_id,scalar_or_derived,true,24619471
-detail.statement.images,myhome_statement_json.images,json_array,true,list
+detail.statement.images,myhome_statement_json.images,json_array_trimmed,true,list
 detail.statement.is_active,myhome_statement_json,mixed,true,True
 detail.statement.is_old,myhome_statement_json,mixed,true,False
 detail.statement.is_owner,is_owner,scalar_or_derived,true,False
@@ -146,7 +146,7 @@ list.price_type_id,parse_list_row,mixed,true,3
 list.project_id,parse_list_row,mixed,true,None
 list.quantity_of_day,parse_list_row,mixed,true,3
 list.real_estate_type_id,parse_list_row,mixed,true,1
-list.room,parse_list_row,mixed,true,'2'
+list.room,rooms,scalar_or_derived,true,'2'
 list.statement_currency_id,parse_list_row,mixed,true,2
 list.status_id,parse_list_row,mixed,true,2
 list.street_id,parse_list_row,mixed,true,13422

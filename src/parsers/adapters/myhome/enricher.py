@@ -24,6 +24,10 @@ from domain.lead import Lead
 from parsers.adapters.myhome.constants import DETAIL_PATH_TMPL, REQUEST_TIMEOUT_S, api_headers
 from parsers.adapters.myhome.published import TBILISI
 from parsers.adapters.myhome.schema import MyHomeStatementPayload
+from parsers.adapters.myhome.statement_snapshot import (
+    parse_room_value,
+    prepare_statement_snapshot,
+)
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
@@ -128,11 +132,9 @@ def statement_to_lead_updates(statement: dict[str, Any]) -> dict[str, Any]:
     if floor_s:
         updates["floor"] = floor_s
 
-    room = statement.get("room")
-    if isinstance(room, int):
+    room = parse_room_value(statement.get("room"))
+    if room is not None:
         updates["rooms"] = room
-    elif isinstance(room, str) and room.strip().isdigit():
-        updates["rooms"] = int(room.strip())
 
     if statement.get("is_owner") is True:
         updates["is_owner"] = True
@@ -154,7 +156,10 @@ def statement_to_lead_updates(statement: dict[str, Any]) -> dict[str, Any]:
     if pub is not None:
         updates["published_at"] = pub
 
-    updates["myhome_statement_json"] = dict(statement)
+    updates["myhome_statement_json"] = prepare_statement_snapshot(
+        statement,
+        strip_comment_html=strip_html_comment_to_plain_text,
+    )
     return updates
 
 

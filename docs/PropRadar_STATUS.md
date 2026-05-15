@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-15 — P1 myhome: rooms, images snapshot, очистка JSONB
+
+- **Фикс 1:** **`parse_list_item`** (`parser.py`) — **`list.room`** → **`leads.rooms`** при ingest списка.
+- **Фикс 2–3:** **`statement_snapshot.py`** + **`statement_to_lead_updates`** — в JSONB: **`images`** без **`large`** (только **`thumb`**/**`blur`**), сортировка по **`is_main`**; удалены **`nearby_places`**, **`gifts`**, VIP-флаги и др. (15 ключей); **`comment`** без HTML. Старые лиды не переписываются.
+- **NOTICE:** ingest **только detail** без **`statement.room`** — **`rooms`** может остаться NULL; **`room_type_id` → rooms** — отдельная задача.
+- **Проверки:** **`pytest tests/unit/`** — PASS. **Деплой:** rebuild **`playwright-worker`** — **человек**.
+
 ## 2026-05-15 — phone queue: Playwright использует claim (SKIP LOCKED)
 
 - **Проблема:** HTTP — **`claim_pending_phone_enrichment`**, Playwright — **`list_pending_phone_enrichment`** → гонка между **`phase=phone`** и **`phase=phone_playwright`**.

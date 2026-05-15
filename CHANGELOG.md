@@ -6,6 +6,10 @@
 
 ### Fixed
 
+- **P1 myhome mapping (rooms, images, JSON snapshot):** **`parse_list_item`** — **`list.room`** → **`leads.rooms`**; **`statement_snapshot.py`** — снимок **`myhome_statement_json`**: без **`large`** в **`images`** (только **`thumb`**/**`blur`**, **`is_main`** первым), удаление 15 шумных ключей, **`comment`** без HTML; только **новые** записи. **Gap:** **`room_type_id` → rooms** — вне scope. **Проверки:** **`pytest tests/unit/`** — PASS.
+
+### Fixed
+
 - **Очередь телефона Playwright = HTTP claim:** `phase=phone_playwright` и CLI fallback вызывают **`claim_pending_phone_enrichment`** (SKIP LOCKED), не **`list_*`** — `src/worker/main.py`, `scripts/run_myhome_enricher.py`. **`phone.py`** без изменений. n8n: **`phone_playwright`** только после батча HTTP.
 
 - **`phone_http.py` — concurrency hardening:** per-thread **`httpx.Client`** (myhome + 2captcha), без общего клиента в **`ThreadPoolExecutor`**; безопасное закрытие при падении **`TwoCaptchaClient.__init__`**. **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — **PASS**.

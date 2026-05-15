@@ -53,7 +53,9 @@ def test_statement_to_lead_updates_maps_core_fields() -> None:
     assert upd["is_owner"] is True
     assert upd["published_at"] is not None
     assert upd["published_at"].tzinfo == UTC
-    assert isinstance(upd["myhome_statement_json"], dict)
+    snap = upd["myhome_statement_json"]
+    assert isinstance(snap, dict)
+    assert "parameters" not in snap
 
 
 def test_statement_to_lead_updates_strips_comment_html() -> None:
@@ -64,6 +66,7 @@ def test_statement_to_lead_updates_strips_comment_html() -> None:
     }
     upd = statement_to_lead_updates(stmt)
     assert upd["description"] == "Линия 1.\nЛиния 2"
+    assert upd["myhome_statement_json"]["comment"] == "Линия 1.\nЛиния 2"
 
 
 def test_strip_html_comment_idempotent_plain_text() -> None:
