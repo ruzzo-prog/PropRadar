@@ -31,7 +31,19 @@ class LeadRepository(Repository[Lead], ABC):
 
     @abstractmethod
     def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
-        """Очередь телефона (Playwright): status=new, source, phone пустой (NULL или '')."""
+        """Снимок очереди телефона (read-only). Для enrich — ``claim_pending_phone_enrichment``."""
+
+    @abstractmethod
+    def claim_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        """Очередь телефона для enrich: ``FOR UPDATE SKIP LOCKED``, ``phone_retries < 3``."""
+
+    @abstractmethod
+    def increment_phone_retry(self, lead_id: UUID) -> int:
+        """Увеличить ``phone_retries`` на 1; вернуть новое значение."""
+
+    @abstractmethod
+    def mark_phone_enrich_exhausted(self, lead_id: UUID) -> None:
+        """Исчерпаны попытки: ``status_reason=phone_enrich_failed`` (status остаётся new)."""
 
     @abstractmethod
     def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:

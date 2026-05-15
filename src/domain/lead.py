@@ -38,6 +38,7 @@ class Lead(BaseModel):
     price_m2_usd: int | None = Field(default=None, ge=0)
     published_at: datetime | None = None
     phone: str | None = Field(default=None, max_length=64)
+    phone_retries: int = Field(default=0, ge=0, le=10)
     address: str | None = None
     address_lang: str | None = Field(default=None, max_length=8)
     district: str | None = None

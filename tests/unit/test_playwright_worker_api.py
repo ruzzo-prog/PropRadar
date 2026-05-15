@@ -28,6 +28,17 @@ def test_enrich_returns_202() -> None:
     run.assert_called_once_with("phone")
 
 
+def test_enrich_phone_playwright_phase_returns_202() -> None:
+    with patch("worker.main._run_myhome_enrich_phase") as run:
+        response = client.post(
+            "/enrich",
+            json={"adapter": "myhome", "phase": "phone_playwright"},
+        )
+        assert response.status_code == 202
+        assert response.json()["phase"] == "phone_playwright"
+    run.assert_called_once_with("phone_playwright")
+
+
 def test_login_returns_202() -> None:
     with patch("worker.main._run_myhome_login_subprocess") as run:
         response = client.post("/login", json={"adapter": "myhome"})

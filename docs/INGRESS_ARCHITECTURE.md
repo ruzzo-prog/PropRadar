@@ -52,9 +52,9 @@ flowchart TB
 
 **Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
 
-**Фазы воркера (`POST /enrich`):** помимо **`phone`**, тот же контракт поддерживает **`phase`** **`detail`** (HTTP-детали в БД через myhome Statements API, как очередь в **`run_myhome_enricher`**) и **`pdf`** (Playwright **`page.pdf()`**). Рекомендуемый успех для HTTP-клиента n8n — по-прежнему только **202**; результат по лидам смотреть в БД / логах воркера. Типовой workflow описывает **`phone`** сразу после ingest; **`detail`** / **`pdf`** — отдельные узлы расписания или пакетный CLI **`scripts/run_myhome_enricher.py`** (см. `README.md`, `docs/playwright_worker.md`).
+**Фазы воркера (`POST /enrich`):** **`detail`** (HTTP Statements API), **`phone`** (HTTP: **2captcha** + **`phone/show`**, см. **`MyHomePhoneHttpEnricher`**), **`phone_playwright`** (Playwright fallback, **`MyHomePhoneEnricher`**), **`pdf`** (Playwright **`page.pdf()`**). Успех для n8n — только **202**; результат — в БД / логе **`enrich done`**. Типовой workflow: **`phone`** после ingest; узел **добивки** (повтор **`phone`** через паузу) для **`phone_retries` 1–2**; опционально **`phone_playwright`**; **`detail`** / **`pdf`** — отдельное расписание или CLI **`scripts/run_myhome_enricher.py`**.
 
-**Телефон (myhome, `phase=phone`):** в коде адаптера **`MyHomePhoneEnricher`** поле телефона обогащается через **Playwright** (открытие карточки, клик «показать номер», ответ **`phone/show`**; применяется **playwright-stealth**, см. код). Оркестрация n8n (вызов воркера на **HTTP 202**, без polling) не меняется.
+**Телефон (myhome):** очередь — **`source=myhome`**, **`status=new`**, **`phone` пустой**, **`phone_retries < 3`**. После **3** неуспешных попыток — **`status_reason=phone_enrich_failed`** (статус **`new`**). JWT: **`POST /login`** / **`myhome_login.py`** (Playwright), не HTTP refresh **`api3.myhome.ge`**.
 
 ---
 
@@ -66,7 +66,10 @@ flowchart TB
 | 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |
 | 2b | **HTTP Request** | `POST …/api/myhome/ingest`. |
-| 2c | **HTTP Request** | `POST http://playwright-worker:8001/enrich`, тело JSON **`{"adapter":"myhome","phase":" … "}`**, где **`phase`** — **`phone`** (типово после ingest) или **`detail`** / **`pdf`** (опционально, отдельные узлы/расписание); успех узла для n8n — только **202**; **polling** не используется. |
+| 2c | **HTTP Request** | `POST …/enrich` **`phase=phone`** (HTTP + 2captcha) — после ingest |
+| 2d | **Wait + HTTP Request** | добивка: снова **`phase=phone`** (лиды с **`phone_retries` 1–2**) |
+| 2e | (опц.) **HTTP Request** | **`phase=phone_playwright`** — Playwright fallback (**после** HTTP-батча, не параллельно; **`claim_pending_phone_enrichment`**) |
+| — | **`detail`** / **`pdf`** | отдельные узлы или CLI; успех n8n — только **202**, без polling |
 | 3 | **HTTP Request** | `POST …/api/myhome/sync-status` — discover исчезнувших. |
 | 4 | **Split In Batches / Loop** | Обход элементов `disappeared`. |
 | 5 | **HTTP Request** | Отправка в WhatsApp через Evolution (контракт версии Evolution — локально). |

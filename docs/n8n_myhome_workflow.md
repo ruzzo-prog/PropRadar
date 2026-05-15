@@ -28,7 +28,10 @@
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
 | 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
-| 2c      | Асинхронное обогащение (worker)   | `POST` **`http://playwright-worker:8001/enrich`** (или URL из env), тело **`{"adapter":"myhome","phase":"…"}`** — типово **`phone`** сразу после ingest; допустимы **`detail`** и **`pdf`** (отдельные узлы/расписание). Успех узла n8n — только **HTTP 202**, **polling** нет |
+| 2c      | HTTP phone (primary)              | `POST` **`…/enrich`**, тело **`{"adapter":"myhome","phase":"phone"}`** — **2captcha** + **`phone/show`**. Успех n8n — только **HTTP 202** |
+| 2d      | Добивка phone (retry)             | **Wait** 5–15 мин → снова **`phase":"phone"`** (лиды с **`phone_retries` 1–2**) |
+| 2e      | (опц.) Playwright fallback        | **`phase":"phone_playwright"`** — только **после** батча/добивки **`phone`** (не параллельно); тот же **`claim_*`** в БД |
+| —       | **`detail`** / **`pdf`**          | отдельные узлы или CLI; **polling** нет |
 | 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
 | 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
 | 5       | Mark rejected в БД               | `POST` `**/api/myhome/mark-rejected**` с `ids` и `reason`                  |
@@ -45,7 +48,10 @@
 flowchart LR
   T[Schedule] --> S1[GET fetch-ids]
   S1 --> S2[POST ingest]
-  S2 --> PW[POST playwright-worker /enrich\n202 only]
+  S2 --> P1[POST enrich phase=phone]
+  P1 --> W[Wait retry batch]
+  W --> P2[POST enrich phase=phone]
+  P2 --> PW[POST enrich phase=phone_playwright optional]
   PW --> D[POST sync-status]
   D --> L[Loop disappeared]
   L --> WA[Evolution WhatsApp]

@@ -29,6 +29,7 @@ def api_headers(*, website_key: str = "myhome") -> dict[str, str]:
 
 
 PHONE_URL_PART = "statements/phone/show"
+PHONE_SHOW_PATH = "/v1/statements/phone/show"
 OWNER_MARKERS = ("я собственник", "ვარ მესაკუთრე", "i am the owner", "i'm the owner")
 TW_MS = 30_000
 

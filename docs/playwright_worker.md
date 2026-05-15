@@ -17,14 +17,15 @@
 ## Назначение
 
 - **HTTP API** (FastAPI, порт контейнера **8001**): фоновое обогащение **myhome** через Playwright (**`phone`**, **`pdf`**) и HTTP-детали (**`detail`**), автологин, health.
-- **Контракт с n8n:** `POST http://playwright-worker:8001/enrich` с телом **`{"adapter":"myhome","phase":"<detail|phone|pdf>"}`** — для оркестратора успех **только HTTP 202**; тело ответа как сигнал готовности **не используется**; polling результата не выполняется (см. `docs/INGRESS_ARCHITECTURE.md`).
+- **Контракт с n8n:** `POST http://playwright-worker:8001/enrich` с телом **`{"adapter":"myhome","phase":"<detail|phone|phone_playwright|pdf>"}`** — для оркестратора успех **только HTTP 202**; тело ответа как сигнал готовности **не используется**; polling результата не выполняется (см. `docs/INGRESS_ARCHITECTURE.md`).
 
 ## Контракт `POST /enrich` и связь с CLI
 
 | `phase` | Что выполняется | Очередь в БД (кратко) |
 |---------|----------------|------------------------|
 | `detail` | `GET` Statements API → обновление полей лида | `source=myhome`, нет адреса или нет `price_gel` |
-| `phone` | Playwright: карточка → клик → **`phone/show`** | `phone` пустой; используется **`MYHOME_SESSION_PATH`** и **playwright-stealth** |
+| `phone` | HTTP: **2captcha** → **`POST …/phone/show`** (**`MyHomePhoneHttpEnricher`**, 5 потоков) | `phone` пустой, **`phone_retries < 3`**; **`TWOCAPTCHA_API_KEY`**, **`MYHOME_SESSION_PATH`** |
+| `phone_playwright` | Playwright fallback: карточка → клик → **`phone/show`** | та же очередь, **`claim_pending_phone_enrichment`** (SKIP LOCKED); **не параллелить** с активным `phase=phone` |
 | `pdf` | Playwright: открытие карточки → **`page.pdf()`** | `pdf_url` пустой при заполненном адресе; каталог **`MYHOME_PDF_OUTPUT_DIR`** |
 
 Реализация: **`src/worker/main.py`**. Лимиты размера батча и URL API те же, что у **`Settings`** в пакетном скрипте **`scripts/run_myhome_enricher.py`**: CLI последовательно гоняет **все три фазы** в одном процессе и печатает **один JSON** в stdout (`detail_enriched`, `detail_failed`, `detail_errors`, `phone_*`, `pdf_*`). Воркер обрабатывает **одну** фазу за вызов в фоне; итог по лидам смотрите в БД или в логе строки **`enrich done {…}`**.
@@ -37,7 +38,12 @@
 |------------|-----------|------------|
 | `DATABASE_URL` | `api`, `playwright-worker`, CLI на хосте | Подключение к **leads-db** |
 | `MYHOME_API_BASE_URL` | `api`, воркер (`detail`) | Базовый URL Statements API |
-| `MYHOME_SESSION_PATH` | воркер, CLI (`phone`) | Путь к JSON storage state (том сессий) |
+| `MYHOME_SESSION_PATH` | воркер, CLI (`phone`, `phone_playwright`) | Путь к JSON storage state (cookie **AccessToken**) |
+| `TWOCAPTCHA_API_KEY` | воркер (`phone`) | Ключ 2captcha (секрет, только `.env`) |
+| `MYHOME_RECAPTCHA_SITE_KEY` | воркер (`phone`) | Site key reCAPTCHA v3 myhome.ge |
+| `MYHOME_PHONE_HTTP_WORKERS` | воркер (`phone`) | Параллельные потоки (1–10, default **5**) |
+| `MYHOME_PHONE_HTTP_ENABLED` | воркер (`phone`) | **`false`** — откат без деплоя кода |
+| `PLAYWRIGHT_PROXY_*` | HTTP phone + Playwright | Прокси для исходящих запросов |
 | `MYHOME_PDF_OUTPUT_DIR` | воркер, CLI (`pdf`) | Каталог файлов PDF |
 | `MYHOME_PDF_PUBLIC_BASE_URL` | воркер, CLI (`pdf`, опц.) | Префикс публичного URL в поле `pdf_url` |
 

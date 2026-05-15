@@ -1,4 +1,4 @@
-"""Пакетное обогащение myhome.ge: API-детали → телефон (Playwright) → PDF; JSON в stdout."""
+"""Пакетное обогащение myhome.ge: API-детали → телефон (HTTP 2captcha) → PDF; JSON в stdout."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from config.settings import Settings
 from parsers.adapters.myhome.enricher import MyHomeEnricher
 from parsers.adapters.myhome.pdf import MyHomePdfEnricher
 from parsers.adapters.myhome.phone import MyHomePhoneEnricher
+from parsers.adapters.myhome.phone_http import MyHomePhoneHttpEnricher
 from parsers.myhome import MyHomeParser
 from repositories.postgres_lead_repository import (
     PostgresLeadRepository,
@@ -45,13 +46,61 @@ def main() -> int:
         )
         report_detail = detail_enricher.enrich_leads(leads_detail)
 
-    leads_phone = repo.list_pending_phone_enrichment(src, limit=limit)
-    phone_enricher = MyHomePhoneEnricher(
-        repo,
-        headless=True,
-        storage_state_path=settings.myhome_session_path,
+    phone_http_summary = {
+        "phone_http_enriched": 0,
+        "phone_http_failed": 0,
+        "phone_http_errors": [],
+    }
+    phone_playwright_summary = {
+        "phone_playwright_enriched": 0,
+        "phone_playwright_failed": 0,
+        "phone_playwright_errors": [],
+    }
+
+    if settings.myhome_phone_http_enabled and settings.twocaptcha_api_key:
+        http_enricher = MyHomePhoneHttpEnricher(
+            repo,
+            base_url=str(settings.myhome_api_base_url),
+            session_path=settings.myhome_session_path,
+            twocaptcha_api_key=settings.twocaptcha_api_key,
+            recaptcha_site_key=settings.myhome_recaptcha_site_key,
+            max_workers=settings.myhome_phone_http_workers,
+        )
+        report_http = http_enricher.enrich_batch(src, limit=limit)
+        phone_http_summary = {
+            "phone_http_enriched": report_http.enriched,
+            "phone_http_failed": report_http.failed,
+            "phone_http_errors": report_http.errors,
+        }
+    else:
+        phone_http_summary["phone_http_errors"] = ["http_disabled_or_no_twocaptcha_key"]
+
+    if settings.myhome_phone_playwright_fallback:
+        leads_phone = repo.claim_pending_phone_enrichment(src, limit=limit)
+        phone_enricher = MyHomePhoneEnricher(
+            repo,
+            headless=True,
+            storage_state_path=settings.myhome_session_path,
+        )
+        report_phone = phone_enricher.enrich_leads(leads_phone)
+        phone_playwright_summary = {
+            "phone_playwright_enriched": report_phone.enriched,
+            "phone_playwright_failed": report_phone.failed,
+            "phone_playwright_errors": report_phone.errors,
+        }
+
+    phone_enriched = (
+        phone_http_summary["phone_http_enriched"]
+        + phone_playwright_summary["phone_playwright_enriched"]
     )
-    report_phone = phone_enricher.enrich_leads(leads_phone)
+    phone_failed = (
+        phone_http_summary["phone_http_failed"]
+        + phone_playwright_summary["phone_playwright_failed"]
+    )
+    phone_errors = [
+        *phone_http_summary["phone_http_errors"],
+        *phone_playwright_summary["phone_playwright_errors"],
+    ]
 
     leads_pdf = repo.list_pending_pdf_enrichment(src, limit=limit)
     pdf_enricher = MyHomePdfEnricher(
@@ -68,9 +117,11 @@ def main() -> int:
                 "detail_enriched": report_detail.enriched,
                 "detail_failed": report_detail.failed,
                 "detail_errors": report_detail.errors,
-                "phone_enriched": report_phone.enriched,
-                "phone_failed": report_phone.failed,
-                "phone_errors": report_phone.errors,
+                **phone_http_summary,
+                **phone_playwright_summary,
+                "phone_enriched": phone_enriched,
+                "phone_failed": phone_failed,
+                "phone_errors": phone_errors,
                 "pdf_enriched": report_pdf.enriched,
                 "pdf_failed": report_pdf.failed,
                 "pdf_errors": report_pdf.errors,
@@ -92,6 +143,12 @@ if __name__ == "__main__":
                     "detail_enriched": 0,
                     "detail_failed": 0,
                     "detail_errors": [],
+                    "phone_http_enriched": 0,
+                    "phone_http_failed": 0,
+                    "phone_http_errors": [],
+                    "phone_playwright_enriched": 0,
+                    "phone_playwright_failed": 0,
+                    "phone_playwright_errors": [],
                     "phone_enriched": 0,
                     "phone_failed": 0,
                     "phone_errors": [],

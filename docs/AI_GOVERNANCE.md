@@ -151,7 +151,7 @@ Smoke-тест      ← ТОЧКА КОНТРОЛЯ 3
 ## 9. Технические инварианты
 
 - **Polling (setInterval + fetch) — запрещён.** Только SSE или WebSocket
-- **Телефон продавца** — получать только через Playwright (**reCAPTCHA v3**, ответ JWT / ``phone/show`` на стороне myhome). Номера и токены в логи не пишутся; паузы между шагами браузерного сценария не сокращать без отдельного решения.
+- **Телефон продавца (myhome)** — **основной путь:** HTTP (**2captcha** reCAPTCHA v3 + ``POST api-statements.tnet.ge/v1/statements/phone/show`` + cookie **AccessToken** из **`MYHOME_SESSION_PATH`**). **Fallback:** Playwright (**``MyHomePhoneEnricher``**, фаза воркера **`phone_playwright`**); **`scripts/myhome_login.py`** — обновление JWT (~10 мин). Номера, токены и ключи captcha в логи не пишутся. Паузы Playwright между лидами не сокращать без отдельного решения.
 - **Мониторинг объявлений** — через прямой HTTP к `api-statements.tnet.ge`
   с заголовком `X-Website-Key: myhome`, без ChromeDriver
 - **БД** — только `leads-db` (PostgreSQL, порт 5433). В `dispatch-db-dev` не писать

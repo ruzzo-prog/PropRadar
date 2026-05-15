@@ -10,6 +10,7 @@ from parsers.adapters.myhome.extract import extract_details_from_page_text, list
 from parsers.adapters.myhome.parser import MyHomeRunReport, fetch_raw_list_batch, parse_list_item
 from parsers.adapters.myhome.pdf import MyHomePdfEnricher, MyHomePdfEnrichReport, resolve_pdf_url
 from parsers.adapters.myhome.phone import MyHomePhoneEnricher, MyHomePhoneEnrichReport
+from parsers.adapters.myhome.phone_http import MyHomePhoneHttpEnricher, MyHomePhoneHttpEnrichReport
 
 __all__ = [
     "MyHomeEnrichReport",
@@ -18,6 +19,8 @@ __all__ = [
     "MyHomePdfEnricher",
     "MyHomePhoneEnrichReport",
     "MyHomePhoneEnricher",
+    "MyHomePhoneHttpEnrichReport",
+    "MyHomePhoneHttpEnricher",
     "MyHomeRunReport",
     "enrich_leads_via_api",
     "extract_details_from_page_text",

@@ -134,6 +134,15 @@ class _MemRepo(LeadRepository):
     def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         return []
 
+    def claim_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        return []
+
+    def increment_phone_retry(self, lead_id: UUID) -> int:
+        return 1
+
+    def mark_phone_enrich_exhausted(self, lead_id: UUID) -> None:
+        return None
+
     def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         return []
 

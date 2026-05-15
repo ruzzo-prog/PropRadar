@@ -12,6 +12,8 @@ from parsers.adapters.myhome import (
     MyHomePdfEnrichReport,
     MyHomePhoneEnricher,
     MyHomePhoneEnrichReport,
+    MyHomePhoneHttpEnricher,
+    MyHomePhoneHttpEnrichReport,
     extract_details_from_page_text,
     listing_url,
 )
@@ -24,6 +26,8 @@ __all__ = [
     "MyHomePdfEnricher",
     "MyHomePhoneEnrichReport",
     "MyHomePhoneEnricher",
+    "MyHomePhoneHttpEnrichReport",
+    "MyHomePhoneHttpEnricher",
     "extract_details_from_page_text",
     "listing_url",
     "_parse_phone_response",

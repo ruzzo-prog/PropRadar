@@ -2,6 +2,35 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-15 — phone queue: Playwright использует claim (SKIP LOCKED)
+
+- **Проблема:** HTTP — **`claim_pending_phone_enrichment`**, Playwright — **`list_pending_phone_enrichment`** → гонка между **`phase=phone`** и **`phase=phone_playwright`**.
+- **Реализация:** **`worker/main.py`**, **`run_myhome_enricher.py`** — Playwright fallback на **`claim_*`**; docstrings репозитория; n8n/ingress — не параллелить фазы.
+- **Проверки:** **`pytest tests/unit/test_myhome_phone_queue.py`** + регрессия worker/phone_http — **PASS**.
+- **Backlog:** резервирование лида на время обработки (колонка в claim-транзакции) — при дублях в проде.
+
+## 2026-05-15 — phone_http: per-thread httpx (concurrency hardening)
+
+- **Проблема:** общий **`httpx.Client`** и **`TwoCaptchaClient`** в **`ThreadPoolExecutor`** (не thread-safe); утечка клиента при падении конструктора 2captcha.
+- **Реализация:** **`_enrich_one_isolated`** — два **`httpx.Client`** на поток/лид, **`finally`** закрывает оба; **`enrich_leads`** без batch-клиентов.
+- **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — **PASS**. **Деплой** — **человек**.
+
+## 2026-05-15 — P0 hotfix: phone_http 401 retry + httpx leak
+
+- **Инцидент:** **`phone/show` 401** помечался **`retryable=False`** → лид без **`phone_retries`**, выпадал из очереди при истёкшем JWT (~11 мин в батче). При ошибке **`load_access_token`** ранний **`return`** до **`finally`** → не закрывались **`httpx.Client`** (myhome + 2captcha).
+- **Hotfix:** **`src/parsers/adapters/myhome/phone_http.py`** — 401 → **`retryable=True`**; создание клиентов в **`try/finally`** с **`captcha.close()`** и **`client.close()`** при любом выходе.
+- **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — **11 passed** (2026-05-15). **Деплой** — **человек** (rebuild **`playwright-worker`**).
+- **Документация:** **`CHANGELOG.md`**, этот файл.
+- **Ретро:** **`@architect` + Plan Check** — не позднее 1 рабочего дня (канон P0).
+
+## 2026-05-15 — MyHome HTTP phone enricher (2captcha, primary path)
+
+- **Цель:** заменить Playwright как основной путь телефона (~**16 с/лид** vs **60+ с**); Playwright — fallback и JWT login.
+- **Реализация:** **`src/parsers/adapters/myhome/phone_http.py`** (`MyHomePhoneHttpEnricher`, 2captcha v3, **`POST /v1/statements/phone/show`** с **`global-authorization`** + **`response_token`**); миграция **`migrations/011_add_phone_retries.sql`**; репозиторий **`claim_pending_phone_enrichment`** (**`SKIP LOCKED`**), **`phone_retries`**, **`status_reason=phone_enrich_failed`** при **≥3** попытках; воркер **`phase=phone`** (HTTP), **`phase=phone_playwright`** (без правок **`phone.py`**). Env: **`TWOCAPTCHA_API_KEY`**, **`MYHOME_PHONE_HTTP_WORKERS`**, **`MYHOME_PHONE_HTTP_ENABLED`**.
+- **Проверки:** **`pytest`** unit (**`test_myhome_phone_http`**, enricher, worker API) — **23 passed** (2026-05-15). **Scanner**, smoke на сервере, миграция **011** — **человек**.
+- **Документация:** **`CHANGELOG.md`**, **`docs/phone_extraction.md`**, **`docs/playwright_worker.md`**, **`docs/n8n_myhome_workflow.md`**, **`Docs/AI_GOVERNANCE.md`** §9, **`Docs/INGRESS_ARCHITECTURE.md`**, этот файл.
+- **Деплой (человек):** применить **`011_add_phone_retries.sql`**; **`TWOCAPTCHA_API_KEY`** в `.env`; rebuild **`playwright-worker`**; n8n — узел добивки **`phase=phone`** после паузы.
+
 ## 2026-05-15 — P0 hotfix: MyHome phone / `phone/show` HTTP 204
 
 - **Инцидент:** **`expect_response`** ждал только **`status == 200`**; реальный ответ **`phone/show`** — **204** → таймаут **30 s**, затем **`save_timeout_shot`**; **~81+ s/лид** вместо **~15 s**.

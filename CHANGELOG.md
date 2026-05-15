@@ -6,6 +6,18 @@
 
 ### Fixed
 
+- **Очередь телефона Playwright = HTTP claim:** `phase=phone_playwright` и CLI fallback вызывают **`claim_pending_phone_enrichment`** (SKIP LOCKED), не **`list_*`** — `src/worker/main.py`, `scripts/run_myhome_enricher.py`. **`phone.py`** без изменений. n8n: **`phone_playwright`** только после батча HTTP.
+
+- **`phone_http.py` — concurrency hardening:** per-thread **`httpx.Client`** (myhome + 2captcha), без общего клиента в **`ThreadPoolExecutor`**; безопасное закрытие при падении **`TwoCaptchaClient.__init__`**. **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — **PASS**.
+
+- **P0 hotfix / `phone_http.py` — 401 retry + утечка httpx:** **`phone/show` HTTP 401** → **`PhoneShowError(..., retryable=True)`** и **`phone_retries += 1`** (JWT истёк — добивка следующим батчем после **`POST /login`**); при падении **`load_access_token`** **`finally`** закрывает оба **`httpx.Client`** (myhome + 2captcha). **Проверки:** **`pytest tests/unit/test_myhome_phone_http.py`** — **11 passed** (2026-05-15).
+
+### Added
+
+- **MyHome HTTP phone enricher (2captcha):** основной путь телефона — **`src/parsers/adapters/myhome/phone_http.py`** (reCAPTCHA v3 через **2captcha**, **`POST /v1/statements/phone/show`**, **~16 с/лид**, **5** потоков); **`phase=phone`** в **`playwright-worker`** → HTTP; **`phase=phone_playwright`** → прежний **`MyHomePhoneEnricher`** без правок **`phone.py`**. Миграция **`migrations/011_add_phone_retries.sql`** — **`phone_retries`**, очередь **`phone_retries < 3`**, исчерпание → **`status_reason=phone_enrich_failed`** (**`status`** остаётся **`new`**). Репозиторий: **`claim_pending_phone_enrichment`** (**`SKIP LOCKED`**), **`increment_phone_retry`**, **`mark_phone_enrich_exhausted`**. Env: **`TWOCAPTCHA_API_KEY`**, **`MYHOME_RECAPTCHA_SITE_KEY`**, **`MYHOME_PHONE_HTTP_WORKERS`**, **`MYHOME_PHONE_HTTP_ENABLED`**, **`MYHOME_PHONE_PLAYWRIGHT_FALLBACK`** (CLI). **Проверки:** **`pytest`** — **23 passed** (unit phone HTTP + enricher + worker API, 2026-05-15); **Scanner** и smoke на сервере — **человек**.
+
+### Fixed
+
 - **P0 hotfix / `src/parsers/adapters/myhome/phone.py` — `phone/show` HTTP 204:** API **`api-statements.tnet.ge/v1/statements/phone/show`** отвечает **204 No Content** (номер в DOM после React); фильтр **`status == 200`** в **`expect_response`** давал таймаут **30 s** + **`save_timeout_shot`** (~**81+ s/лид**). **`expect_response`** принимает **200** и **204**; при **204** — **`body.inner_text()`** + **`\+?995[\s\d]{9,14}`** → **`+995…`**; при **200** — **`parse_phone_response`**. **Вне scope:** прокси, паузы между лидами, **`save_timeout_shot`**, pkill/waitpid. **Проверки:** **`pytest tests/unit/test_myhome_enricher.py`** — **10 passed** (2026-05-15); smoke на **3 лидах** и rebuild **`playwright-worker`** — **человек**.
 
 - **`src/parsers/adapters/myhome/phone.py` — сеть по `phone/show` и парс телефона:** ожидание ответа по URL **`phone/show`** без ограничения **`status == 200`**; выбор видимой кнопки телефона — перебор **`nth(i)`** с проверкой **`bounding_box`**, без привязки к **`.first`**; для ответа **HTTP 204** — ожидание **1000 ms**, номер берётся из **`inner_text`** выбранной видимой кнопки, извлечение по **`\+?[0-9]{9,13}`**; для ответов с телом сохранена ветка **`parse_phone_response(response)`**. **Вне scope этого фикса:** прокси, **`user_agent`**, stealth, **`storage_state`**, навигация. **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-10).

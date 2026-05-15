@@ -49,6 +49,11 @@ class LeadORM(Base):
     price_m2_usd: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     phone: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    phone_retries: Mapped[int] = mapped_column(
+        Integer(),
+        nullable=False,
+        server_default=text("0"),
+    )
     address: Mapped[str | None] = mapped_column(Text(), nullable=True)
     address_lang: Mapped[str | None] = mapped_column(String(8), nullable=True)
     district: Mapped[str | None] = mapped_column(Text(), nullable=True)
@@ -82,6 +87,7 @@ def _to_domain(row: LeadORM) -> Lead:
         price_m2_usd=row.price_m2_usd,
         published_at=row.published_at,
         phone=row.phone,
+        phone_retries=row.phone_retries,
         address=row.address,
         address_lang=row.address_lang,
         district=row.district,
@@ -150,6 +156,7 @@ class PostgresLeadRepository(LeadRepository):
             price_m2_usd=entity.price_m2_usd,
             published_at=entity.published_at,
             phone=entity.phone,
+            phone_retries=entity.phone_retries,
             address=entity.address,
             address_lang=entity.address_lang,
             district=entity.district,
@@ -193,26 +200,64 @@ class PostgresLeadRepository(LeadRepository):
             rows = session.scalars(stmt).all()
             return [_to_domain(r) for r in rows]
 
+    @staticmethod
+    def _phone_queue_filters(source: str) -> tuple:
+        return (
+            LeadORM.source == source,
+            LeadORM.status == LeadStatus.NEW.value,
+            or_(
+                LeadORM.phone.is_(None),
+                LeadORM.phone == "",
+            ),
+            LeadORM.phone_retries < 3,
+        )
+
     def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         lim = max(1, min(limit, 500))
         with self._sessions.factory() as session:
             stmt = (
                 select(LeadORM)
-                .where(
-                    and_(
-                        LeadORM.source == source,
-                        LeadORM.status == LeadStatus.NEW.value,
-                        or_(
-                            LeadORM.phone.is_(None),
-                            LeadORM.phone == "",
-                        ),
-                    ),
-                )
+                .where(and_(*self._phone_queue_filters(source)))
                 .order_by(LeadORM.created_at.asc())
                 .limit(lim)
             )
             rows = session.scalars(stmt).all()
             return [_to_domain(r) for r in rows]
+
+    def claim_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
+        lim = max(1, min(limit, 500))
+        with self._sessions.factory() as session:
+            stmt = (
+                select(LeadORM)
+                .where(and_(*self._phone_queue_filters(source)))
+                .order_by(LeadORM.created_at.asc())
+                .limit(lim)
+                .with_for_update(skip_locked=True)
+            )
+            rows = session.scalars(stmt).all()
+            return [_to_domain(r) for r in rows]
+
+    def increment_phone_retry(self, lead_id: UUID) -> int:
+        with self._sessions.factory() as session:
+            row = session.get(LeadORM, lead_id)
+            if row is None:
+                msg = "лид не найден"
+                raise ValueError(msg)
+            row.phone_retries = int(row.phone_retries or 0) + 1
+            row.updated_at = datetime.now(UTC)
+            session.commit()
+            session.refresh(row)
+            return int(row.phone_retries)
+
+    def mark_phone_enrich_exhausted(self, lead_id: UUID) -> None:
+        with self._sessions.factory() as session:
+            row = session.get(LeadORM, lead_id)
+            if row is None:
+                msg = "лид не найден"
+                raise ValueError(msg)
+            row.status_reason = "phone_enrich_failed"
+            row.updated_at = datetime.now(UTC)
+            session.commit()
 
     def list_pending_pdf_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         lim = max(1, min(limit, 500))

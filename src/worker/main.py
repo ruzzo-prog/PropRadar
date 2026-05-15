@@ -21,6 +21,7 @@ from config.settings import Settings
 from parsers.adapters.myhome.enricher import MyHomeEnricher
 from parsers.adapters.myhome.pdf import MyHomePdfEnricher
 from parsers.adapters.myhome.phone import MyHomePhoneEnricher
+from parsers.adapters.myhome.phone_http import MyHomePhoneHttpEnricher
 from parsers.myhome import MyHomeParser
 from repositories.postgres_lead_repository import (
     PostgresLeadRepository,
@@ -30,14 +31,16 @@ from repositories.postgres_lead_repository import (
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("playwright_worker")
 
-app = FastAPI(title="PropRadar Playwright Worker", version="0.1.0")
+app = FastAPI(title="PropRadar Playwright Worker", version="0.2.0")
 
 _job_lock = Lock()
 
 
 class EnrichRequest(BaseModel):
     adapter: Literal["myhome"] = Field(description="Идентификатор адаптера")
-    phase: Literal["detail", "phone", "pdf"] = Field(description="Фаза обогащения")
+    phase: Literal["detail", "phone", "phone_playwright", "pdf"] = Field(
+        description="Фаза обогащения",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -54,6 +57,59 @@ def _repo_root() -> Path:
 def _ping_db(sessions: PostgresSessionFactory) -> None:
     with sessions.engine.connect() as conn:
         conn.execute(text("SELECT 1"))
+
+
+def _run_myhome_phone_http(
+    repo: PostgresLeadRepository,
+    settings: Settings,
+    limit: int,
+) -> dict[str, object]:
+    if not settings.myhome_phone_http_enabled:
+        return {
+            "phone_http_enriched": 0,
+            "phone_http_failed": 0,
+            "phone_http_errors": ["http_disabled"],
+        }
+    api_key = settings.twocaptcha_api_key
+    if not api_key:
+        return {
+            "phone_http_enriched": 0,
+            "phone_http_failed": 0,
+            "phone_http_errors": ["twocaptcha_api_key_missing"],
+        }
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url=str(settings.myhome_api_base_url),
+        session_path=settings.myhome_session_path,
+        twocaptcha_api_key=api_key,
+        recaptcha_site_key=settings.myhome_recaptcha_site_key,
+        max_workers=settings.myhome_phone_http_workers,
+    )
+    report = enricher.enrich_batch(MyHomeParser.SOURCE, limit=limit)
+    return {
+        "phone_http_enriched": report.enriched,
+        "phone_http_failed": report.failed,
+        "phone_http_errors": report.errors,
+    }
+
+
+def _run_myhome_phone_playwright(
+    repo: PostgresLeadRepository,
+    settings: Settings,
+    limit: int,
+) -> dict[str, object]:
+    leads_phone = repo.claim_pending_phone_enrichment(MyHomeParser.SOURCE, limit=limit)
+    phone_enricher = MyHomePhoneEnricher(
+        repo,
+        headless=True,
+        storage_state_path=settings.myhome_session_path,
+    )
+    report = phone_enricher.enrich_leads(leads_phone)
+    return {
+        "phone_playwright_enriched": report.enriched,
+        "phone_playwright_failed": report.failed,
+        "phone_playwright_errors": report.errors,
+    }
 
 
 def _run_myhome_enrich_phase(phase: str) -> None:
@@ -83,18 +139,21 @@ def _run_myhome_enrich_phase(phase: str) -> None:
             },
         )
     elif phase == "phone":
-        leads_phone = repo.list_pending_phone_enrichment(src, limit=limit)
-        phone_enricher = MyHomePhoneEnricher(
-            repo,
-            headless=True,
-            storage_state_path=settings.myhome_session_path,
-        )
-        report = phone_enricher.enrich_leads(leads_phone)
+        summary.update(_run_myhome_phone_http(repo, settings, limit))
         summary.update(
             {
-                "phone_enriched": report.enriched,
-                "phone_failed": report.failed,
-                "phone_errors": report.errors,
+                "phone_enriched": summary.get("phone_http_enriched", 0),
+                "phone_failed": summary.get("phone_http_failed", 0),
+                "phone_errors": summary.get("phone_http_errors", []),
+            },
+        )
+    elif phase == "phone_playwright":
+        summary.update(_run_myhome_phone_playwright(repo, settings, limit))
+        summary.update(
+            {
+                "phone_enriched": summary.get("phone_playwright_enriched", 0),
+                "phone_failed": summary.get("phone_playwright_failed", 0),
+                "phone_errors": summary.get("phone_playwright_errors", []),
             },
         )
     elif phase == "pdf":

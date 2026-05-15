@@ -79,3 +79,27 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("PLAYWRIGHT_PROXY_PASS"),
     )
+    twocaptcha_api_key: str | None = Field(
+        default=None,
+        validation_alias="TWOCAPTCHA_API_KEY",
+        description="API-ключ 2captcha для reCAPTCHA v3 (HTTP phone enricher).",
+    )
+    myhome_recaptcha_site_key: str = Field(
+        default="6LeziPEpAAAAAHuR9vWBVCrfklSbWt8zixM4jAbM",
+        validation_alias="MYHOME_RECAPTCHA_SITE_KEY",
+    )
+    myhome_phone_http_workers: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+        validation_alias="MYHOME_PHONE_HTTP_WORKERS",
+    )
+    myhome_phone_http_enabled: bool = Field(
+        default=True,
+        validation_alias="MYHOME_PHONE_HTTP_ENABLED",
+    )
+    myhome_phone_playwright_fallback: bool = Field(
+        default=False,
+        validation_alias="MYHOME_PHONE_PLAYWRIGHT_FALLBACK",
+        description="CLI: после HTTP-фазы запустить Playwright для оставшихся без phone.",
+    )
