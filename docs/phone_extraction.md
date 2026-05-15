@@ -62,9 +62,10 @@ sync_playwright()
   wait 3s
   _wait_for_phone_btn_and_recaptcha()   ← polling "text=ნომრის ნახვა" + grecaptcha ready
   click_show_phone()
-    expect_response("phone/show", status != 204)
+    expect_response("phone/show", status in (200, 204))
     JS evaluate → раскрыть display:none у предков → el.click()
-    parse_phone_response()   ← проверки result/data/phone_number
+    200 → parse_phone_response()   ← JSON result/data/phone_number
+    204 → body.inner_text() + regex +995…   ← номер в DOM после React
   repository.update_enriched_fields()
   context.storage_state() → save to disk   ← фиксируем обновлённый токен
 browser.close()
@@ -107,10 +108,10 @@ while (e && e !== document.body) {
 el.click();
 ```
 
-### 4.5 HTTP 204 — OPTIONS preflight, не данные
+### 4.5 HTTP 204 — No Content, номер в DOM
 
-**Проблема:** `expect_response` перехватывал OPTIONS preflight (204) вместо реального ответа с телефоном.  
-**Решение:** фильтр `"phone/show" in r.url and r.status != 204`.
+**Проблема:** API **`phone/show`** (tnet) отвечает **204** без тела; номер появляется в UI после React update. Фильтр **`status == 200`** не ловил ответ → таймаут **30 s** на лид.  
+**Решение:** `"phone/show" in r.url and r.status in (200, 204)`; при **204** — **`page.locator("body").inner_text()`** и regex **`\+?995[\s\d]{9,14}`** → формат **`+995XXXXXXXXX`**; при **200** — **`parse_phone_response`**.
 
 ### 4.6 AccessToken TTL ~11 мин
 

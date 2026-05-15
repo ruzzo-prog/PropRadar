@@ -33,6 +33,7 @@ from repositories.base import LeadRepository
 logger = logging.getLogger(__name__)
 
 _PHONE_RE = re.compile(r"\+?[0-9]{9,13}")
+_DOM_204_PHONE_RE = re.compile(r"\+?995[\s\d]{9,14}")
 
 _MYHOME_PHONE_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -104,6 +105,18 @@ def _extract_phone_from_dom(page: Page) -> str | None:
     return None
 
 
+def _phone_from_body_text(page: Page) -> str:
+    """Извлечь +995… из DOM после phone/show 204 (тело ответа пустое)."""
+    text = page.locator("body").inner_text(timeout=TW_MS)
+    m = _DOM_204_PHONE_RE.search(text)
+    if not m:
+        raise RuntimeError("phone_btn_digits_missing")
+    normalized = re.sub(r"\s+", "", m.group(0))
+    if not normalized.startswith("+"):
+        normalized = "+" + normalized
+    return normalized
+
+
 def click_show_phone(page: Page, external_id: str) -> str:
     """Ждать появления кнопки (React hydration ~5-9s), кликнуть, ждать телефон в DOM."""
     # Wait for phone button (React hydration takes ~5-9s after domcontentloaded)
@@ -114,9 +127,9 @@ def click_show_phone(page: Page, external_id: str) -> str:
         logger.debug("btn_wait_fail ext=%s: %s", external_id, exc)
         raise RuntimeError("phone_btn_not_found")
 
-    # Intercept phone/show 200 response (204 is just OPTIONS preflight — skip it)
+    # phone/show: 200 — JSON с номером; 204 — No Content, номер в DOM после React update
     with page.expect_response(
-        lambda r: "phone/show" in r.url and r.status == 200,
+        lambda r: "phone/show" in r.url and r.status in (200, 204),
         timeout=TW_MS,
     ) as resp_info:
         btn_loc.evaluate("""el => {
@@ -130,17 +143,13 @@ def click_show_phone(page: Page, external_id: str) -> str:
         }""")
 
     resp = resp_info.value
-    if resp.status >= 400:
-        raise RuntimeError(f"phone_api_http_{resp.status}")
-    payload = resp.json()
-    if payload.get("result") is not True:
-        raise RuntimeError("phone_api_denied")
-    data = payload.get("data", {})
-    raw = data.get("phone_number", "")
-    if not raw:
-        raise RuntimeError("phone_api_empty")
-    logger.debug("phone_from_api ext=%s phone=%s", external_id, raw)
-    return raw.strip()
+    if resp.status == 204:
+        phone = _phone_from_body_text(page)
+        logger.debug("phone_from_dom ext=%s", external_id)
+        return phone
+    phone = parse_phone_response(resp)
+    logger.debug("phone_from_api ext=%s", external_id)
+    return phone
 
 @dataclass
 class MyHomePhoneEnrichReport:

@@ -2,6 +2,14 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-15 — P0 hotfix: MyHome phone / `phone/show` HTTP 204
+
+- **Инцидент:** **`expect_response`** ждал только **`status == 200`**; реальный ответ **`phone/show`** — **204** → таймаут **30 s**, затем **`save_timeout_shot`**; **~81+ s/лид** вместо **~15 s**.
+- **Реализация:** в **`src/parsers/adapters/myhome/phone.py`** — фильтр **`status in (200, 204)`**; при **204** — **`_phone_from_body_text`**: **`page.locator("body").inner_text()`**, regex **`\+?995[\s\d]{9,14}`**, нормализация **`+995…`**; при **200** — **`parse_phone_response`**. **Не трогалось:** прокси, паузы **2–4 s**, pkill/waitpid, таймаут скриншота.
+- **Проверки:** **`pytest tests/unit/test_myhome_enricher.py`** — **10 passed** (2026-05-15). **Вручную (человек):** 3 лида (**enriched > 0**, **< 30 s/лид**); **`docker compose --profile app build playwright-worker`** + **`up -d playwright-worker`**.
+- **Документация:** **`CHANGELOG.md`**, **`docs/phone_extraction.md`**, этот файл.
+- **Ретро:** **`@architect` + Plan Check** — не позднее 1 рабочего дня (канон P0).
+
 ## 2026-05-10 — MyHome phone: `phone/show` без фильтра 200, кнопка `nth`+`bounding_box`, ветка 204
 
 - **Цель:** снизить хрупкость шага после клика по видимому контролу телефона: корректно ждать сетевой ответ **`phone/show`**, выбирать реально видимую кнопку и различать **204** против ответов с телом для разбора.

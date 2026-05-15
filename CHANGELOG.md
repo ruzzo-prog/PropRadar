@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- **P0 hotfix / `src/parsers/adapters/myhome/phone.py` — `phone/show` HTTP 204:** API **`api-statements.tnet.ge/v1/statements/phone/show`** отвечает **204 No Content** (номер в DOM после React); фильтр **`status == 200`** в **`expect_response`** давал таймаут **30 s** + **`save_timeout_shot`** (~**81+ s/лид**). **`expect_response`** принимает **200** и **204**; при **204** — **`body.inner_text()`** + **`\+?995[\s\d]{9,14}`** → **`+995…`**; при **200** — **`parse_phone_response`**. **Вне scope:** прокси, паузы между лидами, **`save_timeout_shot`**, pkill/waitpid. **Проверки:** **`pytest tests/unit/test_myhome_enricher.py`** — **10 passed** (2026-05-15); smoke на **3 лидах** и rebuild **`playwright-worker`** — **человек**.
+
 - **`src/parsers/adapters/myhome/phone.py` — сеть по `phone/show` и парс телефона:** ожидание ответа по URL **`phone/show`** без ограничения **`status == 200`**; выбор видимой кнопки телефона — перебор **`nth(i)`** с проверкой **`bounding_box`**, без привязки к **`.first`**; для ответа **HTTP 204** — ожидание **1000 ms**, номер берётся из **`inner_text`** выбранной видимой кнопки, извлечение по **`\+?[0-9]{9,13}`**; для ответов с телом сохранена ветка **`parse_phone_response(response)`**. **Вне scope этого фикса:** прокси, **`user_agent`**, stealth, **`storage_state`**, навигация. **Проверки:** **Scanner** — **PASS** (человек); **`pytest tests/unit/test_myhome_enricher.py tests/unit/test_playwright_worker_api.py`** — **13 passed** (2026-05-10).
 
 ### Removed
