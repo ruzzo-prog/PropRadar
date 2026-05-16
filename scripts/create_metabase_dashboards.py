@@ -70,7 +70,7 @@ def _create_cards(
         title = str(spec["title_ru"])
         display = str(spec.get("display", "table"))
         sql_text = str(spec["sql"])
-        desc = str(spec.get("description_ru", ""))
+        desc = spec.get("description_ru") or None
         _LOGGER.info("Создание карточки «%s» (key=%s)", title, key)
         ids_by_key[key] = create_native_card(
             client,

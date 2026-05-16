@@ -139,7 +139,7 @@ def native_card_body(
     *,
     database_id: int,
     name: str,
-    description: str,
+    description: str | None,
     sql_text: str,
     display: str,
 ) -> dict[str, Any]:
@@ -161,7 +161,7 @@ def create_native_card(
     *,
     database_id: int,
     name: str,
-    description: str,
+    description: str | None,
     sql_text: str,
     display: str,
 ) -> int:
