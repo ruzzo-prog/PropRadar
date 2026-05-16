@@ -1,0 +1,13 @@
+{
+  "dashboard_name": "PropRadar — Карта объектов",
+  "cards": [
+    {
+      "key": "map",
+      "title_ru": "Карта объектов",
+      "display": "map",
+      "description_ru": "До 500 последних лидов с координатами (leads_client).",
+      "sql": "SELECT\n  geo_lat AS latitude,\n  geo_lng AS longitude,\n  district_name AS \"Район\",\n  rooms AS \"Комнаты\",\n  price_usd AS \"Цена USD\"\nFROM leads_client\nWHERE geo_lat IS NOT NULL\n  AND geo_lng IS NOT NULL\nORDER BY synced_at DESC NULLS LAST\nLIMIT 500",
+      "layout": {"row": 0, "col": 0, "size_x": 12, "size_y": 10}
+    }
+  ]
+}

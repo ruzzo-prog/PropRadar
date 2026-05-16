@@ -128,6 +128,29 @@ docker compose --profile tools up -d metabase
 
 Скрипт **`scripts/setup_metabase_dashboard.py`** находит элементы массива **`cards`** по **строгому совпадению** **`title_ru`** с литералами в коде. Если переименовать подпись в JSON без синхронного изменения скрипта, при запуске возможен **KeyError**. Канон для скаляра средней цены в USD: **`Средняя цена объекта (USD)`**.
 
+## Админ-дашборды (мониторинг и карта)
+
+Отдельно от **«PropRadar — Лиды»** — два дашборда для операторов/админов, только через API:
+
+| Дашборд | JSON bundle | Назначение |
+| -------- | ----------- | ---------- |
+| **PropRadar — Мониторинг** | `metabase/monitoring_admin_dashboard.json` | Скаляры (synced/published), график 30 дней (две линии), воронка статусов, таблица 20 лидов |
+| **PropRadar — Карта объектов** | `metabase/map_objects_dashboard.json` | Карта до 500 точек по `geo_lat`/`geo_lng` |
+
+**Таймзона в SQL:** `Asia/Tbilisi` для срезов «сегодня» и дневных графиков.
+
+**Запуск** (после подключения БД **PropRadar Leads** в Metabase):
+
+1. В `.env`: **`METABASE_URL`** (prod: `https://metabase.usluga-market.ru`), **`METABASE_USER`**, **`METABASE_PASSWORD`**, при необходимости **`LEADS_DATABASE_NAME`**.
+2. Из корня репозитория:  
+   `python scripts/create_metabase_dashboards.py`
+3. Скрипт выводит `id` и `url` обоих дашбордов. **Идемпотентность:** при повторном запуске дашборд с тем же именем удаляется (вместе с карточками) и создаётся заново.
+4. **Не затрагивает** дашборд **«PropRadar — Лиды»** и **`setup_metabase_dashboard.py`**.
+
+Общие HTTP-хелперы: **`scripts/metabase_api_common.py`**.
+
+**Smoke (человек):** 10 плиток на мониторинге, график с двумя сериями, карта с точками в Грузии, запросы без ошибки PostgreSQL (миграции **007–009** для `owner_name` / `urban_name`).
+
 ## Критерии готовности
 
 - `docker compose -f docker/tools/docker-compose.yml up -d` завершается без ошибки.

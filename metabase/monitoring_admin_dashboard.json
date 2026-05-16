@@ -1,0 +1,84 @@
+{
+  "dashboard_name": "PropRadar — Мониторинг",
+  "timezone_note": "Даты и «сегодня» — Asia/Tbilisi.",
+  "cards": [
+    {
+      "key": "total",
+      "title_ru": "Всего в базе",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client",
+      "layout": {"row": 0, "col": 0, "size_x": 4, "size_y": 3}
+    },
+    {
+      "key": "synced_today",
+      "title_ru": "Скачано сегодня",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE (synced_at AT TIME ZONE 'Asia/Tbilisi')::date = (now() AT TIME ZONE 'Asia/Tbilisi')::date",
+      "layout": {"row": 0, "col": 4, "size_x": 4, "size_y": 3}
+    },
+    {
+      "key": "synced_7d",
+      "title_ru": "Скачано за 7 дней",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE synced_at >= now() - interval '7 days'",
+      "layout": {"row": 0, "col": 8, "size_x": 4, "size_y": 3}
+    },
+    {
+      "key": "published_today",
+      "title_ru": "Опубликовано сегодня",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE (published_at AT TIME ZONE 'Asia/Tbilisi')::date = (now() AT TIME ZONE 'Asia/Tbilisi')::date",
+      "layout": {"row": 1, "col": 0, "size_x": 3, "size_y": 3}
+    },
+    {
+      "key": "published_7d",
+      "title_ru": "Опубликовано за 7 дней",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE published_at >= now() - interval '7 days'",
+      "layout": {"row": 1, "col": 3, "size_x": 3, "size_y": 3}
+    },
+    {
+      "key": "avg_usd",
+      "title_ru": "Средняя цена USD",
+      "display": "scalar",
+      "sql": "SELECT ROUND(AVG(price_usd)::numeric, 0) AS avg_usd\nFROM leads_client\nWHERE price_usd IS NOT NULL",
+      "layout": {"row": 1, "col": 6, "size_x": 3, "size_y": 3}
+    },
+    {
+      "key": "avg_gel",
+      "title_ru": "Средняя цена GEL",
+      "display": "scalar",
+      "sql": "SELECT ROUND(AVG(price_gel)::numeric, 0) AS avg_gel\nFROM leads_client\nWHERE price_gel IS NOT NULL",
+      "layout": {"row": 1, "col": 9, "size_x": 3, "size_y": 3}
+    },
+    {
+      "key": "synced_by_day",
+      "title_ru": "Скачано по дням",
+      "display": "line",
+      "sql": "SELECT (synced_at AT TIME ZONE 'Asia/Tbilisi')::date AS day,\n       COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE synced_at >= now() - interval '30 days'\nGROUP BY 1\nORDER BY 1",
+      "layout": {"row": 2, "col": 0, "size_x": 12, "size_y": 6},
+      "series_keys": ["published_by_day"]
+    },
+    {
+      "key": "published_by_day",
+      "title_ru": "Опубликовано по дням",
+      "display": "line",
+      "sql": "SELECT (published_at AT TIME ZONE 'Asia/Tbilisi')::date AS day,\n       COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE published_at IS NOT NULL\n  AND published_at >= now() - interval '30 days'\nGROUP BY 1\nORDER BY 1",
+      "series_only": true
+    },
+    {
+      "key": "status_funnel",
+      "title_ru": "Воронка статусов",
+      "display": "bar",
+      "sql": "SELECT status,\n       COUNT(*)::bigint AS cnt\nFROM leads_client\nGROUP BY status\nORDER BY CASE status\n           WHEN 'new' THEN 1\n           WHEN 'contacted' THEN 2\n           WHEN 'qualified' THEN 3\n           WHEN 'converted' THEN 4\n           WHEN 'rejected' THEN 5\n           ELSE 99\n         END",
+      "layout": {"row": 3, "col": 0, "size_x": 5, "size_y": 4}
+    },
+    {
+      "key": "latest_leads",
+      "title_ru": "Последние лиды",
+      "display": "table",
+      "sql": "SELECT\n  external_id AS \"ID\",\n  address AS \"Адрес\",\n  district_name AS \"Район\",\n  urban_name AS \"Микрорайон\",\n  phone AS \"Телефон\",\n  price_usd AS \"Цена USD\",\n  price_gel AS \"Цена GEL\",\n  area_m2 AS \"Площадь (м²)\",\n  rooms AS \"Комнаты\",\n  owner_name AS \"Владелец\",\n  floor || '/' || total_floors AS \"Этаж\",\n  comment AS \"Состояние\",\n  'https://myhome.ge/pr/' || external_id AS \"Ссылка\"\nFROM leads_client\nORDER BY synced_at DESC NULLS LAST\nLIMIT 20",
+      "layout": {"row": 4, "col": 0, "size_x": 12, "size_y": 10}
+    }
+  ]
+}

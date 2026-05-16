@@ -2,6 +2,18 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — Metabase: дашборды «Мониторинг» и «Карта объектов» (API)
+
+- **Реализация:** `scripts/create_metabase_dashboards.py`, `scripts/metabase_api_common.py`, JSON bundles в `metabase/`; SQL к **`leads_client`**, даты — **`Asia/Tbilisi`**; идемпотентность: delete dashboard + cards → recreate.
+- **Не трогали:** `setup_metabase_dashboard.py`, дашборд **«PropRadar — Лиды»**.
+- **Проверки:** `pytest tests/unit/test_metabase_dashboard_bundles.py` + `ruff` — PASS; smoke на `https://metabase.usluga-market.ru` — **человек** (`python scripts/create_metabase_dashboards.py`).
+- **Документация:** `docs/METABASE_SETUP.md`, `CHANGELOG.md`.
+
+| Дашборд | Bundle |
+| -------- | ------ |
+| PropRadar — Мониторинг | `monitoring_admin_dashboard.json` |
+| PropRadar — Карта объектов | `map_objects_dashboard.json` |
+
 ## 2026-05-16 — myhome: `room_type_id` → `leads.rooms`
 
 - **Проблема:** `leads.rooms` = NULL при `room_type_id` в `myhome_statement_json` — код читал только `statement.room`.

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Metabase админ-дашборды (API):** `scripts/create_metabase_dashboards.py` + `scripts/metabase_api_common.py` — **«PropRadar — Мониторинг»** (10 плиток, `leads_client`, TZ `Asia/Tbilisi`) и **«PropRadar — Карта объектов»**; bundles `metabase/monitoring_admin_dashboard.json`, `metabase/map_objects_dashboard.json`; идемпотентное пересоздание по имени. **Smoke:** только человек (`METABASE_*`).
+
 ### Fixed
 
 - **myhome `room_type_id` → `leads.rooms`:** `resolve_rooms()` в `statement_snapshot.py` — fallback после `room`; `statement_to_lead_updates` и `parse_list_item`; миграция **`012_backfill_rooms_from_room_type_id.sql`** для существующих лидов.

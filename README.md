@@ -79,7 +79,7 @@ PropRadar/
    
    Канон полей API — **`src/parsers/adapters/myhome/myhome_api_schema.csv`**. После миграции **006** для уже существующих строк с пустым **`price_gel`** — однократный прогон **`python scripts/backfill_price_gel.py`** (только **new** и **`price_gel IS NULL`**, флаг **`--limit`**).
 7. Metabase: из корня `docker compose --profile tools up -d metabase`, UI **[http://localhost:3031](http://localhost:3031)** — см. **`[docs/METABASE_SETUP.md](docs/METABASE_SETUP.md)`**.
-8. Дашборд Metabase через API (после первого входа и подключения БД **«PropRadar Leads»**): `python scripts/setup_metabase_dashboard.py` (переменные `**METABASE_*`** в `.env`). SQL в **`metabase/propradar_dashboard.json`** рассчитан на проекцию **`leads_client`** (миграции **007**, **008** и при необходимости **009** после **006**; контракт столбцов — поле **`schema_reference`** в JSON); операторские заметки по вёрстке таблицы на дашборде — в **`docs/METABASE_SETUP.md`** и в поле **`operator_instructions_ru`** JSON.
+8. Дашборды Metabase через API (после первого входа и подключения БД **«PropRadar Leads»**): `python scripts/setup_metabase_dashboard.py` — **«PropRadar — Лиды»** (`metabase/propradar_dashboard.json`); `python scripts/create_metabase_dashboards.py` — **«PropRadar — Мониторинг»** и **«PropRadar — Карта объектов»** (переменные **`METABASE_*`** в `.env`, см. **`docs/METABASE_SETUP.md`**).
 
 Проверка compose из корня: `docker compose --profile infra --profile app config` (без `--profile` список сервисов пуст — у всех сервисов задан профиль). Фрагменты по отдельности (обязательно укажите профиль): `docker compose -f docker/infra/docker-compose.yml --profile infra config`. Деплой на сервер: `[docs/DEPLOY_SERVER.md](docs/DEPLOY_SERVER.md)`.
 
