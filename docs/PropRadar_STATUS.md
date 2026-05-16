@@ -2,6 +2,18 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — P1 hotfix: `fetch-ids` — `limit` в пагинации list_ids
+
+- **Проблема:** `GET /api/myhome/fetch-ids?limit=N` скачивал все ~300 страниц myhome (~132 с) → `ECONNABORTED` в n8n (таймаут 30 с).
+- **Реализация:** `src/parsers/adapters/myhome/list_ids.py` — `limit` в `fetch_all_list_items_sync`, ранний `break` по числу raw-элементов; проброс из `fetch_all_external_ids_sync` только при `since_days is None`.
+- **Проверки:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — **25 passed**; `ruff` — OK.
+- **Деплой:** rebuild/restart контейнера **`api`** — **человек**.
+
+| Поле | Значение |
+|------|----------|
+| Scope | `list_ids.py`, `test_myhome_list_ids.py` |
+| API контракт | без изменений |
+
 ## 2026-05-15 — phone_http: параллелизм 5 потоков (claim 1 / задача)
 
 - **Реализация:** `phone_http.py` — `enrich_batch` не делает один `claim(limit=N)`; пул **`MYHOME_PHONE_HTTP_WORKERS`** (default **5**), на задачу **`claim(1)`** + изолированный enrich; лог с **`thread=`**.

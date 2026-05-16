@@ -124,6 +124,41 @@ def test_fetch_all_external_ids_applies_limit() -> None:
     assert ids == ["24552178"]
 
 
+def test_fetch_all_external_ids_stops_pagination_at_limit() -> None:
+    pages_seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params.get("page", "1")
+        pages_seen.append(page)
+        item_id = 10_000_000 + int(page)
+        return httpx.Response(
+            200,
+            json={
+                "result": True,
+                "data": {
+                    "data": [
+                        {
+                            "id": item_id,
+                            "price": {"1": {"price_total": 100, "price_square": 1}},
+                            "created_at": "2025-01-15T10:00:00+00:00",
+                        },
+                    ],
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as client:
+        ids = fetch_all_external_ids_sync(
+            client,
+            base_url="https://api-statements.tnet.ge",
+            limit=1,
+            max_pages=5,
+        )
+    assert ids == ["10000001"]
+    assert pages_seen == ["1"]
+
+
 def test_fetch_all_external_ids_forwards_filters_for_limit_all(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,6 +189,7 @@ def test_fetch_all_external_ids_forwards_filters_for_limit_all(
     assert captured["category"] == "apartment"
     assert captured["object_type"] == "apartment"
     assert captured["seller_type"] == "private"
+    assert captured.get("limit") is None
 
 
 def test_raw_items_to_external_ids_since_days_filters_inside_window(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,6 +227,7 @@ def test_fetch_all_external_ids_respects_since_days(monkeypatch: pytest.MonkeyPa
 
     def _fake_fetch_all_list_items_sync(_client: httpx.Client, **kwargs: object) -> list:
         assert kwargs.get("seller_type") == "private"
+        assert kwargs.get("limit") is None
         return [
             {"id": 100, "price": {"1": {}}, "created_at": "2025-01-18T00:00:00+00:00"},
             {"id": 101, "price": {"1": {}}, "created_at": "2025-01-01T00:00:00+00:00"},

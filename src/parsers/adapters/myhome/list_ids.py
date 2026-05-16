@@ -117,12 +117,13 @@ def fetch_all_list_items_sync(
     *,
     base_url: str,
     max_pages: int = 500,
+    limit: int | None = None,
     city: str = "tbilisi",
     category: str = "apartment",
     object_type: str = "apartment",
     seller_type: str = "private",
 ) -> list[dict[str, Any]]:
-    """Загрузить все страницы списка (``data.data``), пока не пусто или лимит страниц."""
+    """Загрузить страницы списка до пустой выдачи, ``max_pages`` или ``limit`` raw-элементов."""
     out: list[dict[str, Any]] = []
     for page in range(1, max_pages + 1):
         batch = _fetch_page(
@@ -138,6 +139,8 @@ def fetch_all_list_items_sync(
             break
         out.extend(batch)
         logger.info("myhome list page=%s items=%s", page, len(batch))
+        if limit is not None and len(out) >= limit:
+            break
     return out
 
 
@@ -202,10 +205,12 @@ def fetch_all_external_ids_sync(
         msg = f"limit must be >= 1, got {limit}"
         raise ValueError(msg)
 
+    list_limit = limit if since_days is None else None
     raw = fetch_all_list_items_sync(
         client,
         base_url=base_url,
         max_pages=max_pages,
+        limit=list_limit,
         city=city,
         category=category,
         object_type=object_type,

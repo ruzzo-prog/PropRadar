@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **P1 / `fetch-ids` `limit` в пагинации:** `fetch_all_list_items_sync` принимает `limit` и останавливает обход страниц; `fetch_all_external_ids_sync` пробрасывает `limit` только при `since_days is None` (n8n `limit=N` укладывается в таймаут 30 с). **Проверки:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — PASS.
+
 ### Changed
 
 - **phone_http P1 — 5 параллельных потоков:** `enrich_batch` — до `limit` задач в `ThreadPoolExecutor`, каждая **`claim_pending_phone_enrichment(limit=1)`** → 2captcha → phone/show; лог **`phone_http_ok … thread=… latency_ms=…`**; `MYHOME_PHONE_HTTP_WORKERS` (default 5). **`_job_lock`** в worker без изменений.
