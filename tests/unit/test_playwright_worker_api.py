@@ -32,7 +32,7 @@ def test_enrich_returns_202() -> None:
         assert body["status"] == "accepted"
         assert body["adapter"] == "myhome"
         assert body["phase"] == "phone"
-    run.assert_called_once_with("phone")
+    run.assert_called_once_with("phone", override_limit=None)
 
 
 def test_enrich_phone_playwright_phase_returns_202() -> None:
@@ -43,7 +43,17 @@ def test_enrich_phone_playwright_phase_returns_202() -> None:
         )
         assert response.status_code == 202
         assert response.json()["phase"] == "phone_playwright"
-    run.assert_called_once_with("phone_playwright")
+    run.assert_called_once_with("phone_playwright", override_limit=None)
+
+
+def test_enrich_passes_limit_to_phase() -> None:
+    with patch("worker.main._run_myhome_enrich_phase") as run:
+        response = client.post(
+            "/enrich",
+            json={"adapter": "myhome", "phase": "phone", "limit": 120},
+        )
+        assert response.status_code == 202
+    run.assert_called_once_with("phone", override_limit=120)
 
 
 def test_login_returns_202() -> None:

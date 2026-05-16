@@ -46,6 +46,7 @@ class EnrichRequest(BaseModel):
     phase: Literal["detail", "phone", "phone_playwright", "pdf"] = Field(
         description="Фаза обогащения",
     )
+    limit: int | None = Field(default=None, description="Размер батча; иначе MYHOME_ENRICH_LIMIT")
 
 
 class LoginRequest(BaseModel):
@@ -131,13 +132,13 @@ def _run_myhome_phone_playwright(
     }
 
 
-def _run_myhome_enrich_phase(phase: str) -> None:
+def _run_myhome_enrich_phase(phase: str, *, override_limit: int | None = None) -> None:
     """Синхронный прогон одной фазы (как run_myhome_enricher, лимиты те же)."""
     settings = Settings()
     sessions = PostgresSessionFactory.from_database_url(str(settings.database_url))
     _ping_db(sessions)
     repo = PostgresLeadRepository(sessions)
-    limit = settings.myhome_enrich_limit
+    limit = override_limit or settings.myhome_enrich_limit
     src = MyHomeParser.SOURCE
     summary: dict[str, object] = {"adapter": "myhome", "phase": phase}
 
@@ -262,7 +263,7 @@ async def enrich(
     phase = body.phase
 
     def job() -> None:
-        _run_myhome_enrich_phase(phase)
+        _run_myhome_enrich_phase(phase, override_limit=body.limit)
 
     background_tasks.add_task(_locked_background, job)
     return {"status": "accepted", "adapter": body.adapter, "phase": body.phase}

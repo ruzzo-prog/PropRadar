@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — playwright-worker: `limit` в `POST /enrich`
+
+- **Проблема:** n8n передавал `limit` в JSON, `EnrichRequest` не читал поле — всегда `settings.myhome_enrich_limit` (**50**).
+- **Фикс:** `src/worker/main.py` — `EnrichRequest.limit: int | None`; `job()` → `_run_myhome_enrich_phase(..., override_limit=body.limit)`.
+- **Проверки:** `pytest tests/unit/test_playwright_worker_api.py` — **человек/release-check**.
+- **Деплой:** rebuild **`playwright-worker`** — **человек**.
+
 ## 2026-05-16 — myhome phone: резерв при claim + TG статистика n8n
 
 - **Проблема (@architect):** параллельные потоки `enrich_batch` повторно забирали одни лиды — claim без in-flight → завышенный `enriched` при NULL `phone`.

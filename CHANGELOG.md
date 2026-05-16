@@ -6,6 +6,10 @@
 
 ### Fixed
 
+- **playwright-worker `POST /enrich` — `limit` в теле:** `EnrichRequest.limit` (опционально) пробрасывается в `_run_myhome_enrich_phase`; без поля — `settings.myhome_enrich_limit` (default **50**). n8n может задавать `MIN(pending, 150)` вместо фиксированных 50.
+
+### Fixed
+
 - **myhome phone claim — резерв очереди:** при `claim_pending_phone_enrichment` — `status_reason = phone_enriching`, `updated_at` (без `phone_retries`); очередь + TTL **`PHONE_ENRICH_STALE_MINUTES`**; `sweep_stale_phone_enriching` в начале `enrich_batch`; **`phone_retries += 1` только в `release_phone_enrich_after_failure`** при реальной ошибке; после успеха `status_reason = NULL` в `update_enriched_fields`. Устраняет повторный claim и ложные retries при claim/краше воркера.
 
 ### Added
