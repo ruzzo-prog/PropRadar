@@ -25,14 +25,27 @@ def test_monitoring_bundle_layout_and_series() -> None:
     assert chart.series_card_ids == (ids["published_by_day"],)
 
 
-def test_map_bundle_single_tile() -> None:
+def test_map_bundle_scalars_and_map_layout() -> None:
     bundle = _load_bundle("map_objects_dashboard.json")
     assert bundle["dashboard_name"] == "PropRadar — Карта объектов"
     cards = bundle["cards"]
-    ids = {"map": 42}
+    assert len(cards) == 3
+    ids = {str(c["key"]): 100 + i for i, c in enumerate(cards)}
     layout = _build_layout(cards, ids)
-    assert len(layout) == 1
-    assert layout[0].size_x == 12
+    assert len(layout) == 3
+    map_card = next(c for c in cards if c["key"] == "map")
+    assert map_card["visualization_settings"]["map.latitude_column"] == "longitude"
+    map_tile = next(dc for dc in layout if dc.card_id == ids["map"])
+    assert map_tile.row == 1 and map_tile.size_x == 12
+
+
+def test_monitoring_latest_leads_sql_fixes() -> None:
+    bundle = _load_bundle("monitoring_admin_dashboard.json")
+    latest = next(c for c in bundle["cards"] if c["key"] == "latest_leads")
+    sql = latest["sql"]
+    assert "myhome_statement_json->>'condition'" in sql
+    assert "CASE" in sql and "TRIM(lc.floor)" in sql
+    assert "JOIN leads l" in sql
 
 
 def test_bundles_are_valid_json() -> None:

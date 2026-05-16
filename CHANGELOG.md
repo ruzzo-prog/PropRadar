@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Metabase админ-дашборды:** таблица «Последние лиды» — этаж без дубля `13/13`, «Состояние» из `myhome_statement_json.condition` (JOIN `leads`); карта — swap `map.latitude_column`/`longitude_column`, скаляры «Всего точек» и «Средняя цена USD» на дашборде карты.
+
 ### Added
 
 - **Metabase админ-дашборды (API):** `scripts/create_metabase_dashboards.py` + `scripts/metabase_api_common.py` — **«PropRadar — Мониторинг»** (10 плиток, `leads_client`, TZ `Asia/Tbilisi`) и **«PropRadar — Карта объектов»**; bundles `metabase/monitoring_admin_dashboard.json`, `metabase/map_objects_dashboard.json`; идемпотентное пересоздание по имени. **Smoke:** только человек (`METABASE_*`).

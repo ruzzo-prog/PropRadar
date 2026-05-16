@@ -58,6 +58,25 @@ def _dashboard_url(base: str, dashboard_id: int) -> str:
     return f"{base.rstrip('/')}/dashboard/{dashboard_id}"
 
 
+def _apply_visualization_settings(
+    client: httpx.Client,
+    card_id: int,
+    settings: dict[str, Any],
+) -> None:
+    gr = client.get(f"/api/card/{card_id}")
+    gr.raise_for_status()
+    card = gr.json()
+    if not isinstance(card, dict):
+        msg = f"GET /api/card/{card_id}: не объект"
+        raise RuntimeError(msg)
+    base = card.get("visualization_settings")
+    merged = {**base, **settings} if isinstance(base, dict) else dict(settings)
+    card["visualization_settings"] = merged
+    pr = client.put(f"/api/card/{card_id}", json=card)
+    if pr.status_code >= 400:
+        raise RuntimeError(f"PUT /api/card/{card_id}: {pr.text[:500]}")
+
+
 def _create_cards(
     client: httpx.Client,
     *,
@@ -72,7 +91,7 @@ def _create_cards(
         sql_text = str(spec["sql"])
         desc = spec.get("description_ru") or None
         _LOGGER.info("Создание карточки «%s» (key=%s)", title, key)
-        ids_by_key[key] = create_native_card(
+        card_id = create_native_card(
             client,
             database_id=database_id,
             name=title,
@@ -80,6 +99,10 @@ def _create_cards(
             sql_text=sql_text,
             display=display,
         )
+        viz = spec.get("visualization_settings")
+        if isinstance(viz, dict) and viz:
+            _apply_visualization_settings(client, card_id, viz)
+        ids_by_key[key] = card_id
     return ids_by_key
 
 

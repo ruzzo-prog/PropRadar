@@ -77,7 +77,7 @@
       "key": "latest_leads",
       "title_ru": "Последние лиды",
       "display": "table",
-      "sql": "SELECT\n  external_id AS \"ID\",\n  address AS \"Адрес\",\n  district_name AS \"Район\",\n  urban_name AS \"Микрорайон\",\n  phone AS \"Телефон\",\n  price_usd AS \"Цена USD\",\n  price_gel AS \"Цена GEL\",\n  area_m2 AS \"Площадь (м²)\",\n  rooms AS \"Комнаты\",\n  owner_name AS \"Владелец\",\n  floor || '/' || total_floors AS \"Этаж\",\n  comment AS \"Состояние\",\n  'https://myhome.ge/pr/' || external_id AS \"Ссылка\"\nFROM leads_client\nORDER BY synced_at DESC NULLS LAST\nLIMIT 20",
+      "sql": "SELECT\n  lc.external_id AS \"ID\",\n  lc.address AS \"Адрес\",\n  lc.district_name AS \"Район\",\n  lc.urban_name AS \"Микрорайон\",\n  lc.phone AS \"Телефон\",\n  lc.price_usd AS \"Цена USD\",\n  lc.price_gel AS \"Цена GEL\",\n  lc.area_m2 AS \"Площадь (м²)\",\n  lc.rooms AS \"Комнаты\",\n  lc.owner_name AS \"Владелец\",\n  CASE\n    WHEN lc.floor IS NOT NULL AND lc.total_floors IS NOT NULL\n         AND TRIM(lc.floor) = lc.total_floors::text THEN TRIM(lc.floor)\n    WHEN lc.floor IS NOT NULL AND lc.total_floors IS NOT NULL\n         THEN TRIM(lc.floor) || '/' || lc.total_floors::text\n    WHEN lc.floor IS NOT NULL THEN TRIM(lc.floor)\n    ELSE NULL\n  END AS \"Этаж\",\n  NULLIF(TRIM(l.myhome_statement_json->>'condition'), '') AS \"Состояние\",\n  'https://myhome.ge/pr/' || lc.external_id AS \"Ссылка\"\nFROM leads_client lc\nJOIN leads l ON l.source = lc.source AND l.external_id = lc.external_id\nORDER BY lc.synced_at DESC NULLS LAST\nLIMIT 20",
       "layout": {"row": 4, "col": 0, "size_x": 12, "size_y": 10}
     }
   ]

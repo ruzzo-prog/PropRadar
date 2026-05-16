@@ -2,6 +2,11 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — Metabase: hotfix дашбордов (этаж, состояние, карта)
+
+- **Фикс:** `monitoring_admin_dashboard.json` — этаж `CASE`, «Состояние» = `condition` из JSON (`JOIN leads`); `map_objects_dashboard.json` — swap pin lat/lng в `visualization_settings`, 2 скаляра; `create_metabase_dashboards.py` — `PUT` per-card `visualization_settings`.
+- **Деплой:** `python scripts/create_metabase_dashboards.py` на сервере — **человек**.
+
 ## 2026-05-16 — Metabase: дашборды «Мониторинг» и «Карта объектов» (API)
 
 - **Реализация:** `scripts/create_metabase_dashboards.py`, `scripts/metabase_api_common.py`, JSON bundles в `metabase/`; SQL к **`leads_client`**, даты — **`Asia/Tbilisi`**; идемпотентность: delete dashboard + cards → recreate.

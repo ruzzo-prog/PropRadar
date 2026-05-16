@@ -2,12 +2,31 @@
   "dashboard_name": "PropRadar — Карта объектов",
   "cards": [
     {
+      "key": "points_total",
+      "title_ru": "Всего точек",
+      "display": "scalar",
+      "sql": "SELECT COUNT(*)::bigint AS cnt\nFROM leads_client\nWHERE geo_lat IS NOT NULL\n  AND geo_lng IS NOT NULL",
+      "layout": {"row": 0, "col": 0, "size_x": 4, "size_y": 3}
+    },
+    {
+      "key": "avg_price_usd",
+      "title_ru": "Средняя цена USD",
+      "display": "scalar",
+      "sql": "SELECT ROUND(AVG(price_usd)::numeric, 0) AS avg_usd\nFROM leads_client\nWHERE geo_lat IS NOT NULL\n  AND geo_lng IS NOT NULL\n  AND price_usd IS NOT NULL",
+      "layout": {"row": 0, "col": 4, "size_x": 4, "size_y": 3}
+    },
+    {
       "key": "map",
       "title_ru": "Карта объектов",
       "display": "map",
       "description_ru": "До 500 последних лидов с координатами (leads_client).",
       "sql": "SELECT\n  geo_lat AS latitude,\n  geo_lng AS longitude,\n  district_name AS \"Район\",\n  rooms AS \"Комнаты\",\n  price_usd AS \"Цена USD\"\nFROM leads_client\nWHERE geo_lat IS NOT NULL\n  AND geo_lng IS NOT NULL\nORDER BY synced_at DESC NULLS LAST\nLIMIT 500",
-      "layout": {"row": 0, "col": 0, "size_x": 12, "size_y": 10}
+      "visualization_settings": {
+        "map.type": "pin",
+        "map.latitude_column": "longitude",
+        "map.longitude_column": "latitude"
+      },
+      "layout": {"row": 1, "col": 0, "size_x": 12, "size_y": 10}
     }
   ]
 }
