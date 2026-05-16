@@ -14,7 +14,7 @@ import httpx
 
 from domain.lead import Lead
 from parsers.adapters.myhome.constants import LIST_PATH, REQUEST_TIMEOUT_S, api_headers
-from parsers.adapters.myhome.statement_snapshot import parse_room_value
+from parsers.adapters.myhome.statement_snapshot import resolve_rooms
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,7 @@ def parse_list_item(raw: dict[str, Any], *, source: str = "myhome") -> Lead | No
     price_usd_val = int(usd_total) if usd_total is not None else None
     price_m2 = int(per_m2_usd) if per_m2_usd is not None else None
     published_at = _parse_published_at(raw)
-    rooms = parse_room_value(raw.get("room"))
+    rooms = resolve_rooms(room=raw.get("room"), room_type_id=raw.get("room_type_id"))
     return Lead(
         source=source,
         external_id=external_id,

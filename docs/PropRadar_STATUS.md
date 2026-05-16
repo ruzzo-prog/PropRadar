@@ -2,6 +2,18 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — myhome: `room_type_id` → `leads.rooms`
+
+- **Проблема:** `leads.rooms` = NULL при `room_type_id` в `myhome_statement_json` — код читал только `statement.room`.
+- **Реализация:** `resolve_rooms()` (`statement_snapshot.py`) — приоритет `room`, иначе `room_type_id` (int > 0); `enricher.py`, `parser.py`; миграция **`migrations/012_backfill_rooms_from_room_type_id.sql`**.
+- **Проверки:** `pytest tests/unit/test_myhome_statement_snapshot.py` — PASS.
+- **Деплой:** rebuild/restart **`api`**; затем применить **012** на `leads-db` — **человек**.
+
+| Поле | Значение |
+|------|----------|
+| Scope | `statement_snapshot.py`, `enricher.py`, `parser.py` |
+| Backfill | SQL 012, опционально после деплоя |
+
 ## 2026-05-16 — playwright-worker: login-if-needed в `phase=phone`
 
 - **Проблема:** cron login без парсинга — риск бана; `phone_http` не проверял `expires_at`; при гонке `/login`+`/enrich` enrich дропался.
@@ -59,7 +71,7 @@
 
 - **Фикс 1:** **`parse_list_item`** (`parser.py`) — **`list.room`** → **`leads.rooms`** при ingest списка.
 - **Фикс 2–3:** **`statement_snapshot.py`** + **`statement_to_lead_updates`** — в JSONB: **`images`** без **`large`** (только **`thumb`**/**`blur`**), сортировка по **`is_main`**; удалены **`nearby_places`**, **`gifts`**, VIP-флаги и др. (15 ключей); **`comment`** без HTML. Старые лиды не переписываются.
-- **NOTICE:** ingest **только detail** без **`statement.room`** — **`rooms`** может остаться NULL; **`room_type_id` → rooms** — отдельная задача.
+- **NOTICE (закрыто 2026-05-16):** fallback **`room_type_id` → rooms** — см. запись выше; backfill — миграция 012.
 - **Проверки:** **`pytest tests/unit/`** — PASS. **Деплой:** rebuild **`playwright-worker`** — **человек**.
 
 ## 2026-05-15 — phone queue: Playwright использует claim (SKIP LOCKED)

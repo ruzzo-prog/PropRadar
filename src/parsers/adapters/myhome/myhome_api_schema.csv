@@ -85,7 +85,7 @@ detail.statement.rating,myhome_statement_json,mixed,true,None
 detail.statement.real_estate_type_id,myhome_statement_json,mixed,true,1
 detail.statement.rent_period,myhome_statement_json,mixed,true,None
 detail.statement.rent_type_id,myhome_statement_json,mixed,true,None
-detail.statement.room_type_id,myhome_statement_json,mixed,true,2
+detail.statement.room_type_id,rooms (fallback) + myhome_statement_json,mixed,true,2
 detail.statement.rs_code,myhome_statement_json,mixed,true,None
 detail.statement.status_id,myhome_statement_json,mixed,true,2
 detail.statement.storeroom_area,myhome_statement_json,mixed,true,None

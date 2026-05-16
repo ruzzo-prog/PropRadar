@@ -25,8 +25,8 @@ from parsers.adapters.myhome.constants import DETAIL_PATH_TMPL, REQUEST_TIMEOUT_
 from parsers.adapters.myhome.published import TBILISI
 from parsers.adapters.myhome.schema import MyHomeStatementPayload
 from parsers.adapters.myhome.statement_snapshot import (
-    parse_room_value,
     prepare_statement_snapshot,
+    resolve_rooms,
 )
 from repositories.base import LeadRepository
 
@@ -132,7 +132,10 @@ def statement_to_lead_updates(statement: dict[str, Any]) -> dict[str, Any]:
     if floor_s:
         updates["floor"] = floor_s
 
-    room = parse_room_value(statement.get("room"))
+    room = resolve_rooms(
+        room=statement.get("room"),
+        room_type_id=statement.get("room_type_id"),
+    )
     if room is not None:
         updates["rooms"] = room
 

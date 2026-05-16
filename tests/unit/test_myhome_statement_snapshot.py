@@ -10,6 +10,7 @@ from parsers.adapters.myhome.parser import parse_list_item
 from parsers.adapters.myhome.statement_snapshot import (
     parse_room_value,
     prepare_statement_snapshot,
+    resolve_rooms,
 )
 
 _DROP_KEYS = {
@@ -38,6 +39,16 @@ def test_parse_room_value_int_and_string() -> None:
     assert parse_room_value(None) is None
 
 
+def test_resolve_rooms_prefers_room_over_room_type_id() -> None:
+    assert resolve_rooms(room="2", room_type_id=4) == 2
+
+
+def test_resolve_rooms_from_room_type_id() -> None:
+    assert resolve_rooms(room=None, room_type_id=4) == 4
+    assert resolve_rooms(room_type_id=0) is None
+    assert resolve_rooms() is None
+
+
 def test_parse_list_item_maps_room_to_leads_rooms() -> None:
     lead = parse_list_item(
         {
@@ -49,6 +60,19 @@ def test_parse_list_item_maps_room_to_leads_rooms() -> None:
     )
     assert lead is not None
     assert lead.rooms == 2
+
+
+def test_parse_list_item_maps_room_type_id_to_leads_rooms() -> None:
+    lead = parse_list_item(
+        {
+            "id": 100,
+            "uuid": "64e53fa9-e0dc-4538-a19b-46125f08b4ae",
+            "price": {"1": {"price_total": 100}},
+            "room_type_id": 4,
+        },
+    )
+    assert lead is not None
+    assert lead.rooms == 4
 
 
 def test_prepare_statement_snapshot_images_and_drops() -> None:
@@ -87,6 +111,6 @@ def test_statement_to_lead_updates_sanitized_json() -> None:
     snap = upd["myhome_statement_json"]
     assert "gifts" not in snap
     assert "room_type_id" in snap
-    assert "rooms" not in upd
+    assert upd["rooms"] == 2
     assert snap["comment"] == "x"
     assert "large" not in snap["images"][0]

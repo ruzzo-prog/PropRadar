@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **myhome `room_type_id` → `leads.rooms`:** `resolve_rooms()` в `statement_snapshot.py` — fallback после `room`; `statement_to_lead_updates` и `parse_list_item`; миграция **`012_backfill_rooms_from_room_type_id.sql`** для существующих лидов.
+
 ### Changed
 
 - **playwright-worker / `phase=phone` — login-if-needed:** перед `enrich_batch` проверка JWT (`session_needs_login` в `phone_http.py`); при `remaining < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default **40**, p95 login ~8 с + 30 с) — `myhome_login.py` в том же `_job_lock`; при `exit_code != 0` enrich **не** стартует (`login_failed_exit_*`). JWT payload — **base64url** с корректным padding; невалидный env → warning + default 40. n8n шлёт только **`POST /enrich`**; cron login **`MvaHceZGVlUxDIHM`** — **inactive**.

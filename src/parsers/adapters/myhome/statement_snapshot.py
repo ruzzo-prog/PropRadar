@@ -37,6 +37,16 @@ def parse_room_value(room: Any) -> int | None:
     return None
 
 
+def resolve_rooms(*, room: Any = None, room_type_id: Any = None) -> int | None:
+    """Сначала ``room`` (list/detail), иначе ``room_type_id`` как число комнат (> 0)."""
+    parsed = parse_room_value(room)
+    if parsed is not None:
+        return parsed
+    if isinstance(room_type_id, int) and room_type_id > 0:
+        return room_type_id
+    return None
+
+
 def _normalize_images(images: Any) -> list[dict[str, Any]]:
     if not isinstance(images, list):
         return []
