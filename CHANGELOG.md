@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **playwright-worker / `phase=phone` — login-if-needed:** перед `enrich_batch` проверка JWT (`session_needs_login` в `phone_http.py`); при `remaining < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default **40**, p95 login ~8 с + 30 с) — `myhome_login.py` в том же `_job_lock`; при `exit_code != 0` enrich **не** стартует (`login_failed_exit_*`). JWT payload — **base64url** с корректным padding; невалидный env → warning + default 40. n8n шлёт только **`POST /enrich`**; cron login **`MvaHceZGVlUxDIHM`** — **inactive**.
+
+- **n8n orchestration (login / enrich split):** отдельный workflow **`PropRadar myhome session login`** (`MvaHceZGVlUxDIHM`, cron `3-59/9 * * * *` → `POST /login`) — **деактивирован**; основной **`PropRadar — myhome v4`** (`yG1JxQnR6kX0Vlgt`) — ingest → `POST /enrich` `phase=phone` **без** `/login` в том же execution (устранение silent drop при `_job_lock`).
+
 ### Fixed
 
 - **P1 / `fetch-ids` `limit` в пагинации:** `fetch_all_list_items_sync` принимает `limit` и останавливает обход страниц; `fetch_all_external_ids_sync` пробрасывает `limit` только при `since_days is None` (n8n `limit=N` укладывается в таймаут 30 с). **Проверки:** `pytest tests/unit/test_myhome_list_ids.py tests/unit/test_myhome_http_api.py` — PASS.

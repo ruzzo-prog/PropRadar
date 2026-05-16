@@ -15,6 +15,34 @@
 9. [Troubleshooting](#troubleshooting)
 10. [Экспорт workflow (опционально)](#экспорт-workflow-опционально)
 11. [Связка API, worker и CLI](#связка-api-playwright-worker-и-run_myhome_enricherpy)
+12. [Два workflow: login cron и основной sync](#два-workflow-login-cron-и-основной-sync)
+
+---
+
+## Основной sync и login-if-needed в воркере
+
+**Прод (n8n):** основной workflow шлёт только **`POST /enrich`** `phase=phone`. JWT при необходимости обновляет **playwright-worker** (login-if-needed в том же `_job_lock`, порог `MYHOME_SESSION_MIN_REMAINING_SECONDS`, default **40** с).
+
+| Workflow | ID (n8n) | Расписание | Назначение |
+| -------- | ---------- | ---------- | ---------- |
+| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`POST /enrich`** `phase=phone` |
+| ~~PropRadar myhome session login~~ | `MvaHceZGVlUxDIHM` | ~~cron `3-59/9`~~ | **inactive** — login в воркере |
+
+**Инвариант:** в основном workflow (`yG1JxQnR6kX0Vlgt`) узла **`POST /login` нет**. Отдельный cron-login **не используется**.
+
+```mermaid
+flowchart TB
+  subgraph loginCron["MvaHceZGVlUxDIHM — inactive (login в воркере)"]
+    LC[Schedule 3-59/9] --> L1[POST /login]
+  end
+  subgraph mainSync["yG1JxQnR6kX0Vlgt — 09:00 daily"]
+    MS[Schedule 09:00] --> F[fetch-ids]
+    F --> I[ingest]
+    I --> E[POST /enrich phase=phone]
+  end
+```
+
+Старый workflow `isac0mztKLIIaYOP` — не использовать (неактивен).
 
 ---
 
@@ -387,6 +415,7 @@ Listing for {{address}} is no longer found on myhome.ge. If it was sold, please 
 | Пустой `disappeared`, но лиды есть           | В БД нет `new` по `source=myhome` или все ID ещё в API                   | Проверить SQL; убедиться, что ingest отработал                                                                            |
 | Cron «сдвинут» на часы                       | TZ сервера ≠ ожидаемый                                                   | Уточнить TZ контейнера n8n; скорректировать cron                                                                          |
 | Дубли WhatsApp при повторном execution       | Повторный прогон того же набора                                          | Ввести операционный дедуп (учёт уже отправленных `external_id` в сторонней таблице или логе) — скрипты Python не меняются |
+| enrich **202**, телефон пустой; в логах `background job skipped` или `login_failed_exit_*` | Параллельные enrich/login или login не удался | Один enrich за раз; в логах — `myhome_login exit_code=0` и `enrich done` `phase=phone`; при `login_failed_exit_*` — проверить `MYHOME_EMAIL`/`MYHOME_PASSWORD` |
 
 
 ---

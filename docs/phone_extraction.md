@@ -65,7 +65,7 @@ Playwright остаётся как **fallback** и для обновления J
 
 ```
 1. Прочитать AccessToken из myhome_session.json
-   └─ Если истёк → POST /login → Playwright обновляет сессию
+   └─ Если `expires_at - now < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default 40 с) → `myhome_login.py` в том же job воркера
 
 2. Получить statement_uuid
    └─ GET https://api-statements.tnet.ge/v1/statements/{ext_id}
@@ -92,7 +92,7 @@ Playwright остаётся как **fallback** и для обновления J
 5. Разобрать ответ
    └─ HTTP 200 + JSON → phone_number из data.phone_number
    └─ HTTP 400 / bad token → increment phone_retries → следующий батч
-   └─ HTTP 401 → сессия истекла → POST /login + retry
+   └─ HTTP 401 → сессия истекла → `phone_retries += 1` (relogin в том же job — follow-up для mid-batch)
 
 6. Сохранить в БД
    └─ repository.update_enriched_fields(lead_id, phone=…)
@@ -317,7 +317,7 @@ docker logs propradar-playwright-worker-1 --tail 100 -f
 | Приоритет   | Задача                                                                                                   |
 | ----------- | -------------------------------------------------------------------------------------------------------- |
 | **ВЫСОКИЙ** | `init: true` в `docker-compose.yml` для playwright-worker → tini как PID 1, автоматический reaping зомби |
-| **ВЫСОКИЙ** | n8n workflow: расписание POST /login каждые 8–10 мин + POST /enrich phase=phone                          |
+| ~~**ВЫСОКИЙ**~~ | ~~n8n: login cron + enrich~~ — **2026-05-16:** login-if-needed в `phase=phone` воркера; cron `MvaHceZGVlUxDIHM` inactive; v4 только `POST /enrich` |
 | **СРЕДНИЙ** | Мониторинг success rate: метрика после каждого батча, алерт если `enriched/total < 80%`                  |
 | **СРЕДНИЙ** | Ротация прокси при росте объёма (500+ лидов/день)                                                        |
 | **НИЗКИЙ**  | Ограничение памяти контейнера playwright-worker                                                          |

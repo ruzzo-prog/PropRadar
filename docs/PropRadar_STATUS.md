@@ -2,6 +2,33 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — playwright-worker: login-if-needed в `phase=phone`
+
+- **Проблема:** cron login без парсинга — риск бана; `phone_http` не проверял `expires_at`; при гонке `/login`+`/enrich` enrich дропался.
+- **Реализация:** `phone_http.py` — `access_token_remaining_seconds`, `session_needs_login`; `worker/main.py` — перед phone HTTP: login при `remaining < 40` с (env `MYHOME_SESSION_MIN_REMAINING_SECONDS`, p95 login ~7.8 с + 30 с запас); `exit_code != 0` → без enrich; лог `myhome_login duration_s=…`.
+- **n8n:** только **`POST /enrich`** в **`yG1JxQnR6kX0Vlgt`**; **`MvaHceZGVlUxDIHM`** — **inactive**.
+- **Проверки:** `pytest tests/unit/` — **103 passed**; Scanner PASS (urlsafe JWT decode + fallback при невалидном `MYHOME_SESSION_MIN_REMAINING_SECONDS`).
+- **Деплой:** rebuild/restart **`playwright-worker`** — **человек**.
+- **Smoke (человек):** свежий session → enrich без login; удалить session → один enrich → `exit_code=0` → `enrich done`; SQL `phone IS NOT NULL`.
+
+| Поле | Значение |
+|------|----------|
+| Scope | `phone_http.py`, `worker/main.py`, unit-тесты |
+| Порог JWT | default **40** с (`MYHOME_SESSION_MIN_REMAINING_SECONDS`) |
+
+## 2026-05-16 — n8n: разнос `/login` и `/enrich` (вариант A, superseded login cron)
+
+- **Проблема:** в одном execution `POST /login` + `POST /enrich` → enrich **202**, но `background job skipped` — телефон не обогащался.
+- **Реализация (n8n UI, MCP):**
+  - **`yG1JxQnR6kX0Vlgt`** переименован в **PropRadar — myhome v4** — узел **`POST /login` удалён**; цепочка: health → fetch → ingest → enrich `phase=phone`.
+  - **`MvaHceZGVlUxDIHM`** — cron login — **деактивирован** (логин перенесён в воркер, см. запись выше).
+- **Не трогали:** `isac0mztKLIIaYOP`, `phone.py`, сигнатуру `POST /enrich`.
+
+| Workflow | ID | Active |
+| -------- | --- | ------ |
+| PropRadar — myhome v4 | `yG1JxQnR6kX0Vlgt` | да |
+| PropRadar myhome session login | `MvaHceZGVlUxDIHM` | **нет** |
+
 ## 2026-05-16 — P1 hotfix: `fetch-ids` — `limit` в пагинации list_ids
 
 - **Проблема:** `GET /api/myhome/fetch-ids?limit=N` скачивал все ~300 страниц myhome (~132 с) → `ECONNABORTED` в n8n (таймаут 30 с).

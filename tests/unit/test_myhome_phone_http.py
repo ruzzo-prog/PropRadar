@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import threading
 import time
@@ -17,9 +18,12 @@ from parsers.adapters.myhome.phone_http import (
     MyHomePhoneHttpEnricher,
     PhoneShowError,
     TwoCaptchaClient,
+    _decode_jwt_payload_segment,
+    access_token_remaining_seconds,
     httpx_client_kwargs_from_settings,
     load_access_token,
     post_phone_show,
+    session_needs_login,
 )
 from repositories.base import LeadRepository
 
@@ -84,6 +88,49 @@ class _PhoneRepo(LeadRepository):
         status_reason: str | None = None,
     ) -> int:
         return 0
+
+
+def _session_with_token_expires(tmp_path: Path, expires_at: float) -> Path:
+    payload = (
+        base64.urlsafe_b64encode(json.dumps({"expires_at": expires_at}).encode())
+        .decode()
+        .rstrip("=")
+    )
+    token = f"hdr.{payload}.sig"
+    session = {"cookies": [{"name": "AccessToken", "value": token, "domain": ".tnet.ge"}]}
+    path = tmp_path / "session.json"
+    path.write_text(json.dumps(session), encoding="utf-8")
+    return path
+
+
+def test_decode_jwt_payload_segment_urlsafe_unpadded() -> None:
+    raw = base64.urlsafe_b64encode(
+        json.dumps({"expires_at": 1_700_000_000, "sub": "x/y+z"}).encode(),
+    ).decode().rstrip("=")
+    payload = _decode_jwt_payload_segment(raw)
+    assert payload["expires_at"] == 1_700_000_000
+    assert payload["sub"] == "x/y+z"
+
+
+def test_access_token_remaining_seconds_from_jwt(tmp_path: Path) -> None:
+    path = _session_with_token_expires(tmp_path, time.time() + 120)
+    remaining = access_token_remaining_seconds(path)
+    assert remaining is not None
+    assert 110 < remaining <= 120
+
+
+def test_session_needs_login_missing_file(tmp_path: Path) -> None:
+    assert session_needs_login(tmp_path / "missing.json", min_remaining=40) is True
+
+
+def test_session_needs_login_expired_token(tmp_path: Path) -> None:
+    path = _session_with_token_expires(tmp_path, time.time() + 10)
+    assert session_needs_login(path, min_remaining=40) is True
+
+
+def test_session_needs_login_fresh_token(tmp_path: Path) -> None:
+    path = _session_with_token_expires(tmp_path, time.time() + 600)
+    assert session_needs_login(path, min_remaining=40) is False
 
 
 def test_load_access_token_from_storage(tmp_path: Path) -> None:

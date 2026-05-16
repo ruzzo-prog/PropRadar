@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import threading
@@ -87,6 +88,51 @@ def load_access_token(session_path: Path | None) -> str:
         msg = "access_token_missing"
         raise PhoneShowError(msg, retryable=False)
     return str(token)
+
+
+def _decode_jwt_payload_segment(segment: str) -> dict[str, Any]:
+    """JWT payload segment: base64url (unpadded), not standard base64."""
+    pad = "=" * (-len(segment) % 4)
+    raw = base64.urlsafe_b64decode(segment + pad)
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        msg = "jwt_payload_not_object"
+        raise TypeError(msg)
+    return data
+
+
+def access_token_remaining_seconds(session_path: Path | None) -> float | None:
+    """Секунды до ``expires_at`` JWT AccessToken в storage state; ``None`` если не прочитать."""
+    if session_path is None or not session_path.is_file():
+        return None
+    try:
+        storage = json.loads(session_path.read_text(encoding="utf-8"))
+        token = next(
+            (c["value"] for c in storage.get("cookies", []) if c.get("name") == "AccessToken"),
+            None,
+        )
+        if not token:
+            return None
+        parts = token.split(".")
+        if len(parts) < 2:
+            return None
+        payload = _decode_jwt_payload_segment(parts[1])
+        expires_at = payload.get("expires_at")
+        if expires_at is None:
+            return None
+        return float(expires_at) - time.time()
+    except Exception:
+        return None
+
+
+def session_needs_login(session_path: Path | None, *, min_remaining: float) -> bool:
+    """Нужен ли ``myhome_login`` перед phone HTTP (как ``phone.py``, порог настраивается)."""
+    if session_path is None or not session_path.is_file():
+        return True
+    remaining = access_token_remaining_seconds(session_path)
+    if remaining is None:
+        return True
+    return remaining < min_remaining
 
 
 def resolve_statement_uuid(

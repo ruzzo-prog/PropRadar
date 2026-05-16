@@ -54,7 +54,7 @@ flowchart TB
 
 **Фазы воркера (`POST /enrich`):** **`detail`** (HTTP Statements API), **`phone`** (HTTP: **2captcha** + **`phone/show`**, см. **`MyHomePhoneHttpEnricher`**), **`phone_playwright`** (Playwright fallback, **`MyHomePhoneEnricher`**), **`pdf`** (Playwright **`page.pdf()`**). Успех для n8n — только **202**; результат — в БД / логе **`enrich done`**. Типовой workflow: **`phone`** после ingest; узел **добивки** (повтор **`phone`** через паузу) для **`phone_retries` 1–2**; опционально **`phone_playwright`**; **`detail`** / **`pdf`** — отдельное расписание или CLI **`scripts/run_myhome_enricher.py`**.
 
-**Телефон (myhome):** очередь — **`source=myhome`**, **`status=new`**, **`phone` пустой**, **`phone_retries < 3`**. После **3** неуспешных попыток — **`status_reason=phone_enrich_failed`** (статус **`new`**). JWT: **`POST /login`** / **`myhome_login.py`** (Playwright), не HTTP refresh **`api3.myhome.ge`**.
+**Телефон (myhome):** очередь — **`source=myhome`**, **`status=new`**, **`phone` пустой**, **`phone_retries < 3`**. После **3** неуспешных попыток — **`status_reason=phone_enrich_failed`** (статус **`new`**). JWT: при **`phase=phone`** воркер сам вызывает **`myhome_login.py`** если `expires_at - now < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default **40** с); отдельный cron **`POST /login`** не используется. Не HTTP refresh **`api3.myhome.ge`**.
 
 ---
 
@@ -62,6 +62,7 @@ flowchart TB
 
 | № | Узел | Назначение |
 |---|------|------------|
+| L | **Login-if-needed** (внутри `phase=phone`) | `myhome_login.py` в том же `_job_lock`, если JWT скоро истечёт; cron `MvaHceZGVlUxDIHM` — **inactive** |
 | 0 | **Schedule Trigger** | Периодический запуск (cron/интервал). |
 | 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |

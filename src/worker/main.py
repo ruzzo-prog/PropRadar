@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from threading import Lock
@@ -21,7 +22,10 @@ from config.settings import Settings
 from parsers.adapters.myhome.enricher import MyHomeEnricher
 from parsers.adapters.myhome.pdf import MyHomePdfEnricher
 from parsers.adapters.myhome.phone import MyHomePhoneEnricher
-from parsers.adapters.myhome.phone_http import MyHomePhoneHttpEnricher
+from parsers.adapters.myhome.phone_http import (
+    MyHomePhoneHttpEnricher,
+    session_needs_login,
+)
 from parsers.myhome import MyHomeParser
 from repositories.postgres_lead_repository import (
     PostgresLeadRepository,
@@ -34,6 +38,7 @@ logger = logging.getLogger("playwright_worker")
 app = FastAPI(title="PropRadar Playwright Worker", version="0.2.0")
 
 _job_lock = Lock()
+_DEFAULT_SESSION_MIN_REMAINING_S = 40.0
 
 
 class EnrichRequest(BaseModel):
@@ -52,6 +57,19 @@ def _repo_root() -> Path:
     if env is not None:
         return Path(env).resolve()
     return Path(__file__).resolve().parents[2]
+
+
+def _session_min_remaining_seconds() -> float:
+    raw = os.getenv("MYHOME_SESSION_MIN_REMAINING_SECONDS", "40")
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning(
+            "invalid MYHOME_SESSION_MIN_REMAINING_SECONDS=%r, using default %.0f",
+            raw,
+            _DEFAULT_SESSION_MIN_REMAINING_S,
+        )
+        return _DEFAULT_SESSION_MIN_REMAINING_S
 
 
 def _ping_db(sessions: PostgresSessionFactory) -> None:
@@ -140,6 +158,28 @@ def _run_myhome_enrich_phase(phase: str) -> None:
             },
         )
     elif phase == "phone":
+        min_remaining = _session_min_remaining_seconds()
+        if session_needs_login(settings.myhome_session_path, min_remaining=min_remaining):
+            login_started = time.monotonic()
+            login_code = _run_myhome_login_subprocess()
+            if login_code != 0:
+                login_err = f"login_failed_exit_{login_code}"
+                summary.update(
+                    {
+                        "phone_http_enriched": 0,
+                        "phone_http_failed": 0,
+                        "phone_http_errors": [login_err],
+                        "phone_enriched": 0,
+                        "phone_failed": 0,
+                        "phone_errors": [login_err],
+                    },
+                )
+                logger.info("enrich done %s", json.dumps(summary, ensure_ascii=False))
+                return
+            logger.info(
+                "myhome_login duration_s=%.1f",
+                time.monotonic() - login_started,
+            )
         summary.update(_run_myhome_phone_http(repo, settings, limit))
         summary.update(
             {
@@ -179,12 +219,12 @@ def _run_myhome_enrich_phase(phase: str) -> None:
     logger.info("enrich done %s", json.dumps(summary, ensure_ascii=False))
 
 
-def _run_myhome_login_subprocess() -> None:
+def _run_myhome_login_subprocess() -> int:
     root = _repo_root()
     script = root / "scripts" / "myhome_login.py"
     if not script.is_file():
         logger.error("myhome_login script not found: %s", script)
-        return
+        return 1
     env = {**os.environ, "PYTHONPATH": str(root / "src")}
     proc = subprocess.run(
         [sys.executable, str(script)],
@@ -193,6 +233,7 @@ def _run_myhome_login_subprocess() -> None:
         check=False,
     )
     logger.info("myhome_login exit_code=%s", proc.returncode)
+    return int(proc.returncode)
 
 
 def _locked_background(sync_fn: Callable[[], None]) -> None:
