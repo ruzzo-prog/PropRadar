@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,6 +15,18 @@ from sqlalchemy.types import BigInteger, Boolean, DateTime, Numeric, Text
 
 from domain.lead import Lead, LeadStatus
 from repositories.base import LeadRepository
+
+PHONE_ENRICHING_STATUS = "phone_enriching"
+PHONE_ENRICH_EXHAUSTED_STATUS = "phone_enrich_failed"
+_DEFAULT_STALE_MINUTES = 15
+
+
+def _phone_enrich_stale_minutes() -> int:
+    raw = os.getenv("PHONE_ENRICH_STALE_MINUTES", str(_DEFAULT_STALE_MINUTES))
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _DEFAULT_STALE_MINUTES
 
 
 class Base(DeclarativeBase):
@@ -201,7 +214,9 @@ class PostgresLeadRepository(LeadRepository):
             return [_to_domain(r) for r in rows]
 
     @staticmethod
-    def _phone_queue_filters(source: str) -> tuple:
+    def _phone_queue_filters(source: str, *, now: datetime | None = None) -> tuple:
+        ts = now or datetime.now(UTC)
+        stale_before = ts - timedelta(minutes=_phone_enrich_stale_minutes())
         return (
             LeadORM.source == source,
             LeadORM.status == LeadStatus.NEW.value,
@@ -210,6 +225,14 @@ class PostgresLeadRepository(LeadRepository):
                 LeadORM.phone == "",
             ),
             LeadORM.phone_retries < 3,
+            or_(
+                LeadORM.status_reason.is_(None),
+                LeadORM.status_reason != PHONE_ENRICHING_STATUS,
+                and_(
+                    LeadORM.status_reason == PHONE_ENRICHING_STATUS,
+                    LeadORM.updated_at < stale_before,
+                ),
+            ),
         )
 
     def list_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
@@ -224,17 +247,58 @@ class PostgresLeadRepository(LeadRepository):
             rows = session.scalars(stmt).all()
             return [_to_domain(r) for r in rows]
 
+    def sweep_stale_phone_enriching(self, source: str) -> int:
+        """Сбросить зависшие ``phone_enriching`` (воркер упал mid-batch)."""
+        cutoff = datetime.now(UTC) - timedelta(minutes=_phone_enrich_stale_minutes())
+        with self._sessions.factory() as session:
+            stmt = (
+                update(LeadORM)
+                .where(
+                    LeadORM.source == source,
+                    LeadORM.status_reason == PHONE_ENRICHING_STATUS,
+                    LeadORM.updated_at < cutoff,
+                )
+                .values(status_reason=None, updated_at=datetime.now(UTC))
+            )
+            result = session.execute(stmt)
+            session.commit()
+            return int(result.rowcount or 0)
+
+    def release_phone_enrich_after_failure(self, lead_id: UUID) -> int:
+        """После ошибки enrich: снять in-flight; retries уже увеличен при claim."""
+        with self._sessions.factory() as session:
+            row = session.get(LeadORM, lead_id)
+            if row is None:
+                msg = "лид не найден"
+                raise ValueError(msg)
+            row.status_reason = None
+            row.updated_at = datetime.now(UTC)
+            retries = int(row.phone_retries or 0)
+            if retries >= 3:
+                row.status_reason = PHONE_ENRICH_EXHAUSTED_STATUS
+            session.commit()
+            session.refresh(row)
+            return retries
+
     def claim_pending_phone_enrichment(self, source: str, *, limit: int) -> list[Lead]:
         lim = max(1, min(limit, 500))
+        now = datetime.now(UTC)
         with self._sessions.factory() as session:
             stmt = (
                 select(LeadORM)
-                .where(and_(*self._phone_queue_filters(source)))
+                .where(and_(*self._phone_queue_filters(source, now=now)))
                 .order_by(LeadORM.created_at.asc())
                 .limit(lim)
                 .with_for_update(skip_locked=True)
             )
-            rows = session.scalars(stmt).all()
+            rows = list(session.scalars(stmt).all())
+            for row in rows:
+                row.phone_retries = int(row.phone_retries or 0) + 1
+                row.status_reason = PHONE_ENRICHING_STATUS
+                row.updated_at = now
+            session.commit()
+            for row in rows:
+                session.refresh(row)
             return [_to_domain(r) for r in rows]
 
     def increment_phone_retry(self, lead_id: UUID) -> int:
@@ -293,6 +357,7 @@ class PostgresLeadRepository(LeadRepository):
                 raise ValueError(msg)
             if entity.phone is not None:
                 row.phone = entity.phone
+                row.status_reason = None
             if entity.price_gel is not None:
                 row.price_gel = entity.price_gel
             if entity.price_usd is not None:

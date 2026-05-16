@@ -38,6 +38,7 @@ TWOCAPTCHA_RESULT_URL = "https://api.2captcha.com/getTaskResult"
 TWOCAPTCHA_POLL_INTERVAL_S = 3.0
 TWOCAPTCHA_MAX_WAIT_S = 120.0
 PHONE_ENRICH_EXHAUSTED_REASON = "phone_enrich_failed"
+PHONE_ENRICHING_REASON = "phone_enriching"
 
 
 @dataclass
@@ -381,6 +382,12 @@ class MyHomePhoneHttpEnricher:
         if slots <= 0:
             return report
 
+        sweep = getattr(self._repository, "sweep_stale_phone_enriching", None)
+        if sweep is not None:
+            swept = sweep(source)
+            if swept:
+                logger.info("phone_enrich_sweep stale_released=%s", swept)
+
         try:
             access_token = load_access_token(self._session_path)
         except PhoneShowError as exc:
@@ -423,12 +430,17 @@ class MyHomePhoneHttpEnricher:
     def _record_retry(self, lead: Lead, source: str, err: str) -> str:
         if lead.id is None:
             return err
+        release = getattr(self._repository, "release_phone_enrich_after_failure", None)
         try:
-            retries = self._repository.increment_phone_retry(lead.id)
+            if release is not None:
+                retries = release(lead.id)
+            else:
+                retries = self._repository.increment_phone_retry(lead.id)
+                if retries >= 3:
+                    self._repository.mark_phone_enrich_exhausted(lead.id)
         except ValueError:
             return err
         if retries >= 3:
-            self._repository.mark_phone_enrich_exhausted(lead.id)
             logger.info(
                 "phone_enrich_exhausted ext=%s retries=%s",
                 lead.external_id,

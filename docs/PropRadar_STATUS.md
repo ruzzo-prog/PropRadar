@@ -2,6 +2,15 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-16 — myhome phone: резерв при claim + TG статистика n8n
+
+- **Проблема (@architect):** параллельные потоки `enrich_batch` повторно забирали одни лиды — claim без in-flight → завышенный `enriched` при NULL `phone`.
+- **Фикс 1:** `postgres_lead_repository.py` — при claim: `phone_retries += 1`, `status_reason = phone_enriching`, `updated_at`; фильтр очереди + TTL **`PHONE_ENRICH_STALE_MINUTES`** (default **15**); `sweep_stale_phone_enriching`, `release_phone_enrich_after_failure`; `phone_http.enrich_batch` — sweep в начале. **DDL не менялся.**
+- **Фикс 2:** n8n **`yG1JxQnR6kX0Vlgt`** — после «TG: Обогащение запущено»: Wait **240 с** → SQL stats → «TG: Обогащение завершено» (опубликовано).
+- **Проверки:** `pytest tests/unit/test_myhome_phone_claim.py` + `test_myhome_phone_http.py` + `ruff` — **человек/release-check** перед деплоем.
+- **Деплой (человек):** rebuild **`playwright-worker`**; rebuild **`api`** если shared repo; workflow n8n уже published.
+- **Документация:** `CHANGELOG.md`, `docs/phone_extraction.md`, `docs/n8n_myhome_workflow.md`, этот файл.
+
 ## 2026-05-16 — Metabase: hotfix дашбордов (этаж, состояние, карта)
 
 - **Фикс:** `monitoring_admin_dashboard.json` — этаж `CASE`, «Состояние» = `condition` из JSON (`JOIN leads`); `map_objects_dashboard.json` — swap pin lat/lng в `visualization_settings`, 2 скаляра; `create_metabase_dashboards.py` — `PUT` per-card `visualization_settings`.
@@ -96,7 +105,7 @@
 - **Проблема:** HTTP — **`claim_pending_phone_enrichment`**, Playwright — **`list_pending_phone_enrichment`** → гонка между **`phase=phone`** и **`phase=phone_playwright`**.
 - **Реализация:** **`worker/main.py`**, **`run_myhome_enricher.py`** — Playwright fallback на **`claim_*`**; docstrings репозитория; n8n/ingress — не параллелить фазы.
 - **Проверки:** **`pytest tests/unit/test_myhome_phone_queue.py`** + регрессия worker/phone_http — **PASS**.
-- **Backlog:** резервирование лида на время обработки (колонка в claim-транзакции) — при дублях в проде.
+- **Закрыто (2026-05-16):** резервирование при claim — `status_reason=phone_enriching` + TTL (см. запись выше).
 
 ## 2026-05-15 — phone_http: per-thread httpx (concurrency hardening)
 

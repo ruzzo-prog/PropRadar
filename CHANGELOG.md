@@ -6,6 +6,14 @@
 
 ### Fixed
 
+- **myhome phone claim — резерв очереди:** при `claim_pending_phone_enrichment` в одной транзакции `phone_retries += 1`, `status_reason = phone_enriching`, `updated_at = now()`; очередь исключает активный enriching или stale (`PHONE_ENRICH_STALE_MINUTES`, default **15**); `sweep_stale_phone_enriching` в начале `enrich_batch`; после ошибки `release_phone_enrich_after_failure` (без повторного increment); после успеха `status_reason = NULL` в `update_enriched_fields`. Устраняет повторный claim одних лидов при параллельных потоках.
+
+### Added
+
+- **n8n myhome v4 (`yG1JxQnR6kX0Vlgt`):** после «TG: Обогащение запущено» — **Wait 240 с** → SQL статистика телефонов по `leads` (`source=myhome`) → «TG: Обогащение завершено» (with_phone / failed / pending / total).
+
+### Fixed
+
 - **Metabase админ-дашборды:** таблица «Последние лиды» — этаж без дубля `13/13`, «Состояние» из `myhome_statement_json.condition` (JOIN `leads`); карта — swap `map.latitude_column`/`longitude_column`, скаляры «Всего точек» и «Средняя цена USD» на дашборде карты.
 
 ### Added

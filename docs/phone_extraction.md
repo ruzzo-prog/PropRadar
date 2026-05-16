@@ -117,6 +117,8 @@ Playwright остаётся как **fallback** и для обновления J
 На **каждый лид в потоке** — **два** отдельных `httpx.Client` (myhome API + 2captcha); общий клиент между потоками **не используется**.  
 Выборка лидов из БД — атомарная, `SELECT … FOR UPDATE SKIP LOCKED` — гонки исключены.
 
+**Резерв при claim (in-flight):** в той же транзакции claim — `phone_retries += 1`, `status_reason = phone_enriching`, `updated_at = now()`. Лид снова eligible, если `status_reason` пустой, не `phone_enriching`, или enriching **старше** `PHONE_ENRICH_STALE_MINUTES` (default **15**, env). В начале батча — `sweep_stale_phone_enriching` (сброс зависших enriching по TTL). После успеха — `status_reason = NULL`; после ошибки — `release_phone_enrich_after_failure` (retries уже учтены при claim).
+
 ---
 
 ## 4. Fallback путь: Playwright

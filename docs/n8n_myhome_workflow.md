@@ -25,7 +25,7 @@
 
 | Workflow | ID (n8n) | Расписание | Назначение |
 | -------- | ---------- | ---------- | ---------- |
-| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`POST /enrich`** `phase=phone` |
+| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`POST /enrich`** `phase=phone` → TG старт → **Wait 240 с** → SQL stats → TG итог |
 | ~~PropRadar myhome session login~~ | `MvaHceZGVlUxDIHM` | ~~cron `3-59/9`~~ | **inactive** — login в воркере |
 
 **Инвариант:** в основном workflow (`yG1JxQnR6kX0Vlgt`) узла **`POST /login` нет**. Отдельный cron-login **не используется**.
@@ -39,6 +39,10 @@ flowchart TB
     MS[Schedule 09:00] --> F[fetch-ids]
     F --> I[ingest]
     I --> E[POST /enrich phase=phone]
+    E --> TG1[TG: Обогащение запущено]
+    TG1 --> W240[Wait 240s]
+    W240 --> SQL[SQL enrich stats]
+    SQL --> TG2[TG: Обогащение завершено]
   end
 ```
 
@@ -226,6 +230,32 @@ PROPRADAR_API_URL=http://api:8000
 - **Polling / повторный GET статуса:** не предусмотрены контрактом — узел завершается после получения **202**.
 - **Ошибки:** коды вне **202** или сетевой сбой обрабатывайте политикой retry/error workflow n8n отдельно от ingest и discover.
 - **Скриншот (опционально):** `docs/assets/n8n/nodes/02c-playwright-enrich.png`
+
+---
+
+### Узлы 2c-TG — Telegram + Wait + итоговая статистика (v4, `yG1JxQnR6kX0Vlgt`)
+
+После **`POST /enrich`** `phase=phone` (узел «POST /enrich phone») workflow **не** опрашивает воркер — фиксированная пауза и сводка из БД.
+
+| Узел | Тип | Назначение |
+| ---- | --- | ---------- |
+| **TG: Обогащение запущено** | Telegram | Уведомление о старте (HTTP **202** принят) |
+| **Wait enrich 240s** | Wait | **240 с** (`timeInterval`); рассчитано на `ENRICH_LIMIT=50` и ~16 с/лид — **без polling** |
+| **SQL enrich stats** | Postgres `executeQuery` | Агрегаты по `leads` где `source='myhome'`: `total`, `with_phone`, `failed` (`phone_retries >= 3`, без телефона), `pending` (без телефона, retries &lt; 3) |
+| **TG: Обогащение завершено** | Telegram | Итог: получили телефон / не удалось / осталось / всего в базе (`{{ $json.* }}`) |
+
+**SQL (как в workflow):**
+
+```sql
+SELECT
+  COUNT(*)::bigint AS total,
+  COUNT(*) FILTER (WHERE phone IS NOT NULL AND phone != '') AS with_phone,
+  COUNT(*) FILTER (WHERE (phone IS NULL OR phone='') AND phone_retries >= 3) AS failed,
+  COUNT(*) FILTER (WHERE (phone IS NULL OR phone='') AND phone_retries < 3) AS pending
+FROM leads WHERE source='myhome'
+```
+
+**Инвариант:** не смешивать с отдельным cron-login (`MvaHceZGVlUxDIHM` — inactive). Workflow **`isac0mztKLIIaYOP`** не использовать.
 
 ---
 
