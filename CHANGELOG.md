@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- **myhome phone claim — резерв очереди:** при `claim_pending_phone_enrichment` в одной транзакции `phone_retries += 1`, `status_reason = phone_enriching`, `updated_at = now()`; очередь исключает активный enriching или stale (`PHONE_ENRICH_STALE_MINUTES`, default **15**); `sweep_stale_phone_enriching` в начале `enrich_batch`; после ошибки `release_phone_enrich_after_failure` (без повторного increment); после успеха `status_reason = NULL` в `update_enriched_fields`. Устраняет повторный claim одних лидов при параллельных потоках.
+- **myhome phone claim — резерв очереди:** при `claim_pending_phone_enrichment` — `status_reason = phone_enriching`, `updated_at` (без `phone_retries`); очередь + TTL **`PHONE_ENRICH_STALE_MINUTES`**; `sweep_stale_phone_enriching` в начале `enrich_batch`; **`phone_retries += 1` только в `release_phone_enrich_after_failure`** при реальной ошибке; после успеха `status_reason = NULL` в `update_enriched_fields`. Устраняет повторный claim и ложные retries при claim/краше воркера.
 
 ### Added
 

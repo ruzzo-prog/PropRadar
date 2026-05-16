@@ -265,15 +265,16 @@ class PostgresLeadRepository(LeadRepository):
             return int(result.rowcount or 0)
 
     def release_phone_enrich_after_failure(self, lead_id: UUID) -> int:
-        """После ошибки enrich: снять in-flight; retries уже увеличен при claim."""
+        """После ошибки enrich: снять in-flight и ``phone_retries += 1``."""
         with self._sessions.factory() as session:
             row = session.get(LeadORM, lead_id)
             if row is None:
                 msg = "лид не найден"
                 raise ValueError(msg)
+            row.phone_retries = int(row.phone_retries or 0) + 1
             row.status_reason = None
             row.updated_at = datetime.now(UTC)
-            retries = int(row.phone_retries or 0)
+            retries = int(row.phone_retries)
             if retries >= 3:
                 row.status_reason = PHONE_ENRICH_EXHAUSTED_STATUS
             session.commit()
@@ -293,7 +294,6 @@ class PostgresLeadRepository(LeadRepository):
             )
             rows = list(session.scalars(stmt).all())
             for row in rows:
-                row.phone_retries = int(row.phone_retries or 0) + 1
                 row.status_reason = PHONE_ENRICHING_STATUS
                 row.updated_at = now
             session.commit()

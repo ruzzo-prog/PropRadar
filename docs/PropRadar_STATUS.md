@@ -5,7 +5,8 @@
 ## 2026-05-16 — myhome phone: резерв при claim + TG статистика n8n
 
 - **Проблема (@architect):** параллельные потоки `enrich_batch` повторно забирали одни лиды — claim без in-flight → завышенный `enriched` при NULL `phone`.
-- **Фикс 1:** `postgres_lead_repository.py` — при claim: `phone_retries += 1`, `status_reason = phone_enriching`, `updated_at`; фильтр очереди + TTL **`PHONE_ENRICH_STALE_MINUTES`** (default **15**); `sweep_stale_phone_enriching`, `release_phone_enrich_after_failure`; `phone_http.enrich_batch` — sweep в начале. **DDL не менялся.**
+- **Фикс 1:** `postgres_lead_repository.py` — при claim: `status_reason = phone_enriching`, `updated_at` (**`phone_retries` не трогаем**); TTL + sweep (sweep не меняет retries); **`phone_retries += 1` в `release_phone_enrich_after_failure`** при ошибке enrich; `phone_http.enrich_batch` — sweep в начале. **DDL не менялся.**
+- **P1 hotfix (2026-05-16):** убран `phone_retries += 1` при claim — счётчик только на failure.
 - **Фикс 2:** n8n **`yG1JxQnR6kX0Vlgt`** — после «TG: Обогащение запущено»: Wait **240 с** → SQL stats → «TG: Обогащение завершено» (опубликовано).
 - **Проверки:** `pytest tests/unit/test_myhome_phone_claim.py` + `test_myhome_phone_http.py` + `ruff` — **человек/release-check** перед деплоем.
 - **Деплой (человек):** rebuild **`playwright-worker`**; rebuild **`api`** если shared repo; workflow n8n уже published.
