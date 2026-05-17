@@ -81,23 +81,6 @@ const workerOk = ifElse({
   },
 });
 
-const tgWorkerOk = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'TG: Воркер OK',
-    position: [896, 96],
-    executeOnce: true,
-    parameters: {
-      chatId: CHAT,
-      text: '🔌 <b>Воркер:</b> ✅ доступен\n▶️ Запускаем парсинг...',
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
-    },
-    credentials: { telegramApi: newCredential('Telegram') },
-  },
-  output: [{ ok: true }],
-});
-
 const tgWorkerFail = node({
   type: 'n8n-nodes-base.telegram',
   version: 1.2,
@@ -115,12 +98,90 @@ const tgWorkerFail = node({
   output: [{ ok: false }],
 });
 
+// Прокси проверяется сразу после воркера — snapshot refresh тоже идёт через прокси
+const getProxyCheck = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'GET /proxy/check',
+    position: [896, 96],
+    executeOnce: true,
+    parameters: {
+      method: 'GET',
+      url: 'http://playwright-worker:8001/proxy/check',
+      options: {
+        response: { response: { neverError: true } },
+        timeout: 20000,
+      },
+    },
+  },
+  output: [{ ok: true, ip: '203.0.113.1' }],
+});
+
+const proxyOk = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Прокси OK?',
+    position: [1120, 96],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 'p1',
+            leftValue: '={{ $json.ok }}',
+            rightValue: true,
+            operator: { type: 'boolean', operation: 'equals' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const tgProxyFail = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Прокси недоступен',
+    position: [1344, 288],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr('=❌ <b>Прокси недоступен:</b> {{ $json.reason }}\nПарсинг остановлен.'),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: false }],
+});
+
+const tgProxyOk = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Прокси OK',
+    position: [1344, 96],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr(
+        '={{ $json.skipped ? "ℹ️ <b>Прокси не настроен</b>, продолжаем" : "✅ <b>Прокси работает</b> (IP: " + $json.ip + ")" }}',
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: true }],
+});
+
 const getSnapshotStatus = node({
   type: 'n8n-nodes-base.httpRequest',
   version: 4.4,
   config: {
     name: 'GET ids-snapshot/status',
-    position: [1120, 96],
+    position: [1568, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -138,7 +199,7 @@ const snapshotReady = ifElse({
   version: 2.3,
   config: {
     name: 'Снапшот ready?',
-    position: [1344, 96],
+    position: [1792, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -161,7 +222,7 @@ const tgColdStart = node({
   version: 1.2,
   config: {
     name: 'TG: Cold start',
-    position: [1568, 288],
+    position: [2016, 288],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -177,7 +238,7 @@ const snapshotStale = ifElse({
   version: 2.3,
   config: {
     name: 'Снапшот устарел?',
-    position: [1568, 96],
+    position: [2016, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -200,7 +261,7 @@ const tgStaleWarning = node({
   version: 1.2,
   config: {
     name: 'TG: Snapshot stale',
-    position: [1792, 192],
+    position: [2240, 192],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -219,7 +280,7 @@ const getSnapshot = node({
   version: 4.4,
   config: {
     name: 'GET ids-snapshot',
-    position: [1792, 96],
+    position: [2240, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -238,7 +299,7 @@ const idsNewInDb = node({
   version: 2.6,
   config: {
     name: 'IDs new в БД',
-    position: [2016, 192],
+    position: [2464, 192],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -256,7 +317,7 @@ const dedupIds = node({
   version: 2,
   config: {
     name: 'Дедупликация IDs',
-    position: [2016, 96],
+    position: [2464, 96],
     executeOnce: true,
     parameters: {
       jsCode:
@@ -271,7 +332,7 @@ const existingIds = node({
   version: 2.6,
   config: {
     name: 'Существующие IDs в БД',
-    position: [2240, 96],
+    position: [2688, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -289,7 +350,7 @@ const filterNewIds = node({
   version: 2,
   config: {
     name: 'Фильтр новых IDs',
-    position: [2464, 96],
+    position: [2912, 96],
     executeOnce: true,
     parameters: {
       jsCode:
@@ -304,7 +365,7 @@ const tgFetch = node({
   version: 1.2,
   config: {
     name: 'TG: Результат fetch',
-    position: [2688, 96],
+    position: [3136, 96],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -322,7 +383,7 @@ const hasNewIds = ifElse({
   version: 2.3,
   config: {
     name: 'Есть новые IDs?',
-    position: [2912, 96],
+    position: [3360, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -345,7 +406,7 @@ const buildIngest = node({
   version: 2,
   config: {
     name: 'Build Ingest Body',
-    position: [2464, 32],
+    position: [3584, 32],
     executeOnce: true,
     parameters: {
       jsCode:
@@ -360,7 +421,7 @@ const postIngest = node({
   version: 4.4,
   config: {
     name: 'POST /ingest',
-    position: [2688, 32],
+    position: [3808, 32],
     executeOnce: true,
     onError: 'continueRegularOutput',
     parameters: {
@@ -382,7 +443,7 @@ const tgIngest = node({
   version: 1.2,
   config: {
     name: 'TG: Ingest результат',
-    position: [2912, 32],
+    position: [4032, 32],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -401,7 +462,7 @@ const queuePending = node({
   version: 2.6,
   config: {
     name: 'Очередь обогащения',
-    position: [3136, 96],
+    position: [4256, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -419,7 +480,7 @@ const hasPendingPhone = ifElse({
   version: 2.3,
   config: {
     name: 'Есть лиды без телефона?',
-    position: [3360, 96],
+    position: [4480, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -437,89 +498,12 @@ const hasPendingPhone = ifElse({
   },
 });
 
-const getProxyCheck = node({
-  type: 'n8n-nodes-base.httpRequest',
-  version: 4.4,
-  config: {
-    name: 'GET /proxy/check',
-    position: [3584, 0],
-    executeOnce: true,
-    parameters: {
-      method: 'GET',
-      url: 'http://playwright-worker:8001/proxy/check',
-      options: {
-        response: { response: { neverError: true } },
-        timeout: 20000,
-      },
-    },
-  },
-  output: [{ ok: true, ip: '203.0.113.1' }],
-});
-
-const proxyOk = ifElse({
-  version: 2.3,
-  config: {
-    name: 'Прокси OK?',
-    position: [3808, 0],
-    parameters: {
-      conditions: {
-        combinator: 'and',
-        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
-        conditions: [
-          {
-            id: 'p1',
-            leftValue: '={{ $json.ok }}',
-            rightValue: true,
-            operator: { type: 'boolean', operation: 'equals' },
-          },
-        ],
-      },
-    },
-  },
-});
-
-const tgProxyOk = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'TG: Прокси OK',
-    position: [4032, -96],
-    executeOnce: true,
-    parameters: {
-      chatId: CHAT,
-      text: expr(
-        '={{ $json.skipped ? "ℹ️ <b>Прокси не настроен</b>, enrich продолжается" : "✅ <b>Прокси работает</b> (IP: " + $json.ip + ")" }}',
-      ),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
-    },
-    credentials: { telegramApi: newCredential('Telegram') },
-  },
-  output: [{ ok: true }],
-});
-
-const tgProxyFail = node({
-  type: 'n8n-nodes-base.telegram',
-  version: 1.2,
-  config: {
-    name: 'TG: Прокси недоступен',
-    position: [4032, 96],
-    executeOnce: true,
-    parameters: {
-      chatId: CHAT,
-      text: expr('=❌ <b>Прокси недоступен:</b> {{ $json.reason }}. Обогащение остановлено.'),
-      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
-    },
-    credentials: { telegramApi: newCredential('Telegram') },
-  },
-  output: [{ ok: false }],
-});
-
 const postEnrichPhone = node({
   type: 'n8n-nodes-base.httpRequest',
   version: 4.4,
   config: {
     name: 'POST /enrich phone',
-    position: [4256, 0],
+    position: [4704, 0],
     executeOnce: true,
     onError: 'continueRegularOutput',
     parameters: {
@@ -540,7 +524,7 @@ const tgEnrichStarted = node({
   version: 1.2,
   config: {
     name: 'TG: Обогащение запущено',
-    position: [4480, 0],
+    position: [4928, 0],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -559,7 +543,7 @@ const waitEnrichInitial = node({
   version: 1.1,
   config: {
     name: 'Wait enrich 480s',
-    position: [4704, 0],
+    position: [5152, 0],
     parameters: { amount: 480 },
   },
   output: [{}],
@@ -570,7 +554,7 @@ const waitPollStatus = node({
   version: 1.1,
   config: {
     name: 'Wait poll 30s',
-    position: [4928, 0],
+    position: [5376, 0],
     parameters: { amount: 30 },
   },
   output: [{}],
@@ -581,7 +565,7 @@ const getWorkerStatus = node({
   version: 4.4,
   config: {
     name: 'GET /status',
-    position: [5152, 0],
+    position: [5600, 0],
     executeOnce: true,
     parameters: {
       method: 'GET',
@@ -599,7 +583,7 @@ const statusIdle = ifElse({
   version: 2.3,
   config: {
     name: 'Worker idle?',
-    position: [5376, 0],
+    position: [5824, 0],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -621,7 +605,7 @@ const enrichPollTimeout = ifElse({
   version: 2.3,
   config: {
     name: 'Poll timeout 3600s?',
-    position: [5600, 96],
+    position: [6048, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -645,7 +629,7 @@ const tgEnrichPollTimeout = node({
   version: 1.2,
   config: {
     name: 'TG: Таймаут обогащения',
-    position: [5824, 192],
+    position: [6272, 192],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -664,7 +648,7 @@ const sqlEnrichStats = node({
   version: 2.6,
   config: {
     name: 'SQL enrich stats',
-    position: [6048, 0],
+    position: [6496, 0],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -683,7 +667,7 @@ const tgEnrichDone = node({
   version: 1.2,
   config: {
     name: 'TG: Обогащение завершено',
-    position: [6272, 0],
+    position: [6720, 0],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -702,7 +686,7 @@ const tgAllPhones = node({
   version: 1.2,
   config: {
     name: 'TG: Все телефоны есть',
-    position: [3584, 192],
+    position: [4704, 192],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -719,7 +703,7 @@ const buildDisappeared = node({
   version: 2,
   config: {
     name: 'Build disappeared',
-    position: [6496, 96],
+    position: [6944, 96],
     executeOnce: true,
     parameters: {
       jsCode:
@@ -733,7 +717,7 @@ const hasMarkInactive = ifElse({
   version: 2.3,
   config: {
     name: 'Пометить inactive?',
-    position: [6720, 96],
+    position: [7168, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -756,7 +740,7 @@ const sqlMarkInactive = node({
   version: 2.6,
   config: {
     name: 'SQL mark inactive',
-    position: [6944, 0],
+    position: [7392, 0],
     executeOnce: true,
     parameters: {
       operation: 'executeQuery',
@@ -773,7 +757,7 @@ const tgDisappeared = node({
   version: 1.2,
   config: {
     name: 'TG: Исчезнувшие',
-    position: [7168, 0],
+    position: [7616, 0],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -792,7 +776,7 @@ const postRefreshSnapshot = node({
   version: 4.4,
   config: {
     name: 'POST refresh snapshot',
-    position: [7392, 96],
+    position: [7840, 96],
     executeOnce: true,
     onError: 'continueRegularOutput',
     parameters: {
@@ -815,34 +799,26 @@ const finalizeSync = buildDisappeared.to(
 const enrichFromQueue = queuePending.to(
   hasPendingPhone
     .onTrue(
-      getProxyCheck.to(
-        proxyOk
-          .onTrue(
-            tgProxyOk.to(
-              postEnrichPhone.to(
-                tgEnrichStarted.to(
-                  waitEnrichInitial.to(
-                    waitPollStatus.to(
-                      getWorkerStatus.to(
-                        statusIdle
-                          .onTrue(sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)))
-                          .onFalse(
-                            enrichPollTimeout
-                              .onTrue(
-                                tgEnrichPollTimeout.to(
-                                  sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)),
-                                ),
-                              )
-                              .onFalse(waitPollStatus),
-                          ),
-                      ),
-                    ),
+      postEnrichPhone.to(
+        tgEnrichStarted.to(
+          waitEnrichInitial.to(
+            waitPollStatus.to(
+              getWorkerStatus.to(
+                statusIdle
+                  .onTrue(sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)))
+                  .onFalse(
+                    enrichPollTimeout
+                      .onTrue(
+                        tgEnrichPollTimeout.to(
+                          sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)),
+                        ),
+                      )
+                      .onFalse(waitPollStatus),
                   ),
-                ),
               ),
             ),
-          )
-          .onFalse(tgProxyFail.to(finalizeSync)),
+          ),
+        ),
       ),
     )
     .onFalse(tgAllPhones.to(finalizeSync)),
@@ -876,10 +852,16 @@ export default workflow('yG1JxQnR6kX0Vlgt', 'PropRadar — myhome v6 ids-snapsho
   .to(
     workerOk
       .onTrue(
-        tgWorkerOk.to(
-          getSnapshotStatus.to(
-            snapshotReady.onTrue(snapshotReadyChain).onFalse(tgColdStart),
-          ),
+        getProxyCheck.to(
+          proxyOk
+            .onTrue(
+              tgProxyOk.to(
+                getSnapshotStatus.to(
+                  snapshotReady.onTrue(snapshotReadyChain).onFalse(tgColdStart),
+                ),
+              ),
+            )
+            .onFalse(tgProxyFail),
         ),
       )
       .onFalse(tgWorkerFail),
