@@ -125,10 +125,10 @@ const fetchIds = node({
     alwaysOutputData: true,
     parameters: {
       method: 'GET',
-      url: 'http://api:8000/api/myhome/fetch-ids?city=tbilisi&category=apartment&seller_type=private&object_type=apartment&limit=650',
+      url: 'http://api:8000/api/myhome/fetch-ids?city=tbilisi&category=apartment&seller_type=private&object_type=apartment&limit=all',
       sendHeaders: true,
       headerParameters: { parameters: [{ name: 'X-API-Key', value: API_KEY }] },
-      options: { timeout: 30000 },
+      options: { timeout: 120000 },
     },
   },
   output: [{ id: '12345' }],
