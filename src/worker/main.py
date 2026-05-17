@@ -162,6 +162,7 @@ def _run_myhome_phone_http(
         twocaptcha_api_key=api_key,
         recaptcha_site_key=settings.myhome_recaptcha_site_key,
         max_workers=settings.myhome_phone_http_workers,
+        relogin_fn=_run_myhome_login_subprocess,
     )
     report = enricher.enrich_batch(MyHomeParser.SOURCE, limit=limit)
     return {

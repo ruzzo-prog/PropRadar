@@ -2,6 +2,13 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-17 — myhome phone: JWT mid-batch + drain + n8n poll
+
+- **PR1:** `phone_http.py` — `_AccessTokenProvider` (lock, proactive refresh **90** с, 401 → relogin + retry без `phone_retries++`); `main.py` — `relogin_fn=_run_myhome_login_subprocess`.
+- **PR2:** `enrich_batch` — волны до пустой очереди / `limit` (max **500**); n8n `limit=pending`; SDK — Wait **480** с → poll `GET /status` каждые **30** с (timeout **3600** с).
+- **Не трогали:** anti-ban паузы, `phone.py`, proxy, DDL, `_job_lock`.
+- **Проверки:** `pytest tests/unit/test_myhome_phone_http.py` + `test_myhome_phone_claim.py` + `test_playwright_worker_api.py` — **PASS** (48 tests); n8n SDK validate + publish — **человек**; Scanner — **человек**; rebuild **`playwright-worker`** — **человек**.
+
 ## 2026-05-17 — P1 hotfix: proxy в myhome_login.py
 
 - **Проблема:** `myhome_login.py` — `chromium.launch(headless=True)` без proxy; subprocess уже наследовал `PLAYWRIGHT_PROXY_*`, но скрипт не применял → login с IP Hetzner, enrich — через proxy.

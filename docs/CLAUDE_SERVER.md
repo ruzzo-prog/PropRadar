@@ -87,27 +87,26 @@ docker exec propradar-leads-db psql -U leads -d leads -c "SELECT ..."
 ### Параллельность
 - Один job за раз: `threading.Lock(blocking=False)` — не очередь, пропускает
 - `ThreadPoolExecutor(max_workers=5)` — настраивается `MYHOME_PHONE_HTTP_WORKERS`
-- `enrich_batch(limit=N)` создаёт N задач в пуле; каждая: `claim(limit=1)` → captcha → phone/show
+- `enrich_batch(limit=N)` — волны по `max_workers` до `claim==0` или `processed>=min(N,500)`; каждая задача: `claim(limit=1)` → captcha → phone/show
 
 ### Токен сессии
 - Файл: `/data/adapter_sessions/myhome_session.json` (Playwright storage state)
 - Cookie: `AccessToken` (JWT, поле `expires_at`)
 - **TTL: 660 секунд (11 минут)** — подтверждено на реальном токене
 - JWT payload: `{v, iat, expires_at, data:{user_id, username, session_id, phone, ...}}`
-- Перед каждой phone-фазой: если `remaining < 40s` → re-login (subprocess `myhome_login.py`)
-- 401 при phone/show → `phone_retries++`, re-login **не делается**
-- Токен читается **один раз** на весь батч, не обновляется между потоками
+- Перед phone-фазой (воркер): если `remaining < 40s` → re-login (`myhome_login.py`)
+- В батче (`_AccessTokenProvider`): lock + proactive relogin при `remaining < 90s`; на **401** — один relogin + retry без `phone_retries++` при успехе
 
 ---
 
 ## 5. Phone enrichment — flow
 
 ```
-n8n: POST /enrich {phase:"phone", limit:150}
+n8n: POST /enrich {phase:"phone", limit:pending}  (cap 500 в enricher)
   └→ session_needs_login()? → да: subprocess scripts/myhome_login.py (Playwright)
-  └→ sweep_stale_phone_enriching()   — освобождает зависшие записи
-  └→ load_access_token(session_path) — читается один раз
-  └→ ThreadPoolExecutor(5 workers), 150 задач:
+  └→ sweep_stale_phone_enriching()
+  └→ волны: _AccessTokenProvider.get() / refresh на 401
+  └→ ThreadPoolExecutor(5 workers), claim(1) на слот, drain до пустой очереди:
        каждый поток:
          1. claim_pending(limit=1) → status_reason='phone_enriching'
          2. resolve_statement_uuid (из lead.source_listing_uuid или API)
@@ -140,8 +139,8 @@ n8n всегда посылает `phase: "phone"` → Playwright browser **не
 - ID: **`yG1JxQnR6kX0Vlgt`** (PropRadar — myhome v5, active)
 - SDK-файл: `scripts/n8n_workflows/yG1JxQnR6kX0Vlgt_v5_proxy_gate.sdk.js`
 - Расписание: `0 9 * * *` UTC = **13:00 Tbilisi** (UTC+4)
-- Wait enrich: **480s**
-- Лимит батча: `Math.min(pending, 150)` = max 150
+- Wait enrich: **480s**, затем poll **`GET /status`** каждые **30s** до `idle` (execution timeout **3600s** → TG)
+- Лимит батча: **`limit: pending`** (воркер cap **500**)
 
 ### Пайплайн
 ```
@@ -157,9 +156,9 @@ Schedule/Manual
       → TG: ingest результат (parsed, new, errors)
   → SQL: COUNT pending (phone IS NULL, retries<3)
   → IF pending > 0:
-      → POST /enrich {phase:"phone", limit:min(pending,150)}
+      → POST /enrich {phase:"phone", limit:pending}
       → TG: обогащение запущено
-      → Wait 480s
+      → Wait 480s → poll GET /status (30s) until idle
       → SQL enrich stats (total, with_phone, failed, pending)
       → TG: обогащение завершено
 ```
@@ -292,8 +291,7 @@ docker exec propradar-n8n-1 wget -qO- http://playwright-worker:8001/metrics
 
 - **docs/ owned root** — для записи нужен `sudo chown -R claude:claude /srv/propradar/docs`
 - **n8n порт 443** — не HTTPS, HTTP внутри Docker; путает при дебаге curl
-- **Токен 11 мин** — при Wait=480s и старте обогащения ближе к концу токена возможны 401 без re-login
-- **Лимит батча 150** — больше не имеет смысла при Wait=480s (5 workers × 480s/16s ≈ 150)
-- **enrich_batch**: токен читается один раз в начале, 401 не вызывает повторный логин
+- **Токен 11 мин** — mid-batch refresh при `remaining < 90s` и 401-retry под lock (см. `phone_http._AccessTokenProvider`)
+- **n8n** ждёт **`/status idle`**, не фиксированный таймер после 480s warm-up
 - **phone_retries**: инкрементируется только при ошибке, не при claim
 - **ValidationError на ingest**: старые короткие ID (≤8 цифр) — норма, в БД не попадают

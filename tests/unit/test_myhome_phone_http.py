@@ -17,7 +17,10 @@ from domain.lead import Lead, LeadStatus
 from parsers.adapters.myhome.phone_http import (
     MyHomePhoneHttpEnricher,
     PhoneShowError,
+    TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S,
     TwoCaptchaClient,
+    UNAUTHORIZED_ERROR,
+    _AccessTokenProvider,
     _decode_jwt_payload_segment,
     access_token_remaining_seconds,
     httpx_client_kwargs_from_settings,
@@ -600,3 +603,172 @@ def test_increment_retry_on_phone_show_error() -> None:
         )
     assert err is not None
     assert repo.retries[lid] == 1
+
+
+def test_enrich_one_401_relogin_retry_no_phone_retries() -> None:
+    lid = uuid4()
+    lead = Lead(
+        id=lid,
+        source="myhome",
+        external_id="401-retry",
+        status=LeadStatus.NEW,
+        score=0,
+        source_listing_uuid=uuid4(),
+        phone_retries=0,
+    )
+    repo = _PhoneRepo([lead])
+    relogin_calls: list[int] = []
+
+    def _relogin() -> int:
+        relogin_calls.append(1)
+        return 0
+
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url="https://api-statements.tnet.ge",
+        session_path=None,
+        twocaptcha_api_key="key",
+        recaptcha_site_key="site",
+        max_workers=1,
+        http_client=httpx.Client(),
+        relogin_fn=_relogin,
+    )
+    stmt = uuid4()
+
+    post_calls: list[str] = []
+
+    def _post_phone_show(*_a, **_k) -> str:
+        if not post_calls:
+            post_calls.append("401")
+            raise PhoneShowError(UNAUTHORIZED_ERROR, retryable=True)
+        return "+995555000000"
+
+    with (
+        patch(
+            "parsers.adapters.myhome.phone_http.resolve_statement_uuid",
+            return_value=stmt,
+        ),
+        patch(
+            "parsers.adapters.myhome.phone_http.TwoCaptchaClient.solve_recaptcha_v3",
+            return_value="captcha-tok",
+        ),
+        patch(
+            "parsers.adapters.myhome.phone_http.post_phone_show",
+            side_effect=_post_phone_show,
+        ),
+        patch(
+            "parsers.adapters.myhome.phone_http.load_access_token",
+            return_value="jwt-new",
+        ),
+    ):
+        err = enricher._enrich_one(
+            httpx.Client(),
+            MagicMock(),
+            "jwt-old",
+            lead,
+            "myhome",
+        )
+
+    assert err is None
+    assert relogin_calls == [1]
+    assert repo.retries.get(lid) is None
+    assert len(repo.updates) == 1
+    assert repo.updates[0].phone == "+995555000000"
+
+
+def test_token_provider_proactive_refresh_when_remaining_under_90s(
+    tmp_path: Path,
+) -> None:
+    session_path = _session_with_token_expires(tmp_path, time.time() + 30.0)
+    relogin_calls: list[int] = []
+
+    def _relogin() -> int:
+        relogin_calls.append(1)
+        return 0
+
+    provider = _AccessTokenProvider(session_path, _relogin)
+    with patch(
+        "parsers.adapters.myhome.phone_http.load_access_token",
+        return_value="jwt",
+    ) as load_mock:
+        token = provider.get()
+
+    assert token == "jwt"
+    assert relogin_calls == [1]
+    load_mock.assert_called()
+    assert TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S == 90.0
+
+
+def test_enrich_batch_drain_stops_when_queue_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = MagicMock()
+    repo.sweep_stale_phone_enriching = MagicMock(return_value=0)
+    lead = Lead(
+        id=uuid4(),
+        source="myhome",
+        external_id="only-one",
+        status=LeadStatus.NEW,
+        score=0,
+        source_listing_uuid=uuid4(),
+    )
+    repo.claim_pending_phone_enrichment.side_effect = [
+        [lead],
+        [],
+        [],
+        [],
+        [],
+        [],
+    ]
+
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url="https://api-statements.tnet.ge",
+        session_path=None,
+        twocaptcha_api_key="key",
+        recaptcha_site_key="site",
+        max_workers=5,
+    )
+    monkeypatch.setattr(
+        "parsers.adapters.myhome.phone_http.load_access_token",
+        lambda _p: "jwt",
+    )
+    monkeypatch.setattr(enricher, "_enrich_one_isolated", lambda *a, **k: None)
+
+    report = enricher.enrich_batch("myhome", limit=500)
+
+    assert report.enriched == 1
+    assert repo.claim_pending_phone_enrichment.call_count >= 2
+
+
+def test_enrich_batch_drain_respects_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = MagicMock()
+    repo.sweep_stale_phone_enriching = MagicMock(return_value=0)
+    lead = Lead(
+        id=uuid4(),
+        source="myhome",
+        external_id="x",
+        status=LeadStatus.NEW,
+        score=0,
+        source_listing_uuid=uuid4(),
+    )
+    repo.claim_pending_phone_enrichment.side_effect = lambda *_a, **_k: [lead]
+
+    enricher = MyHomePhoneHttpEnricher(
+        repo,
+        base_url="https://api-statements.tnet.ge",
+        session_path=None,
+        twocaptcha_api_key="key",
+        recaptcha_site_key="site",
+        max_workers=5,
+    )
+    monkeypatch.setattr(
+        "parsers.adapters.myhome.phone_http.load_access_token",
+        lambda _p: "jwt",
+    )
+    monkeypatch.setattr(enricher, "_enrich_one_isolated", lambda *a, **k: None)
+
+    report = enricher.enrich_batch("myhome", limit=3)
+
+    assert report.enriched == 3
+    assert repo.claim_pending_phone_enrichment.call_count == 3

@@ -18,7 +18,8 @@
 ## Назначение
 
 - **HTTP API** (FastAPI, порт контейнера **8001**): фоновое обогащение **myhome** через Playwright (**`phone`**, **`pdf`**) и HTTP-детали (**`detail`**), автологин, health.
-- **Контракт с n8n:** `POST http://playwright-worker:8001/enrich` с телом **`{"adapter":"myhome","phase":"<detail|phone|phone_playwright|pdf>"}`** — для оркестратора успех **только HTTP 202**; тело ответа как сигнал готовности **не используется**; polling результата не выполняется (см. `docs/INGRESS_ARCHITECTURE.md`).
+- **Контракт с n8n:** `POST …/enrich` — успех **только HTTP 202**; готовность батча **`phase=phone`** — по **`GET /status`** (`idle`), см. `docs/n8n_myhome_workflow.md`. Тело **202** не несёт счётчиков enrich.
+- **`phase=phone`:** `enrich_batch` drain волнами (cap **500**); JWT — `_AccessTokenProvider` (lock, proactive **90** с, 401-retry); `relogin_fn` → `myhome_login.py` subprocess из `main.py`.
 
 ## Диагностические эндпоинты
 

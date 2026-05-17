@@ -411,7 +411,7 @@ const postEnrichPhone = node({
       sendBody: true,
       specifyBody: 'json',
       jsonBody:
-        '={{ JSON.stringify({ adapter: "myhome", phase: "phone", limit: Math.min($("Очередь обогащения").first().json.pending, 150) }) }}',
+        '={{ JSON.stringify({ adapter: "myhome", phase: "phone", limit: $("Очередь обогащения").first().json.pending }) }}',
       options: { timeout: 10000 },
     },
   },
@@ -437,15 +437,109 @@ const tgEnrichStarted = node({
   output: [{ ok: true }],
 });
 
-const waitEnrich = node({
+const waitEnrichInitial = node({
   type: 'n8n-nodes-base.wait',
   version: 1.1,
   config: {
-    name: 'Wait enrich 240s',
+    name: 'Wait enrich 480s',
     position: [4704, 0],
-    parameters: { amount: 240 },
+    parameters: { amount: 480 },
   },
   output: [{}],
+});
+
+const waitPollStatus = node({
+  type: 'n8n-nodes-base.wait',
+  version: 1.1,
+  config: {
+    name: 'Wait poll 30s',
+    position: [4928, 0],
+    parameters: { amount: 30 },
+  },
+  output: [{}],
+});
+
+const getWorkerStatus = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'GET /status',
+    position: [5152, 0],
+    executeOnce: true,
+    parameters: {
+      method: 'GET',
+      url: 'http://playwright-worker:8001/status',
+      options: {
+        response: { response: { neverError: true } },
+        timeout: 10000,
+      },
+    },
+  },
+  output: [{ status: 'idle', job: null, elapsed_seconds: null }],
+});
+
+const statusIdle = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Worker idle?',
+    position: [5376, 0],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 's1',
+            leftValue: '={{ $json.status }}',
+            rightValue: 'idle',
+            operator: { type: 'string', operation: 'equals' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const enrichPollTimeout = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Poll timeout 3600s?',
+    position: [5600, 96],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 't1',
+            leftValue:
+              '={{ $now.toMillis() - DateTime.fromISO($execution.startedAt).toMillis() }}',
+            rightValue: 3600000,
+            operator: { type: 'number', operation: 'gt' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const tgEnrichPollTimeout = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Таймаут обогащения',
+    position: [5824, 192],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr(
+        '=⚠️ <b>Обогащение: таймаут 3600 с</b>\nWorker всё ещё {{ $json.status }}. Проверьте логи playwright-worker.',
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: true }],
 });
 
 const sqlEnrichStats = node({
@@ -453,7 +547,7 @@ const sqlEnrichStats = node({
   version: 2.6,
   config: {
     name: 'SQL enrich stats',
-    position: [4928, 0],
+    position: [6048, 0],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -472,7 +566,7 @@ const tgEnrichDone = node({
   version: 1.2,
   config: {
     name: 'TG: Обогащение завершено',
-    position: [5152, 0],
+    position: [6272, 0],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
@@ -542,7 +636,23 @@ export default workflow('yG1JxQnR6kX0Vlgt', 'PropRadar — myhome v4')
             .onTrue(
               tgProxyOk.to(
                 postEnrichPhone.to(
-                  tgEnrichStarted.to(waitEnrich.to(sqlEnrichStats.to(tgEnrichDone))),
+                  tgEnrichStarted.to(
+                    waitEnrichInitial.to(
+                      waitPollStatus.to(
+                        getWorkerStatus.to(
+                          statusIdle
+                            .onTrue(sqlEnrichStats.to(tgEnrichDone))
+                            .onFalse(
+                              enrichPollTimeout
+                                .onTrue(
+                                  tgEnrichPollTimeout.to(sqlEnrichStats.to(tgEnrichDone)),
+                                )
+                                .onFalse(waitPollStatus),
+                            ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             )

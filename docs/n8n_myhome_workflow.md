@@ -25,7 +25,7 @@
 
 | Workflow | ID (n8n) | Расписание | Назначение |
 | -------- | ---------- | ---------- | ---------- |
-| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`GET /proxy/check`** → **`POST /enrich`** `phase=phone` → TG → **Wait 240 с** → SQL stats → TG итог |
+| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`GET /proxy/check`** → **`POST /enrich`** `limit=pending` → TG → **Wait 480 с** → poll **`GET /status`** каждые **30 с** до `idle` (max **3600 с**) → SQL stats → TG итог |
 | ~~PropRadar myhome session login~~ | `MvaHceZGVlUxDIHM` | ~~cron `3-59/9`~~ | **inactive** — login в воркере |
 
 **Инвариант:** в основном workflow (`yG1JxQnR6kX0Vlgt`) узла **`POST /login` нет**. Отдельный cron-login **не используется**.
@@ -41,8 +41,9 @@ flowchart TB
     I --> PC[GET /proxy/check]
     PC --> E[POST /enrich phase=phone]
     E --> TG1[TG: Обогащение запущено]
-    TG1 --> W240[Wait 240s]
-    W240 --> SQL[SQL enrich stats]
+    TG1 --> W480[Wait 480s]
+    W480 --> Poll[GET /status poll 30s]
+    Poll --> SQL[SQL enrich stats]
     SQL --> TG2[TG: Обогащение завершено]
   end
 ```
@@ -229,7 +230,7 @@ PROPRADAR_API_URL=http://api:8000
 - **Headers:** `Content-Type: application/json`
 - **Body (JSON):** по умолчанию **`{"adapter":"myhome","phase":"phone"}`**. Допустимы **`"phase":"detail"`** и **`"phase":"pdf"`** — вынесите в **отдельные** HTTP-узлы (другой cron, другой порядок) при необходимости; контракт успеха для n8n тот же — **только 202**.
 - **Ожидаемый успешный ответ:** код **202 Accepted**; тело ответа для принятия решений в workflow **не используется** (готовность по лидам — в БД / логах воркера).
-- **Polling / повторный GET статуса:** не предусмотрены контрактом — узел завершается после получения **202**.
+- **Polling:** после **202** основной workflow опрашивает **`GET /status`** (не тело **202**); лимит в теле: **`pending`** (воркер cap **500**).
 - **Ошибки:** коды вне **202** или сетевой сбой обрабатывайте политикой retry/error workflow n8n отдельно от ingest и discover.
 - **Скриншот (опционально):** `docs/assets/n8n/nodes/02c-playwright-enrich.png`
 
@@ -237,12 +238,14 @@ PROPRADAR_API_URL=http://api:8000
 
 ### Узлы 2c-TG — Telegram + Wait + итоговая статистика (v4, `yG1JxQnR6kX0Vlgt`)
 
-После **`POST /enrich`** `phase=phone` (узел «POST /enrich phone») workflow **не** опрашивает воркер — фиксированная пауза и сводка из БД.
+После **`POST /enrich`** `phase=phone` (тело: `limit` = **`pending`** из SQL-очереди) — warm-up **480 с**, затем poll **`GET /status`** каждые **30 с** до `status=idle`; при превышении **3600 с** с начала execution — TG «таймаут» и переход к SQL stats.
 
 | Узел | Тип | Назначение |
 | ---- | --- | ---------- |
 | **TG: Обогащение запущено** | Telegram | Уведомление о старте (HTTP **202** принят) |
-| **Wait enrich 240s** | Wait | **240 с** (`timeInterval`); рассчитано на `ENRICH_LIMIT=50` и ~16 с/лид — **без polling** |
+| **Wait enrich 480s** | Wait | Первичная пауза перед poll (anti-flap) |
+| **Wait poll 30s** + **GET /status** + **Worker idle?** | Wait + HTTP + IF | Цикл до `idle` или timeout execution |
+| **TG: Таймаут обогащения** | Telegram | Если execution &gt; **3600 с** и worker ещё `running` |
 | **SQL enrich stats** | Postgres `executeQuery` | Агрегаты по `leads` где `source='myhome'`: `total`, `with_phone`, `failed` (`phone_retries >= 3`, без телефона), `pending` (без телефона, retries &lt; 3) |
 | **TG: Обогащение завершено** | Telegram | Итог: получили телефон / не удалось / осталось / всего в базе (`{{ $json.* }}`) |
 

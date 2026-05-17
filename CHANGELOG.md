@@ -6,6 +6,10 @@
 
 ### Fixed
 
+- **myhome phone HTTP — JWT mid-batch (PR1):** `_AccessTokenProvider` в `phone_http.py` — `threading.Lock`, проактивный relogin при `remaining < 90` с, на **401** один relogin + retry `phone/show` **без** `phone_retries++` при успехе; `relogin_fn` из `main.py` (`_run_myhome_login_subprocess`). Порог pre-job в воркере — по-прежнему `MYHOME_SESSION_MIN_REMAINING_SECONDS` (**40** с).
+
+- **myhome phone HTTP — drain очереди (PR2):** `enrich_batch` — волны по `MYHOME_PHONE_HTTP_WORKERS` до `claim==0` или `processed>=limit` (cap **500**); n8n шлёт `limit=pending` (без cap 150). **n8n** `yG1JxQnR6kX0Vlgt` — Wait **480** с → poll **30** с + `GET /status` до `idle` (таймаут execution **3600** с → TG alert).
+
 - **P1 / myhome login через proxy:** общий хелпер `playwright_launch_kwargs_from_settings` (`playwright_proxy.py`); `scripts/myhome_login.py` — `chromium.launch(**launch_kw)` с `PLAYWRIGHT_PROXY_*` (как `phone.py`); login-if-needed больше не ходит на `auth.tnet.ge` с прямого IP Hetzner.
 
 ### Added

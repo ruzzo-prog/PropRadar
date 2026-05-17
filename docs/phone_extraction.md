@@ -92,7 +92,7 @@ Playwright остаётся как **fallback** и для обновления J
 5. Разобрать ответ
    └─ HTTP 200 + JSON → phone_number из data.phone_number
    └─ HTTP 400 / bad token → increment phone_retries → следующий батч
-   └─ HTTP 401 → сессия истекла → `phone_retries += 1` (relogin в том же job — follow-up для mid-batch)
+   └─ HTTP 401 → под lock один relogin (`relogin_fn` из воркера) → один retry `phone/show`; при успехе **`phone_retries` не растёт**; повторный 401 / fail login → `release` как раньше
 
 6. Сохранить в БД
    └─ repository.update_enriched_fields(lead_id, phone=…)
@@ -111,10 +111,14 @@ Playwright остаётся как **fallback** и для обновления J
 | **Итого**        | **~16 с/лид** |
 
 
-### 3.3 Параллелизм
+### 3.3 Параллелизм и JWT
 
 5 потоков (`ThreadPoolExecutor`, `MYHOME_PHONE_HTTP_WORKERS=5`).  
 На **каждый лид в потоке** — **два** отдельных `httpx.Client` (myhome API + 2captcha); общий клиент между потоками **не используется**.  
+**JWT в батче:** `_AccessTokenProvider` + `threading.Lock` — проактивный relogin при `remaining < 90` с (`TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S`); перед стартом job воркер по-прежнему проверяет **`MYHOME_SESSION_MIN_REMAINING_SECONDS`** (default **40** с). Relogin только через `relogin_fn` из `main.py`, не subprocess из enricher.
+
+**Волны drain:** `enrich_batch(limit=N)` — до **N** лидов волнами по `max_workers`: каждая волна — `claim(1)` на слот; следующая волна, пока очередь не пуста и `processed < min(limit, 500)`.
+
 Выборка лидов из БД — атомарная, `SELECT … FOR UPDATE SKIP LOCKED` — гонки исключены.
 
 **Резерв при claim (in-flight):** в той же транзакции claim — `status_reason = phone_enriching`, `updated_at = now()` (**`phone_retries` не меняется**). Лид снова eligible, если `status_reason` пустой, не `phone_enriching`, или enriching **старше** `PHONE_ENRICH_STALE_MINUTES` (default **15**, env). В начале батча — `sweep_stale_phone_enriching` (только `status_reason`, retries не трогаем). После успеха — `status_reason = NULL`; после ошибки — `release_phone_enrich_after_failure` (`phone_retries += 1`).
@@ -177,7 +181,7 @@ FOR UPDATE SKIP LOCKED
 | Успех (phone получен)      | phone записан, phone_retries не меняется                                                   |
 | 2captcha error / timeout   | `phone_retries += 1`                                                                       |
 | phone/show 400 / bad token | `phone_retries += 1`                                                                       |
-| phone/show 401 (JWT истёк) | `phone_retries += 1` + POST /login                                                         |
+| phone/show 401 (JWT истёк) | relogin под lock + один retry; при успехе retries **не** растут; иначе `release` / retries как при других ошибках |
 | `phone_retries >= 3`       | `status_reason = 'phone_enrich_failed'`, статус остаётся `new`, лид исключается из очереди |
 
 

@@ -11,6 +11,7 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from dataclasses import dataclass, field
@@ -40,6 +41,10 @@ TWOCAPTCHA_POLL_INTERVAL_S = 3.0
 TWOCAPTCHA_MAX_WAIT_S = 120.0
 PHONE_ENRICH_EXHAUSTED_REASON = "phone_enrich_failed"
 PHONE_ENRICHING_REASON = "phone_enriching"
+TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S = 90.0
+UNAUTHORIZED_ERROR = "phone_api_unauthorized"
+
+ReloginFn = Callable[[], int]
 
 
 @dataclass
@@ -149,6 +154,44 @@ def access_token_expires_at_iso(session_path: Path | None) -> str | None:
         return datetime.fromtimestamp(float(expires_at), tz=UTC).isoformat()
     except (TypeError, ValueError, OSError):
         return None
+
+
+class _AccessTokenProvider:
+    """Потокобезопасный AccessToken с проактивным relogin и refresh после 401."""
+
+    def __init__(
+        self,
+        session_path: Path | None,
+        relogin_fn: ReloginFn,
+        *,
+        min_remaining: float = TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S,
+    ) -> None:
+        self._session_path = session_path
+        self._relogin_fn = relogin_fn
+        self._min_remaining = min_remaining
+        self._lock = threading.Lock()
+
+    def get(self) -> str:
+        with self._lock:
+            self._ensure_fresh_unlocked()
+            return load_access_token(self._session_path)
+
+    def refresh_after_401(self) -> str:
+        with self._lock:
+            if self._relogin_unlocked() != 0:
+                raise PhoneShowError("login_failed_after_401", retryable=True)
+            return load_access_token(self._session_path)
+
+    def _ensure_fresh_unlocked(self) -> None:
+        if session_needs_login(self._session_path, min_remaining=self._min_remaining):
+            if self._relogin_unlocked() != 0:
+                msg = "login_failed_proactive"
+                raise PhoneShowError(msg, retryable=False)
+
+    def _relogin_unlocked(self) -> int:
+        code = self._relogin_fn()
+        logger.info("phone_http relogin exit_code=%s", code)
+        return code
 
 
 def session_needs_login(session_path: Path | None, *, min_remaining: float) -> bool:
@@ -273,7 +316,7 @@ def post_phone_show(
         timeout=REQUEST_TIMEOUT_S,
     )
     if response.status_code == 401:
-        raise PhoneShowError("phone_api_unauthorized", retryable=True)
+        raise PhoneShowError(UNAUTHORIZED_ERROR, retryable=True)
     if response.status_code == 204:
         raise PhoneShowError("phone_api_204_no_json", retryable=True)
     if response.status_code >= 400:
@@ -318,6 +361,8 @@ class MyHomePhoneHttpEnricher:
         recaptcha_site_key: str,
         max_workers: int = 5,
         http_client: httpx.Client | None = None,
+        relogin_fn: ReloginFn | None = None,
+        token_min_remaining: float = TOKEN_PROACTIVE_REFRESH_MIN_REMAINING_S,
     ) -> None:
         self._repository = repository
         self._base_url = base_url
@@ -326,6 +371,11 @@ class MyHomePhoneHttpEnricher:
         self._site_key = recaptcha_site_key
         self._max_workers = max(1, min(max_workers, 10))
         self._http_client = http_client
+        self._token_provider = (
+            _AccessTokenProvider(session_path, relogin_fn, min_remaining=token_min_remaining)
+            if relogin_fn is not None
+            else None
+        )
 
     def enrich_leads(self, leads: list[Lead], *, source: str) -> MyHomePhoneHttpEnrichReport:
         report = MyHomePhoneHttpEnrichReport()
@@ -401,10 +451,10 @@ class MyHomePhoneHttpEnricher:
                 myhome_client.close()
 
     def enrich_batch(self, source: str, *, limit: int) -> MyHomePhoneHttpEnrichReport:
-        """Параллельный батч: до ``limit`` задач, каждая делает ``claim(limit=1)`` и enrich."""
+        """До ``limit`` лидов волнами: claim(limit=1) на слот, пока очередь не пуста."""
         report = MyHomePhoneHttpEnrichReport()
-        slots = max(1, min(limit, 500))
-        if slots <= 0:
+        max_items = max(0, min(limit, 500))
+        if max_items <= 0:
             return report
 
         sweep = getattr(self._repository, "sweep_stale_phone_enriching", None)
@@ -413,43 +463,63 @@ class MyHomePhoneHttpEnricher:
             if swept:
                 logger.info("phone_enrich_sweep stale_released=%s", swept)
 
-        try:
-            access_token = load_access_token(self._session_path)
-        except PhoneShowError as exc:
-            report.failed = slots
-            report.errors.append(str(exc))
-            return report
-
         client_kw = httpx_client_kwargs_from_settings()
+        processed = 0
 
-        def _claim_and_enrich_one() -> tuple[bool, str | None]:
-            leads = self._repository.claim_pending_phone_enrichment(source, limit=1)
-            if not leads:
-                return False, None
-            err = self._enrich_one_isolated(
-                leads[0],
-                access_token=access_token,
-                source=source,
-                client_kw=client_kw,
-            )
-            return True, err
+        while processed < max_items:
+            try:
+                access_token = (
+                    self._token_provider.get()
+                    if self._token_provider is not None
+                    else load_access_token(self._session_path)
+                )
+            except PhoneShowError as exc:
+                report.failed += max_items - processed
+                report.errors.append(str(exc))
+                break
 
-        with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
-            futures = [pool.submit(_claim_and_enrich_one) for _ in range(slots)]
-            for fut in as_completed(futures):
-                try:
-                    claimed, err = fut.result()
-                except Exception as exc:  # noqa: BLE001
-                    report.failed += 1
-                    report.errors.append(f"worker:{type(exc).__name__}")
-                    continue
-                if not claimed:
-                    continue
-                if err is None:
-                    report.enriched += 1
-                else:
-                    report.failed += 1
-                    report.errors.append(err)
+            wave_slots = min(self._max_workers, max_items - processed)
+            claims_this_wave = 0
+
+            def _claim_and_enrich_one() -> tuple[bool, str | None]:
+                leads = self._repository.claim_pending_phone_enrichment(source, limit=1)
+                if not leads:
+                    return False, None
+                token = (
+                    self._token_provider.get()
+                    if self._token_provider is not None
+                    else access_token
+                )
+                err = self._enrich_one_isolated(
+                    leads[0],
+                    access_token=token,
+                    source=source,
+                    client_kw=client_kw,
+                )
+                return True, err
+
+            with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+                futures = [pool.submit(_claim_and_enrich_one) for _ in range(wave_slots)]
+                for fut in as_completed(futures):
+                    try:
+                        claimed, err = fut.result()
+                    except Exception as exc:  # noqa: BLE001
+                        report.failed += 1
+                        report.errors.append(f"worker:{type(exc).__name__}")
+                        processed += 1
+                        continue
+                    if not claimed:
+                        continue
+                    claims_this_wave += 1
+                    processed += 1
+                    if err is None:
+                        report.enriched += 1
+                    else:
+                        report.failed += 1
+                        report.errors.append(err)
+
+            if claims_this_wave == 0:
+                break
         return report
 
     def _record_retry(self, lead: Lead, source: str, err: str) -> str:
@@ -515,6 +585,32 @@ class MyHomePhoneHttpEnricher:
                 label,
                 exc,
             )
+            if (
+                exc.retryable
+                and str(exc) == UNAUTHORIZED_ERROR
+                and self._token_provider is not None
+            ):
+                try:
+                    new_token = self._token_provider.refresh_after_401()
+                    phone = post_phone_show(
+                        client,
+                        base_url=self._base_url,
+                        statement_uuid=statement_uuid,
+                        captcha_token=token,
+                        access_token=new_token,
+                    )
+                    merged = lead.model_copy(update={"phone": phone})
+                    self._repository.update_enriched_fields(merged)
+                    latency_ms = int((time.monotonic() - started) * 1000)
+                    logger.info(
+                        "phone_http_ok_after_401 ext=%s thread=%s latency_ms=%s",
+                        lead.external_id,
+                        threading.get_ident(),
+                        latency_ms,
+                    )
+                    return None
+                except PhoneShowError:
+                    pass
             if exc.retryable:
                 return self._record_retry(lead, source, f"{lead.external_id}:{exc}")
             return f"{lead.external_id}:{exc}"
