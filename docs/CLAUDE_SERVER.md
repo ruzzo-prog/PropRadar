@@ -191,6 +191,7 @@ Schedule/Manual
 | `TWOCAPTCHA_API_KEY` | `41e66b4e...` | 2captcha API |
 | `PLAYWRIGHT_PROXY_SERVER` | `http://utcso6t3nr.cn.fxdx.in:15539` | Текущий прокси |
 | `MYHOME_EMAIL` | `ruzzo0007@gmail.com` | Логин myhome |
+| `MYHOME_INGEST_CONCURRENCY` | не задан → `20` | Параллельных detail-запросов при ingest (api контейнер) |
 
 ---
 

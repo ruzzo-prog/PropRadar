@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -45,11 +46,13 @@ async def _async_main(*, ingest_ids_json: Path | None) -> None:
                 raise ValueError(msg)
             ids = [str(x).strip() for x in data if x is not None]
             ids = [x for x in ids if x]
+            max_concurrent = int(os.getenv("MYHOME_INGEST_CONCURRENCY", "20"))
             report = await ingest_new_leads_by_detail_ids(
                 client,
                 repo,
                 base_url=base_url,
                 external_ids=ids,
+                max_concurrent=max_concurrent,
             )
         else:
             parser = MyHomeParser(client, repo, base_url=base_url)

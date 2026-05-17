@@ -57,49 +57,57 @@ async def ingest_new_leads_by_detail_ids(
     base_url: str,
     external_ids: list[str],
     source: str = "myhome",
+    max_concurrent: int = 20,
 ) -> MyHomeRunReport:
     """Для каждого ID: если лида ещё нет — загрузить карточку и ``save``."""
     errors: list[str] = []
     new_leads: list[Lead] = []
     seen: set[str] = set()
 
+    unique_ids: list[str] = []
     for eid in external_ids:
         ext = str(eid).strip()
-        if not ext or ext in seen:
-            continue
-        seen.add(ext)
-        try:
-            existing = await asyncio.to_thread(
-                repository.get_by_source_and_external_id,
-                source,
-                ext,
-            )
-            if existing is not None:
-                continue
-            stmt = await fetch_statement_detail_async(
-                client,
-                base_url=base_url,
-                external_id=ext,
-            )
-            raw_id = stmt.get("id")
-            if raw_id is None:
-                errors.append(f"detail_no_id:{ext}")
-                continue
-            if not _statement_id_matches_request(ext, raw_id):
-                errors.append(f"detail_id_mismatch:{ext}:{raw_id}")
-                continue
-            updates = statement_to_lead_updates(stmt)
-            base_lead = Lead(
-                source=source,
-                external_id=ext,
-                status=LeadStatus.NEW,
-            )
-            merged = base_lead.model_copy(update=updates)
-            saved = await asyncio.to_thread(repository.save, merged)
-            new_leads.append(saved)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("ingest detail fail ext=%s type=%s", ext, type(exc).__name__)
-            errors.append(f"{ext}:{type(exc).__name__}")
+        if ext and ext not in seen:
+            seen.add(ext)
+            unique_ids.append(ext)
 
-    parsed = len(seen)
-    return MyHomeRunReport(parsed=parsed, new=len(new_leads), errors=errors, leads=new_leads)
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def _process(ext: str) -> None:
+        async with semaphore:
+            try:
+                existing = await asyncio.to_thread(
+                    repository.get_by_source_and_external_id,
+                    source,
+                    ext,
+                )
+                if existing is not None:
+                    return
+                stmt = await fetch_statement_detail_async(
+                    client,
+                    base_url=base_url,
+                    external_id=ext,
+                )
+                raw_id = stmt.get("id")
+                if raw_id is None:
+                    errors.append(f"detail_no_id:{ext}")
+                    return
+                if not _statement_id_matches_request(ext, raw_id):
+                    errors.append(f"detail_id_mismatch:{ext}:{raw_id}")
+                    return
+                updates = statement_to_lead_updates(stmt)
+                base_lead = Lead(
+                    source=source,
+                    external_id=ext,
+                    status=LeadStatus.NEW,
+                )
+                merged = base_lead.model_copy(update=updates)
+                saved = await asyncio.to_thread(repository.save, merged)
+                new_leads.append(saved)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ingest detail fail ext=%s type=%s", ext, type(exc).__name__)
+                errors.append(f"{ext}:{type(exc).__name__}")
+
+    await asyncio.gather(*[_process(ext) for ext in unique_ids])
+
+    return MyHomeRunReport(parsed=len(unique_ids), new=len(new_leads), errors=errors, leads=new_leads)
