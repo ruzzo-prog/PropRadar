@@ -201,12 +201,16 @@ def _run_refresh(settings: Settings, params: SnapshotFilterParams) -> None:
             return
 
         base_url = str(settings.myhome_api_base_url).rstrip("/")
-        with httpx.Client(**list_httpx_client_kwargs(settings)) as client:
+        ckw = list_httpx_client_kwargs(settings)
+        # Передаём client_kwargs чтобы каждый поток создавал свой Client.
+        # Shared client через прокси вызывает SSL UNEXPECTED_EOF при параллельных запросах.
+        with httpx.Client(**ckw) as client:
             ids, pages_fetched = fetch_all_external_ids_with_pages_sync(
                 client,
                 base_url=base_url,
                 max_pages=params.max_pages,
                 limit=None,
+                client_kwargs=ckw,
                 city=params.city,
                 category=params.category,
                 object_type=params.object_type,

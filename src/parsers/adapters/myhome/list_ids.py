@@ -95,6 +95,29 @@ def _normalize_object_type(value: str) -> int:
     return OBJECT_TYPE_TO_CODE[key]
 
 
+def _fetch_page_with_own_client(
+    *,
+    client_kwargs: dict[str, Any],
+    base_url: str,
+    page: int,
+    city: str,
+    category: str,
+    object_type: str,
+    seller_type: str,
+) -> list[dict[str, Any]]:
+    """Создаёт отдельный httpx.Client для одного потока — безопасно при параллельном fetch."""
+    with httpx.Client(**client_kwargs) as client:
+        return _fetch_page(
+            client,
+            base_url=base_url,
+            page=page,
+            city=city,
+            category=category,
+            object_type=object_type,
+            seller_type=seller_type,
+        )
+
+
 def _fetch_page(
     client: httpx.Client,
     *,
@@ -201,6 +224,7 @@ def fetch_all_list_items_with_pages_sync(
     base_url: str,
     max_pages: int = 500,
     limit: int | None = None,
+    client_kwargs: dict[str, Any] | None = None,
     city: str = "tbilisi",
     category: str = "apartment",
     object_type: str = "apartment",
@@ -208,7 +232,9 @@ def fetch_all_list_items_with_pages_sync(
 ) -> tuple[list[dict[str, Any]], int]:
     """Как ``fetch_all_list_items_sync``, плюс число успешно загруженных страниц.
 
-    При ``limit`` — последовательно; иначе батчи по ``LIST_PAGE_BATCH_SIZE`` + пауза.
+    При ``limit`` — последовательно (shared client).
+    Без ``limit`` — параллельные батчи: если передан ``client_kwargs``, каждый поток
+    создаёт собственный httpx.Client (обязательно при проксировании).
     """
     if limit is not None:
         return _fetch_all_list_items_sequential_with_pages_sync(
@@ -240,10 +266,22 @@ def fetch_all_list_items_with_pages_sync(
         results: dict[int, list[dict[str, Any]]] = {}
 
         with ThreadPoolExecutor(max_workers=LIST_PAGE_BATCH_SIZE) as pool:
-            futures = {
-                pool.submit(_fetch_page, client, page=page_num, **fetch_kw): page_num
-                for page_num in page_numbers
-            }
+            if client_kwargs is not None:
+                # Каждый поток создаёт свой Client — обязательно при прокси
+                futures = {
+                    pool.submit(
+                        _fetch_page_with_own_client,
+                        client_kwargs=client_kwargs,
+                        page=page_num,
+                        **fetch_kw,
+                    ): page_num
+                    for page_num in page_numbers
+                }
+            else:
+                futures = {
+                    pool.submit(_fetch_page, client, page=page_num, **fetch_kw): page_num
+                    for page_num in page_numbers
+                }
             for future in as_completed(futures):
                 page_num = futures[future]
                 results[page_num] = future.result()
@@ -352,6 +390,7 @@ def fetch_all_external_ids_with_pages_sync(
     since_days: int | None = None,
     max_pages: int = 500,
     limit: int | None = None,
+    client_kwargs: dict[str, Any] | None = None,
     city: str = "tbilisi",
     category: str = "apartment",
     object_type: str = "apartment",
@@ -368,6 +407,7 @@ def fetch_all_external_ids_with_pages_sync(
         base_url=base_url,
         max_pages=max_pages,
         limit=list_limit,
+        client_kwargs=client_kwargs,
         city=city,
         category=category,
         object_type=object_type,
