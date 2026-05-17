@@ -8,9 +8,12 @@ import pytest
 from tests.unit.test_myhome_parser import FakeLeadRepo
 
 from domain.lead import Lead, LeadStatus
+from config.settings import Settings
 from parsers.adapters.myhome.list_ids import (
+    LIST_PAGE_BATCH_SIZE,
     _fetch_page,
     fetch_all_external_ids_sync,
+    list_httpx_client_kwargs,
     raw_items_to_external_ids,
 )
 
@@ -38,6 +41,62 @@ def _handler_factory() -> httpx.MockTransport:
         return httpx.Response(200, json={"result": True, "data": {"data": []}})
 
     return httpx.MockTransport(handler)
+
+
+def test_list_httpx_client_kwargs_includes_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLAYWRIGHT_PROXY_SERVER", "http://proxy.example:8080")
+    monkeypatch.setenv("PLAYWRIGHT_PROXY_USER", "u")
+    monkeypatch.setenv("PLAYWRIGHT_PROXY_PASS", "p")
+    kw = list_httpx_client_kwargs(Settings())
+    assert kw["proxy"] == "http://u:p@proxy.example:8080"
+
+
+def test_fetch_all_external_ids_sleeps_between_page_batches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sleep_calls: list[float] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("parsers.adapters.myhome.list_ids.time.sleep", _fake_sleep)
+    monkeypatch.setattr("parsers.adapters.myhome.list_ids._list_fetch_batch_sleep_seconds", lambda: 0.5)
+
+    pages_requested: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params.get("page", "1")
+        pages_requested.append(page)
+        if page == "1":
+            return httpx.Response(
+                200,
+                json={
+                    "result": True,
+                    "data": {
+                        "data": [
+                            {
+                                "id": 1,
+                                "price": {"1": {}},
+                                "created_at": "2025-01-15T10:00:00+00:00",
+                            },
+                        ],
+                    },
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"result": True, "data": {"data": [{"id": 2, "price": {"1": {}}}]}},
+        )
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as client:
+        fetch_all_external_ids_sync(
+            client,
+            base_url="https://api-statements.tnet.ge",
+            max_pages=LIST_PAGE_BATCH_SIZE + 2,
+        )
+    assert sleep_calls == [0.5]
+    assert len(pages_requested) == LIST_PAGE_BATCH_SIZE + 2
 
 
 def test_fetch_all_external_ids_paginates_until_empty() -> None:

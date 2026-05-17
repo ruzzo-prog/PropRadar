@@ -64,7 +64,9 @@ flowchart TB
 |---|------|------------|
 | L | **Login-if-needed** (внутри `phase=phone`) | `myhome_login.py` в том же `_job_lock`, если JWT скоро истечёт; cron `MvaHceZGVlUxDIHM` — **inactive** |
 | 0 | **Schedule Trigger** | Периодический запуск (cron/интервал). |
-| 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
+| 0½ | **HTTP Request** | `GET …/api/myhome/ids-snapshot/status` — cold start / stale gate (v6). |
+| 1 | **HTTP Request** | `GET …/api/myhome/ids-snapshot` — ID из файла (v6); legacy: `fetch-ids` только для отладки. |
+| 1½ | **HTTP Request** | `POST …/api/myhome/ids-snapshot/refresh` — **202** в конце цикла (v6). |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |
 | 2b | **HTTP Request** | `POST …/api/myhome/ingest`. |
 | 2b½ | **HTTP Request** | `GET …/proxy/check` — перед enrich; при `ok=false` enrich не стартует |

@@ -13,7 +13,7 @@ import httpx
 
 from config.settings import Settings
 from domain.lead import LeadStatus
-from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync
+from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync, list_httpx_client_kwargs
 from repositories.postgres_lead_repository import PostgresLeadRepository, PostgresSessionFactory
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -61,7 +61,7 @@ def cmd_discover(
     repo = PostgresLeadRepository(sessions)
 
     if fetch_api:
-        with httpx.Client() as client:
+        with httpx.Client(**list_httpx_client_kwargs(settings)) as client:
             api_ids_list = fetch_all_external_ids_sync(
                 client,
                 base_url=base_url,

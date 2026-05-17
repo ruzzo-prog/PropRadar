@@ -2,6 +2,23 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-17 — myhome IDs snapshot (API + n8n v6) — цепочка PASS
+
+- **Проблема:** `GET /fetch-ids?limit=all` в n8n — 88–160 с → ECONNABORTED (timeout HTTP-ноды).
+- **Реализация:** `src/api/ids_snapshot.py` + эндпоинты в `myhome.py`; `fetch_all_external_ids_with_pages_sync` в `list_ids.py`; том **`propradar_api_data:/data`** для **`api`**; миграция **013** (`status=inactive`). **n8n** `yG1JxQnR6kX0Vlgt` v6 SDK — `GET /ids-snapshot/status` (cold start STOP, stale TG), `GET /ids-snapshot` → ingest/enrich, disappeared → SQL `inactive`, `POST /ids-snapshot/refresh` (202).
+- **`list_ids`:** proxy (`PLAYWRIGHT_PROXY_*`), батчи **8** страниц + `MYHOME_LIST_FETCH_BATCH_SLEEP_S` (default **0.35** с).
+- **Scanner hotfixes:** SQL `update_sql` через `$("Build disappeared")`; `_refreshing` reset при fail file lock; убран `.add(queuePending)` (двойной enrich); `tests/conftest.py` — изоляция `_refreshing`.
+- **Проверки:** `pytest tests/unit/` — **143 passed**, **1 skipped** (2026-05-17); **Scanner** — **PASS** (человек); n8n SDK validate/publish — **человек**; миграция **013** + rebuild **`api`** — **человек**; bootstrap: `POST /refresh` → `ready=true` в `/status`.
+- **Деплой (человек):** см. чеклист ниже.
+
+| Шаг | Действие |
+|-----|----------|
+| 1 | `psql` — `migrations/013_add_inactive_lead_status.sql` |
+| 2 | `docker compose --profile infra --profile app up -d --build api` |
+| 3 | Bootstrap: `POST /api/myhome/ids-snapshot/refresh` + poll `GET …/status` до `ready=true` |
+| 4 | Publish n8n `yG1JxQnR6kX0Vlgt` из `yG1JxQnR6kX0Vlgt_v5_proxy_gate.sdk.js` |
+| 5 | Smoke: manual execution workflow + `curl` snapshot endpoints |
+
 ## 2026-05-17 — myhome phone: JWT mid-batch + drain + n8n poll
 
 - **PR1:** `phone_http.py` — `_AccessTokenProvider` (lock, proactive refresh **90** с, 401 → relogin + retry без `phone_retries++`); `main.py` — `relogin_fn=_run_myhome_login_subprocess`.

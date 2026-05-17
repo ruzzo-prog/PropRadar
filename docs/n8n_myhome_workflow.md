@@ -25,7 +25,7 @@
 
 | Workflow | ID (n8n) | Расписание | Назначение |
 | -------- | ---------- | ---------- | ---------- |
-| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`GET /proxy/check`** → **`POST /enrich`** `limit=pending` → TG → **Wait 480 с** → poll **`GET /status`** каждые **30 с** до `idle` (max **3600 с**) → SQL stats → TG итог |
+| **PropRadar — myhome v6** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | **`GET /ids-snapshot/status`** (cold start / stale) → **`GET /ids-snapshot`** → ingest → **`GET /proxy/check`** → **`POST /enrich`** → poll **`/status`** → disappeared → **`inactive`** → **`POST /ids-snapshot/refresh`** (202) |
 | ~~PropRadar myhome session login~~ | `MvaHceZGVlUxDIHM` | ~~cron `3-59/9`~~ | **inactive** — login в воркере |
 
 **Инвариант:** в основном workflow (`yG1JxQnR6kX0Vlgt`) узла **`POST /login` нет**. Отдельный cron-login **не используется**.
@@ -36,7 +36,8 @@ flowchart TB
     LC[Schedule 3-59/9] --> L1[POST /login]
   end
   subgraph mainSync["yG1JxQnR6kX0Vlgt — 09:00 daily"]
-    MS[Schedule 09:00] --> F[fetch-ids]
+    MS[Schedule 09:00] --> ST[ids-snapshot/status]
+    ST --> F[ids-snapshot]
     F --> I[ingest]
     I --> PC[GET /proxy/check]
     PC --> E[POST /enrich phase=phone]
@@ -60,24 +61,25 @@ flowchart TB
 | Шаг     | Назначение                       | Действие в n8n                                                             |
 | ------- | -------------------------------- | -------------------------------------------------------------------------- |
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
-| 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
+| 0       | Gate снапшота                    | `GET` **`/api/myhome/ids-snapshot/status`** — `!ready` → TG + **STOP**; `age_seconds > 86400` → TG warning |
+| 1       | Список ID из файла               | `GET` **`/api/myhome/ids-snapshot`** (мгновенно; не `fetch-ids`)           |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
 | 2b½    | Proxy gate (v5)                   | `GET` **`http://playwright-worker:8001/proxy/check`** (timeout **20 с**); IF **`ok === true`** → TG (IP или «прокси не настроен») → enrich; иначе TG «прокси недоступен» → **стоп** |
 | 2c      | HTTP phone (primary)              | `POST` **`…/enrich`**, тело **`{"adapter":"myhome","phase":"phone"}`** — **2captcha** + **`phone/show`**. Успех n8n — только **HTTP 202** |
 | 2d      | Добивка phone (retry)             | **Wait** 5–15 мин → снова **`phase":"phone"`** (лиды с **`phone_retries` 1–2**) |
 | 2e      | (опц.) Playwright fallback        | **`phase":"phone_playwright"`** — только **после** батча/добивки **`phone`** (не параллельно); тот же **`claim_*`** в БД |
 | —       | **`detail`** / **`pdf`**          | отдельные узлы или CLI; **polling** нет |
-| 3       | Discover исчезнувшие             | `POST` `**/api/myhome/sync-status**` (внутри API — `discover --fetch-api`) |
-| 4       | Контрольные сообщения в WhatsApp | HTTP Request → Evolution API, цикл по `disappeared`                        |
-| 5       | Mark rejected в БД               | `POST` `**/api/myhome/mark-rejected**` с `ids` и `reason`                  |
-| 6       | Итоги и опционально Slack / файл | Set / Code + Slack или запись лога                                         |
+| 3       | Исчезнувшие (v6)                 | `status=new` в БД **MINUS** `snapshot.ids` → SQL **`UPDATE status=inactive`** (skip если stale) |
+| 4       | Обновить снапшот на завтра       | `POST` **`/api/myhome/ids-snapshot/refresh`** → **202**, не ждать          |
+| —       | (legacy) sync-status / WhatsApp  | `POST /sync-status` + Evolution — опционально, не в v6 SDK                |
 
 
 **Критический инвариант (не смешивать)**
 
-- Вывод шага **1** с `limit=all` — полный снимок ID; с `limit=N` — первые N ID для батча/отладки.
-- Шаг **3** с `**discover --fetch-api`** внутри скрипта загружает **полный** список ID с API (аналог `**fetch_myhome_ids.py --full`**). Поэтому **исчезнувшие** считаются корректно, даже если шаг 1 использует 7 дней.
-- **Нельзя** подставлять в `discover` JSON только за 7 дней через `--api-ids-json` и ожидать корректной классификации «исчезнувших» для старых объявлений — получите ложные `disappeared`.
+- **Bootstrap:** перед первым прод-запуском один раз `POST /ids-snapshot/refresh` и дождаться `ready=true` в `/ids-snapshot/status`.
+- Сравнение «новых» идёт по **вчерашнему** снапшоту (лаг до ~24 ч) — см. аудит ID Snapshot.
+- При `age_seconds > 86400` ingest продолжается, **inactive не ставится** (защита от устаревшего файла).
+- `GET /fetch-ids` остаётся для отладки/CLI; в n8n **не использовать** (таймаут).
 
 ```mermaid
 flowchart LR

@@ -13,12 +13,19 @@ from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from config.settings import Settings
-from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync
+from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync, list_httpx_client_kwargs
 
 from .auth import get_settings, verify_propradar_api_key
+from .ids_snapshot import (
+    SnapshotFilterParams,
+    read_snapshot_file,
+    snapshot_status,
+    start_refresh,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +101,33 @@ def _parse_limit(limit: str) -> int | None:
     return parsed
 
 
+@router.get("/ids-snapshot/status")
+def ids_snapshot_status_endpoint(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    return snapshot_status(settings)
+
+
+@router.get("/ids-snapshot")
+def ids_snapshot_get(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    return read_snapshot_file(settings)
+
+
+@router.post("/ids-snapshot/refresh", status_code=202)
+def ids_snapshot_refresh(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> JSONResponse:
+    started, message = start_refresh(settings, SnapshotFilterParams())
+    if not started:
+        return JSONResponse(
+            status_code=409,
+            content={"detail": message, "refreshing": snapshot_status(settings)["refreshing"]},
+        )
+    return JSONResponse(status_code=202, content={"status": "accepted", "message": message})
+
+
 @router.get("/fetch-ids")
 def fetch_ids(
     settings: Annotated[Settings, Depends(get_settings)],
@@ -107,7 +141,7 @@ def fetch_ids(
     limit_value = _parse_limit(limit)
     base_url = str(settings.myhome_api_base_url).rstrip("/")
     try:
-        with httpx.Client() as client:
+        with httpx.Client(**list_httpx_client_kwargs(settings)) as client:
             ids = fetch_all_external_ids_sync(
                 client,
                 base_url=base_url,

@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 
+from config.settings import Settings
 from parsers.adapters.myhome.constants import LIST_PATH, REQUEST_TIMEOUT_S, api_headers
 from parsers.adapters.myhome.parser import parse_list_item
+from parsers.adapters.myhome.phone_http import httpx_client_kwargs_from_settings
 
 logger = logging.getLogger(__name__)
+
+# Параллельных страниц в одном батче (не менять без отдельного решения).
+LIST_PAGE_BATCH_SIZE = 8
+_DEFAULT_BATCH_SLEEP_S = 0.35
 
 DEFAULT_LIST_PARAMS_BASE: dict[str, str | int] = {
     "deal_types": 1,
@@ -37,6 +46,21 @@ OBJECT_TYPE_TO_CODE: dict[str, int] = {
 SELLER_TYPE_TO_OWNER_TYPE: dict[str, str] = {
     "private": "physical",
 }
+
+
+def list_httpx_client_kwargs(settings: Settings | None = None) -> dict[str, Any]:
+    """Kwargs для ``httpx.Client`` при list fetch (proxy как в phone_http)."""
+    return httpx_client_kwargs_from_settings(settings)
+
+
+def _list_fetch_batch_sleep_seconds() -> float:
+    raw = os.getenv("MYHOME_LIST_FETCH_BATCH_SLEEP_S", str(_DEFAULT_BATCH_SLEEP_S))
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning("invalid MYHOME_LIST_FETCH_BATCH_SLEEP_S=%r, using default", raw)
+        return _DEFAULT_BATCH_SLEEP_S
+    return max(0.0, value)
 
 
 def _normalize_city(value: str) -> int:
@@ -124,7 +148,33 @@ def fetch_all_list_items_sync(
     seller_type: str = "private",
 ) -> list[dict[str, Any]]:
     """Загрузить страницы списка до пустой выдачи, ``max_pages`` или ``limit`` raw-элементов."""
+    items, _pages = fetch_all_list_items_with_pages_sync(
+        client,
+        base_url=base_url,
+        max_pages=max_pages,
+        limit=limit,
+        city=city,
+        category=category,
+        object_type=object_type,
+        seller_type=seller_type,
+    )
+    return items
+
+
+def _fetch_all_list_items_sequential_with_pages_sync(
+    client: httpx.Client,
+    *,
+    base_url: str,
+    max_pages: int,
+    limit: int | None,
+    city: str,
+    category: str,
+    object_type: str,
+    seller_type: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Последовательная пагинация (ранний stop по ``limit``)."""
     out: list[dict[str, Any]] = []
+    pages_fetched = 0
     for page in range(1, max_pages + 1):
         batch = _fetch_page(
             client,
@@ -137,11 +187,87 @@ def fetch_all_list_items_sync(
         )
         if not batch:
             break
+        pages_fetched += 1
         out.extend(batch)
         logger.info("myhome list page=%s items=%s", page, len(batch))
         if limit is not None and len(out) >= limit:
             break
-    return out
+    return out, pages_fetched
+
+
+def fetch_all_list_items_with_pages_sync(
+    client: httpx.Client,
+    *,
+    base_url: str,
+    max_pages: int = 500,
+    limit: int | None = None,
+    city: str = "tbilisi",
+    category: str = "apartment",
+    object_type: str = "apartment",
+    seller_type: str = "private",
+) -> tuple[list[dict[str, Any]], int]:
+    """Как ``fetch_all_list_items_sync``, плюс число успешно загруженных страниц.
+
+    При ``limit`` — последовательно; иначе батчи по ``LIST_PAGE_BATCH_SIZE`` + пауза.
+    """
+    if limit is not None:
+        return _fetch_all_list_items_sequential_with_pages_sync(
+            client,
+            base_url=base_url,
+            max_pages=max_pages,
+            limit=limit,
+            city=city,
+            category=category,
+            object_type=object_type,
+            seller_type=seller_type,
+        )
+
+    out: list[dict[str, Any]] = []
+    pages_fetched = 0
+    page_start = 1
+    batch_sleep_s = _list_fetch_batch_sleep_seconds()
+    fetch_kw = {
+        "base_url": base_url,
+        "city": city,
+        "category": category,
+        "object_type": object_type,
+        "seller_type": seller_type,
+    }
+
+    while page_start <= max_pages:
+        batch_end = min(page_start + LIST_PAGE_BATCH_SIZE - 1, max_pages)
+        page_numbers = list(range(page_start, batch_end + 1))
+        results: dict[int, list[dict[str, Any]]] = {}
+
+        with ThreadPoolExecutor(max_workers=LIST_PAGE_BATCH_SIZE) as pool:
+            futures = {
+                pool.submit(_fetch_page, client, page=page_num, **fetch_kw): page_num
+                for page_num in page_numbers
+            }
+            for future in as_completed(futures):
+                page_num = futures[future]
+                results[page_num] = future.result()
+
+        stop = False
+        for page_num in sorted(results):
+            batch = results[page_num]
+            if not batch:
+                stop = True
+                break
+            pages_fetched += 1
+            out.extend(batch)
+            logger.info("myhome list page=%s items=%s", page_num, len(batch))
+            if limit is not None and len(out) >= limit:
+                return out, pages_fetched
+
+        if stop:
+            break
+
+        page_start = batch_end + 1
+        if page_start <= max_pages and batch_sleep_s > 0:
+            time.sleep(batch_sleep_s)
+
+    return out, pages_fetched
 
 
 def _utc_now() -> datetime:
@@ -217,3 +343,35 @@ def fetch_all_external_ids_sync(
         seller_type=seller_type,
     )
     return raw_items_to_external_ids(raw, limit=limit, since_days=since_days)
+
+
+def fetch_all_external_ids_with_pages_sync(
+    client: httpx.Client,
+    *,
+    base_url: str,
+    since_days: int | None = None,
+    max_pages: int = 500,
+    limit: int | None = None,
+    city: str = "tbilisi",
+    category: str = "apartment",
+    object_type: str = "apartment",
+    seller_type: str = "private",
+) -> tuple[list[str], int]:
+    """Полный список external_id и число загруженных страниц."""
+    if limit is not None and limit < 1:
+        msg = f"limit must be >= 1, got {limit}"
+        raise ValueError(msg)
+
+    list_limit = limit if since_days is None else None
+    raw, pages_fetched = fetch_all_list_items_with_pages_sync(
+        client,
+        base_url=base_url,
+        max_pages=max_pages,
+        limit=list_limit,
+        city=city,
+        category=category,
+        object_type=object_type,
+        seller_type=seller_type,
+    )
+    ids = raw_items_to_external_ids(raw, limit=limit, since_days=since_days)
+    return ids, pages_fetched

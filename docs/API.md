@@ -60,6 +60,10 @@ X-API-Key: <значение PROPRADAR_API_KEY>
 | `PROPRADAR_API_KEY` | Секрет для заголовка `X-API-Key` в production. |
 | `PROPRADAR_REPO_ROOT` | Корень репозитория с каталогом `scripts/` (в Docker: `/srv`, см. compose). |
 | `MYHOME_CLI_TIMEOUT_SECONDS` | Таймаут subprocess (по умолчанию 3600 с). |
+| `MYHOME_IDS_SNAPSHOT_PATH` | Путь к JSON снапшота ID (по умолчанию `/data/myhome_ids_snapshot.json`). |
+| `MYHOME_IDS_SNAPSHOT_LOCK_PATH` | File lock refresh (по умолчанию `/data/.ids_snapshot.lock`). |
+| `MYHOME_LIST_FETCH_BATCH_SLEEP_S` | Пауза между батчами list fetch (default **0.35** с). |
+| `PLAYWRIGHT_PROXY_SERVER` / `USER` / `PASS` | Прокси для list fetch и phone enrich (см. `list_httpx_client_kwargs`). |
 
 Остальные переменные myhome — как в `Settings` (`MYHOME_API_BASE_URL`, сессия и т.д.).
 
@@ -68,6 +72,24 @@ X-API-Key: <значение PROPRADAR_API_KEY>
 Базовый путь: **`/api/myhome`**. Примеры для `http://localhost:9000` и ключа `secret` (подставьте свой).
 
 Пакетное обогащение **detail → phone → PDF** по очередям в БД выполняется скриптом **`scripts/run_myhome_enricher.py`** (не отдельным маршрутом API); эндпоинты ниже закрывают сценарий **n8n → CLI через API** (fetch / ingest / sync / mark).
+
+### `GET /api/myhome/ids-snapshot/status`
+
+Метаданные снапшота без массива ID (для n8n gate).
+
+Ответ: `{"ready": bool, "count": int, "fetched_at": str|null, "age_seconds": int|null, "refreshing": bool, "last_error": str|null, ...}`.
+
+### `GET /api/myhome/ids-snapshot`
+
+Чтение файла снапшота. Если файла нет: `{"ids": [], "fetched_at": null, "count": 0, "ready": false, ...}`.
+
+### `POST /api/myhome/ids-snapshot/refresh`
+
+Запуск фонового full fetch (параметры как в n8n: `tbilisi`, `apartment`, `private`). Ответ **202** `{"status":"accepted"}`. Повтор при уже идущем refresh — **409**.
+
+```bash
+curl -sS -X POST -H "X-API-Key: secret" http://localhost:9000/api/myhome/ids-snapshot/refresh
+```
 
 ### `GET /api/myhome/fetch-ids`
 
@@ -148,7 +170,7 @@ curl -sS -X POST -H "X-API-Key: secret" -H "Content-Type: application/json" \
 
 ## Docker
 
-Сервис **`api`** в `docker/app/docker-compose.yml`: монтирование репозитория в `/srv`, `PYTHONPATH=/srv/src`, `depends_on: leads-db` при **совместном** запуске с `docker/infra/docker-compose.yml`. Подробности — комментарии в compose-файле.
+Сервис **`api`** в `docker/app/docker-compose.yml`: монтирование репозитория в `/srv`, том **`propradar_api_data:/data`** (снапшот ID), `PYTHONPATH=/srv/src`, `depends_on: leads-db` при **совместном** запуске с `docker/infra/docker-compose.yml`. Подробности — комментарии в compose-файле.
 
 ## Идемпотентность
 

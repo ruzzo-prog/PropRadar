@@ -47,6 +47,14 @@ class Settings(BaseSettings):
         default="https://api-statements.tnet.ge",
         validation_alias="MYHOME_API_BASE_URL",
     )
+    myhome_ids_snapshot_path: Path = Field(
+        default=Path("/data/myhome_ids_snapshot.json"),
+        validation_alias="MYHOME_IDS_SNAPSHOT_PATH",
+    )
+    myhome_ids_snapshot_lock_path: Path = Field(
+        default=Path("/data/.ids_snapshot.lock"),
+        validation_alias="MYHOME_IDS_SNAPSHOT_LOCK_PATH",
+    )
     myhome_email: str | None = Field(default=None, validation_alias="MYHOME_EMAIL")
     myhome_password: str | None = Field(default=None, validation_alias="MYHOME_PASSWORD")
     myhome_session_path: Path = Field(
