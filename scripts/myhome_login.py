@@ -19,6 +19,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PWTimeoutError
 
 from config.settings import Settings
+from parsers.adapters.myhome.playwright_proxy import playwright_launch_kwargs_from_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("myhome_login")
@@ -262,6 +263,7 @@ def main() -> int:
     debug = _env_truthy("MYHOME_LOGIN_DEBUG")
     logger.info("Откроется окно браузера. Сессия будет записана в %s", state_path)
 
+    launch_kw = playwright_launch_kwargs_from_settings(settings, headless=True)
     exit_code = 0
     try:
         with sync_playwright() as pw:
@@ -270,7 +272,7 @@ def main() -> int:
             page: Page | None = None
             try:
                 try:
-                    browser = pw.chromium.launch(headless=True)
+                    browser = pw.chromium.launch(**launch_kw)
                 except PWTimeoutError as exc:
                     raise MyHomeLoginError("launch_browser", "timeout") from exc
                 except PlaywrightError as exc:

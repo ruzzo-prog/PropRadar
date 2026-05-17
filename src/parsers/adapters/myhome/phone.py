@@ -28,6 +28,7 @@ from domain.lead import Lead
 from parsers.adapters.myhome.browser import dismiss_popup, save_timeout_shot
 from parsers.adapters.myhome.constants import BTN_SELECTORS, TW_MS
 from parsers.adapters.myhome.extract import listing_url
+from parsers.adapters.myhome.playwright_proxy import playwright_launch_kwargs_from_settings
 from repositories.base import LeadRepository
 
 logger = logging.getLogger(__name__)
@@ -221,27 +222,10 @@ class MyHomePhoneEnricher:
             return report
 
         app_settings = Settings()
-        launch_proxy = None
-        if app_settings.playwright_proxy_server:
-            launch_proxy = {"server": app_settings.playwright_proxy_server}
-            if app_settings.playwright_proxy_user is not None:
-                launch_proxy["username"] = app_settings.playwright_proxy_user
-            if app_settings.playwright_proxy_pass is not None:
-                launch_proxy["password"] = app_settings.playwright_proxy_pass
-
-        _GOOGLE_BYPASS = (
-            "*.google.com,*.gstatic.com,*.googleapis.com,"
-            "*.recaptcha.net,recaptcha.google.com"
+        launch_kw = playwright_launch_kwargs_from_settings(
+            app_settings,
+            headless=self._headless,
         )
-        launch_kw: dict = {
-            "headless": self._headless,
-            "args": [
-                "--disable-blink-features=AutomationControlled",
-                f"--proxy-bypass-list={_GOOGLE_BYPASS}",
-            ],
-        }
-        if launch_proxy is not None:
-            launch_kw["proxy"] = launch_proxy
 
         for lead in items:
             # Re-read session from disk each lead so refreshed tokens are picked up

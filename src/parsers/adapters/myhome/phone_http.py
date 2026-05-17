@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -102,8 +103,7 @@ def _decode_jwt_payload_segment(segment: str) -> dict[str, Any]:
     return data
 
 
-def access_token_remaining_seconds(session_path: Path | None) -> float | None:
-    """Секунды до ``expires_at`` JWT AccessToken в storage state; ``None`` если не прочитать."""
+def _read_access_token_jwt_payload(session_path: Path | None) -> dict[str, Any] | None:
     if session_path is None or not session_path.is_file():
         return None
     try:
@@ -118,11 +118,36 @@ def access_token_remaining_seconds(session_path: Path | None) -> float | None:
         if len(parts) < 2:
             return None
         payload = _decode_jwt_payload_segment(parts[1])
-        expires_at = payload.get("expires_at")
-        if expires_at is None:
-            return None
-        return float(expires_at) - time.time()
+        return payload if isinstance(payload, dict) else None
     except Exception:
+        return None
+
+
+def access_token_remaining_seconds(session_path: Path | None) -> float | None:
+    """Секунды до ``expires_at`` JWT AccessToken в storage state; ``None`` если не прочитать."""
+    payload = _read_access_token_jwt_payload(session_path)
+    if payload is None:
+        return None
+    expires_at = payload.get("expires_at")
+    if expires_at is None:
+        return None
+    try:
+        return float(expires_at) - time.time()
+    except (TypeError, ValueError):
+        return None
+
+
+def access_token_expires_at_iso(session_path: Path | None) -> str | None:
+    """``expires_at`` JWT AccessToken как ISO-8601 UTC; ``None`` если не прочитать."""
+    payload = _read_access_token_jwt_payload(session_path)
+    if payload is None:
+        return None
+    expires_at = payload.get("expires_at")
+    if expires_at is None:
+        return None
+    try:
+        return datetime.fromtimestamp(float(expires_at), tz=UTC).isoformat()
+    except (TypeError, ValueError, OSError):
         return None
 
 

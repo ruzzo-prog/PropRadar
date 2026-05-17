@@ -25,7 +25,7 @@
 
 | Workflow | ID (n8n) | Расписание | Назначение |
 | -------- | ---------- | ---------- | ---------- |
-| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`POST /enrich`** `phase=phone` → TG старт → **Wait 240 с** → SQL stats → TG итог |
+| **PropRadar — myhome v4** | `yG1JxQnR6kX0Vlgt` | cron **`0 9 * * *`** (09:00) + Manual | fetch → ingest → **`GET /proxy/check`** → **`POST /enrich`** `phase=phone` → TG → **Wait 240 с** → SQL stats → TG итог |
 | ~~PropRadar myhome session login~~ | `MvaHceZGVlUxDIHM` | ~~cron `3-59/9`~~ | **inactive** — login в воркере |
 
 **Инвариант:** в основном workflow (`yG1JxQnR6kX0Vlgt`) узла **`POST /login` нет**. Отдельный cron-login **не используется**.
@@ -38,7 +38,8 @@ flowchart TB
   subgraph mainSync["yG1JxQnR6kX0Vlgt — 09:00 daily"]
     MS[Schedule 09:00] --> F[fetch-ids]
     F --> I[ingest]
-    I --> E[POST /enrich phase=phone]
+    I --> PC[GET /proxy/check]
+    PC --> E[POST /enrich phase=phone]
     E --> TG1[TG: Обогащение запущено]
     TG1 --> W240[Wait 240s]
     W240 --> SQL[SQL enrich stats]
@@ -60,6 +61,7 @@ flowchart TB
 | Триггер | Запуск по расписанию             | Schedule Trigger (hourly / 6h / daily)                                     |
 | 1       | Список ID (full или batch)       | `GET` `**/api/myhome/fetch-ids?limit=all`** или `...&limit=100`            |
 | 2       | Ingest по списку ID              | `POST` `**/api/myhome/ingest**` с телом `{"ids": [...]}`                   |
+| 2b½    | Proxy gate (v5)                   | `GET` **`http://playwright-worker:8001/proxy/check`** (timeout **20 с**); IF **`ok === true`** → TG (IP или «прокси не настроен») → enrich; иначе TG «прокси недоступен» → **стоп** |
 | 2c      | HTTP phone (primary)              | `POST` **`…/enrich`**, тело **`{"adapter":"myhome","phase":"phone"}`** — **2captcha** + **`phone/show`**. Успех n8n — только **HTTP 202** |
 | 2d      | Добивка phone (retry)             | **Wait** 5–15 мин → снова **`phase":"phone"`** (лиды с **`phone_retries` 1–2**) |
 | 2e      | (опц.) Playwright fallback        | **`phase":"phone_playwright"`** — только **после** батча/добивки **`phone`** (не параллельно); тот же **`claim_*`** в БД |

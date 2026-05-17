@@ -50,7 +50,7 @@ flowchart TB
   API --> DB
 ```
 
-**Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
+**Порядок по смыслу (типовой n8n workflow):** список ID → ingest в БД → **`GET http://playwright-worker:8001/proxy/check`** (gate) → **`POST http://playwright-worker:8001/enrich`** с телом **`{"adapter":"myhome","phase":"phone"}`** (ожидание только **HTTP 202**, без polling и без чтения тела как статуса выполнения) → discover «исчезнувших» → (опционально) цикл уведомлений в WhatsApp → `mark-rejected` в БД. У **`playwright-worker`** — отдельный том под файлы сессии браузера (см. `docker/app/docker-compose.yml`). Подробнее узлы — в `docs/n8n_myhome_workflow.md`.
 
 **Фазы воркера (`POST /enrich`):** **`detail`** (HTTP Statements API), **`phone`** (HTTP: **2captcha** + **`phone/show`**, см. **`MyHomePhoneHttpEnricher`**), **`phone_playwright`** (Playwright fallback, **`MyHomePhoneEnricher`**), **`pdf`** (Playwright **`page.pdf()`**). Успех для n8n — только **202**; результат — в БД / логе **`enrich done`**. Типовой workflow: **`phone`** после ingest; узел **добивки** (повтор **`phone`** через паузу) для **`phone_retries` 1–2**; опционально **`phone_playwright`**; **`detail`** / **`pdf`** — отдельное расписание или CLI **`scripts/run_myhome_enricher.py`**.
 
@@ -67,7 +67,8 @@ flowchart TB
 | 1 | **HTTP Request** | `GET …/api/myhome/fetch-ids` — массив external ID. |
 | 2a | **Set / Code** | Сборка тела `{"ids": [...]}` для ingest. |
 | 2b | **HTTP Request** | `POST …/api/myhome/ingest`. |
-| 2c | **HTTP Request** | `POST …/enrich` **`phase=phone`** (HTTP + 2captcha) — после ingest |
+| 2b½ | **HTTP Request** | `GET …/proxy/check` — перед enrich; при `ok=false` enrich не стартует |
+| 2c | **HTTP Request** | `POST …/enrich` **`phase=phone`** (HTTP + 2captcha) — после ingest и proxy gate |
 | 2d | **Wait + HTTP Request** | добивка: снова **`phase=phone`** (лиды с **`phone_retries` 1–2**) |
 | 2e | (опц.) **HTTP Request** | **`phase=phone_playwright`** — Playwright fallback (**после** HTTP-батча, не параллельно; **`claim_pending_phone_enrichment`**) |
 | — | **`detail`** / **`pdf`** | отдельные узлы или CLI; успех n8n — только **202**, без polling |

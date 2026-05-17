@@ -2,6 +2,20 @@
 
 Единственный источник оперативного статуса по `docs/AI_GOVERNANCE.md` раздел 8.
 
+## 2026-05-17 — P1 hotfix: proxy в myhome_login.py
+
+- **Проблема:** `myhome_login.py` — `chromium.launch(headless=True)` без proxy; subprocess уже наследовал `PLAYWRIGHT_PROXY_*`, но скрипт не применял → login с IP Hetzner, enrich — через proxy.
+- **Фикс:** `src/parsers/adapters/myhome/playwright_proxy.py` — `playwright_launch_kwargs_from_settings()`; `myhome_login.py` + рефактор `phone.py` на тот же хелпер.
+- **Не трогали:** `phone_http.py`, n8n, `_run_myhome_login_subprocess`.
+- **Проверки:** `pytest tests/unit/test_playwright_proxy.py` + связанные — **PASS** (2026-05-17, 70 tests); **Scanner** — **PASS** (человек); **деплой:** rebuild **`playwright-worker`** — **человек**.
+
+## 2026-05-17 — playwright-worker: диагностика + proxy gate в n8n
+
+- **Реализация:** `src/worker/main.py` v**0.3.0** — `GET /proxy/check`, `/session/check`, `/status`, `POST /session/reset`, `GET /queue`, `GET /metrics`; hooks метрик для `phase=phone`; `phone_http.access_token_expires_at_iso()`.
+- **n8n:** workflow **`yG1JxQnR6kX0Vlgt`** — перед `POST /enrich phone`: `GET /proxy/check` → IF `ok` → TG → enrich; при `ok=false` — TG и **стоп** (SDK: `scripts/n8n_workflows/yG1JxQnR6kX0Vlgt_v5_proxy_gate.sdk.js`).
+- **Не трогали:** `/health`, `/enrich`, `/login` контракты; `isac0mztKLIIaYOP`. *(proxy в login — отдельная запись выше.)*
+- **Проверки:** `pytest tests/unit/test_playwright_worker_api.py` + связанные — **PASS** (2026-05-17, 70 tests); **Scanner** — **PASS** (человек); n8n v5 опубликован (`yG1JxQnR6kX0Vlgt`). **Smoke (человек):** `curl …/proxy/check`, manual n8n, rebuild **`playwright-worker`**.
+
 ## 2026-05-16 — playwright-worker: `limit` в `POST /enrich`
 
 - **Проблема:** n8n передавал `limit` в JSON, `EnrichRequest` не читал поле — всегда `settings.myhome_enrich_limit` (**50**).

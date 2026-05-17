@@ -5,6 +5,7 @@
 ## Оглавление
 
 - [Назначение](#назначение)
+- [Диагностические эндпоинты](#диагностические-эндпоинты)
 - [Контракт `POST /enrich` и связь с CLI](#контракт-post-enrich-и-связь-с-cli)
 - [Переменные окружения (enrich)](#переменные-окружения-enrich)
 - [Изображения карточки и PDF](#изображения-карточки-и-pdf)
@@ -18,6 +19,32 @@
 
 - **HTTP API** (FastAPI, порт контейнера **8001**): фоновое обогащение **myhome** через Playwright (**`phone`**, **`pdf`**) и HTTP-детали (**`detail`**), автологин, health.
 - **Контракт с n8n:** `POST http://playwright-worker:8001/enrich` с телом **`{"adapter":"myhome","phase":"<detail|phone|phone_playwright|pdf>"}`** — для оркестратора успех **только HTTP 202**; тело ответа как сигнал готовности **не используется**; polling результата не выполняется (см. `docs/INGRESS_ARCHITECTURE.md`).
+
+## Диагностические эндпоинты
+
+Реализация: **`src/worker/main.py`** (версия API **0.3.0**). Базовый URL в Docker: `http://playwright-worker:8001`.
+
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| `GET` | `/health` | Процесс жив (`{"status":"ok"}`) |
+| `GET` | `/proxy/check` | Туннель через `PLAYWRIGHT_PROXY_*` (ipify); без proxy → `{"ok":true,"skipped":true}`; ошибка → **503** `{"ok":false,"reason":"…"}` |
+| `GET` | `/session/check` | JWT в `MYHOME_SESSION_PATH`: `ok`, `exists`, `remaining_seconds`, `expires_at` |
+| `GET` | `/status` | `_job_lock`: `idle` / `running`, `job`, `elapsed_seconds` |
+| `POST` | `/session/reset` | Удалить файл сессии (без login) |
+| `GET` | `/queue` | `pending` — COUNT лидов без телефона (`phone_retries < 3`) |
+| `GET` | `/metrics` | In-memory счётчики `phase=phone` (сброс при рестарте) |
+
+**n8n (v4):** перед `POST /enrich` `phase=phone` — `GET /proxy/check`; при `ok !== true` enrich **не** вызывается.
+
+Примеры (на хосте с пробросом **8001**):
+
+```bash
+curl -sS http://127.0.0.1:8001/proxy/check
+curl -sS http://127.0.0.1:8001/session/check
+curl -sS http://127.0.0.1:8001/status
+curl -sS http://127.0.0.1:8001/queue
+curl -sS http://127.0.0.1:8001/metrics
+```
 
 ## Контракт `POST /enrich` и связь с CLI
 
@@ -43,7 +70,7 @@
 | `MYHOME_RECAPTCHA_SITE_KEY` | воркер (`phone`) | Site key reCAPTCHA v3 myhome.ge |
 | `MYHOME_PHONE_HTTP_WORKERS` | воркер (`phone`) | Параллельные потоки (1–10, default **5**) |
 | `MYHOME_PHONE_HTTP_ENABLED` | воркер (`phone`) | **`false`** — откат без деплоя кода |
-| `PLAYWRIGHT_PROXY_*` | HTTP phone + Playwright | Прокси для исходящих запросов |
+| `PLAYWRIGHT_PROXY_*` | HTTP phone + Playwright + **`myhome_login.py`** | Прокси для исходящих запросов (`playwright_launch_kwargs_from_settings`) |
 | `MYHOME_PDF_OUTPUT_DIR` | воркер, CLI (`pdf`) | Каталог файлов PDF |
 | `MYHOME_PDF_PUBLIC_BASE_URL` | воркер, CLI (`pdf`, опц.) | Префикс публичного URL в поле `pdf_url` |
 

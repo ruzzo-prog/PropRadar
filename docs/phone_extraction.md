@@ -46,7 +46,7 @@ Playwright остаётся как **fallback** и для обновления J
 | ------------------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
 | **Cloudflare**                 | CDN fingerprinting + IP-репутация    | residential прокси + playwright-stealth (только для логина и Playwright-fallback) |
 | **reCAPTCHA v3**               | Невидимая капча при запросе телефона | **2captcha API** (~14 с, $2/1000 токенов)                                         |
-| **AccessToken / RefreshToken** | JWT в cookie `.tnet.ge`, TTL ~11 мин | `myhome_login.py` через Playwright (раз в ~10 мин)                                |
+| **AccessToken / RefreshToken** | JWT в cookie `.tnet.ge`, TTL ~11 мин | `myhome_login.py` через Playwright + **`PLAYWRIGHT_PROXY_*`** (login-if-needed в воркере) |
 
 
 **Важно:**
@@ -65,7 +65,7 @@ Playwright остаётся как **fallback** и для обновления J
 
 ```
 1. Прочитать AccessToken из myhome_session.json
-   └─ Если `expires_at - now < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default 40 с) → `myhome_login.py` в том же job воркера
+   └─ Если `expires_at - now < MYHOME_SESSION_MIN_REMAINING_SECONDS` (default 40 с) → `myhome_login.py` в том же job воркера (**Playwright через тот же proxy**, что HTTP/phone enrich)
 
 2. Получить statement_uuid
    └─ GET https://api-statements.tnet.ge/v1/statements/{ext_id}

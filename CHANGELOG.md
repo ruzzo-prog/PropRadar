@@ -6,6 +6,14 @@
 
 ### Fixed
 
+- **P1 / myhome login через proxy:** общий хелпер `playwright_launch_kwargs_from_settings` (`playwright_proxy.py`); `scripts/myhome_login.py` — `chromium.launch(**launch_kw)` с `PLAYWRIGHT_PROXY_*` (как `phone.py`); login-if-needed больше не ходит на `auth.tnet.ge` с прямого IP Hetzner.
+
+### Added
+
+- **playwright-worker — диагностические эндпоинты:** `GET /proxy/check`, `GET /session/check`, `GET /status`, `POST /session/reset`, `GET /queue`, `GET /metrics` (`src/worker/main.py`, v0.3.0). Proxy check — `httpx_client_kwargs_from_settings()` + ipify; метрики in-memory для `phase=phone`. **n8n** `yG1JxQnR6kX0Vlgt` — gate `GET /proxy/check` перед `POST /enrich` `phase=phone`. **Проверки:** `pytest tests/unit/test_playwright_worker_api.py`.
+
+### Fixed
+
 - **playwright-worker `POST /enrich` — `limit` в теле:** `EnrichRequest.limit` (опционально) пробрасывается в `_run_myhome_enrich_phase`; без поля — `settings.myhome_enrich_limit` (default **50**). n8n может задавать `MIN(pending, 150)` вместо фиксированных 50.
 
 ### Fixed
