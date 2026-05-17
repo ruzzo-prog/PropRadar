@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **myhome IDs snapshot (n8n):** `GET/POST /api/myhome/ids-snapshot`, `/status`, `/refresh` — фоновый full fetch в `/data/myhome_ids_snapshot.json` (атомарная запись, file lock); снимает ECONNABORTED на блокирующем `fetch-ids`. Том **`propradar_api_data:/data`** у сервиса **`api`**. Миграция **`013_add_inactive_lead_status.sql`** — статус **`inactive`** для снятых с API объявлений. **n8n** `yG1JxQnR6kX0Vlgt` v6 — cold start / stale guards, disappeared → `inactive`, `POST /refresh` в конце цикла.
+- **`list_ids` anti-ban / proxy:** list fetch через `PLAYWRIGHT_PROXY_*` (`list_httpx_client_kwargs` = phone_http); батчи по **8** страниц параллельно + пауза `MYHOME_LIST_FETCH_BATCH_SLEEP_S` (default **0.35** с) между батчами.
+
 ### Fixed
 
 - **myhome phone HTTP — JWT mid-batch (PR1):** `_AccessTokenProvider` в `phone_http.py` — `threading.Lock`, проактивный relogin при `remaining < 90` с, на **401** один relogin + retry `phone/show` **без** `phone_retries++` при успехе; `relogin_fn` из `main.py` (`_run_myhome_login_subprocess`). Порог pre-job в воркере — по-прежнему `MYHOME_SESSION_MIN_REMAINING_SECONDS` (**40** с).

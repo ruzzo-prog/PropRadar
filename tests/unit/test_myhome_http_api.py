@@ -158,6 +158,31 @@ def test_sync_status(dev_no_key: None, monkeypatch: pytest.MonkeyPatch) -> None:
     assert r.json()["counts"]["disappeared"] == 0
 
 
+def test_ids_snapshot_status_empty(dev_no_key: None, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MYHOME_IDS_SNAPSHOT_PATH", str(tmp_path / "snap.json"))
+    monkeypatch.setenv("MYHOME_IDS_SNAPSHOT_LOCK_PATH", str(tmp_path / ".lock"))
+    r = TestClient(app).get("/api/myhome/ids-snapshot/status")
+    assert r.status_code == 200
+    assert r.json()["ready"] is False
+    assert r.json()["refreshing"] is False
+
+
+def test_ids_snapshot_refresh_accepted(dev_no_key: None, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MYHOME_IDS_SNAPSHOT_PATH", str(tmp_path / "snap.json"))
+    monkeypatch.setenv("MYHOME_IDS_SNAPSHOT_LOCK_PATH", str(tmp_path / ".lock"))
+
+    def _fake_fetch(client, **kwargs):
+        return (["1"], 1)
+
+    monkeypatch.setattr(
+        "api.ids_snapshot.fetch_all_external_ids_with_pages_sync",
+        _fake_fetch,
+    )
+    r = TestClient(app).post("/api/myhome/ids-snapshot/refresh")
+    assert r.status_code == 202
+    assert r.json()["status"] == "accepted"
+
+
 def test_mark_rejected(dev_no_key: None, monkeypatch: pytest.MonkeyPatch) -> None:
     def _fake_run(settings, script: str, args: list[str]) -> tuple[int, str, str]:
         assert "mark-rejected" in args

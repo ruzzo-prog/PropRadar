@@ -10,7 +10,7 @@ import sys
 import httpx
 
 from config.settings import Settings
-from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync
+from parsers.adapters.myhome.list_ids import fetch_all_external_ids_sync, list_httpx_client_kwargs
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("fetch_myhome_ids")
@@ -60,7 +60,7 @@ def main() -> None:
         since_days = 7
 
     try:
-        with httpx.Client() as client:
+        with httpx.Client(**list_httpx_client_kwargs(settings)) as client:
             ids = fetch_all_external_ids_sync(
                 client,
                 base_url=base_url,

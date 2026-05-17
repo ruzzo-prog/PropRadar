@@ -136,7 +136,7 @@ n8n всегда посылает `phase: "phone"` → Playwright browser **не
 
 ## 6. n8n Workflow myhome
 
-- ID: **`yG1JxQnR6kX0Vlgt`** (PropRadar — myhome v5, active)
+- ID: **`yG1JxQnR6kX0Vlgt`** (PropRadar — myhome v6 ids-snapshot, active после publish)
 - SDK-файл: `scripts/n8n_workflows/yG1JxQnR6kX0Vlgt_v5_proxy_gate.sdk.js`
 - Расписание: `0 9 * * *` UTC = **13:00 Tbilisi** (UTC+4)
 - Wait enrich: **480s**, затем poll **`GET /status`** каждые **30s** до `idle` (execution timeout **3600s** → TG)
@@ -147,21 +147,18 @@ n8n всегда посылает `phase: "phone"` → Playwright browser **не
 Schedule/Manual
   → TG:Старт
   → GET /health (тест воркера)
-  → GET /proxy/check → IF ok=false → TG:ошибка + СТОП
-  → Fetch IDs (1500 max, tbilisi, apartment, private)
-  → Дедупликация → Существующие IDs в БД → Фильтр новых
-  → TG: fetch stats (total_api, existing, new_count)
-  → IF new_count > 0:
-      → POST /api/myhome/ingest
-      → TG: ingest результат (parsed, new, errors)
-  → SQL: COUNT pending (phone IS NULL, retries<3)
-  → IF pending > 0:
-      → POST /enrich {phase:"phone", limit:pending}
-      → TG: обогащение запущено
-      → Wait 480s → poll GET /status (30s) until idle
-      → SQL enrich stats (total, with_phone, failed, pending)
-      → TG: обогащение завершено
+  → GET /api/myhome/ids-snapshot/status
+      → IF !ready → TG Cold start + СТОП
+      → IF age_seconds > 86400 → TG stale warning (продолжить)
+  → GET /api/myhome/ids-snapshot (мгновенно, без fetch-ids)
+  → IDs new в БД + дедуп → ingest → enrich (как раньше)
+  → GET /proxy/check → enrich phone → poll /status
+  → disappeared: status=new MINUS snapshot.ids → UPDATE status=inactive
+      (пропуск если age_seconds > 86400)
+  → POST /api/myhome/ids-snapshot/refresh → 202 (не ждать)
 ```
+
+Снапшот на диске API: **`/data/myhome_ids_snapshot.json`** (том `propradar_api_data`).
 
 ---
 

@@ -13,6 +13,7 @@ Score = Annotated[int, Field(ge=0, le=100, description="Скоринг лида 
 
 class LeadStatus(StrEnum):
     NEW = "new"
+    INACTIVE = "inactive"
     CONTACTED = "contacted"
     QUALIFIED = "qualified"
     REJECTED = "rejected"

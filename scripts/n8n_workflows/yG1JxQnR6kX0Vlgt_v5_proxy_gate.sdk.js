@@ -115,23 +115,140 @@ const tgWorkerFail = node({
   output: [{ ok: false }],
 });
 
-const fetchIds = node({
+const getSnapshotStatus = node({
   type: 'n8n-nodes-base.httpRequest',
   version: 4.4,
   config: {
-    name: 'Fetch IDs myhome',
+    name: 'GET ids-snapshot/status',
     position: [1120, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
       method: 'GET',
-      url: 'http://api:8000/api/myhome/fetch-ids?city=tbilisi&category=apartment&seller_type=private&object_type=apartment&limit=650',
+      url: 'http://api:8000/api/myhome/ids-snapshot/status',
       sendHeaders: true,
       headerParameters: { parameters: [{ name: 'X-API-Key', value: API_KEY }] },
-      options: { timeout: 30000 },
+      options: { timeout: 10000 },
     },
   },
-  output: [{ id: '12345' }],
+  output: [{ ready: true, count: 100, age_seconds: 3600, refreshing: false }],
+});
+
+const snapshotReady = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Снапшот ready?',
+    position: [1344, 96],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 'sr1',
+            leftValue: '={{ $json.ready }}',
+            rightValue: true,
+            operator: { type: 'boolean', operation: 'equals' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const tgColdStart = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Cold start',
+    position: [1568, 288],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: '❌ <b>Cold start</b>\nСнапшот ID пуст. Запустите <code>POST /api/myhome/ids-snapshot/refresh</code> и дождитесь готовности.',
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: false }],
+});
+
+const snapshotStale = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Снапшот устарел?',
+    position: [1568, 96],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 'st1',
+            leftValue: '={{ $json.age_seconds }}',
+            rightValue: 86400,
+            operator: { type: 'number', operation: 'gt' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const tgStaleWarning = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Snapshot stale',
+    position: [1792, 192],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr(
+        '=⚠️ <b>Снапшот устарел</b> ({{ $json.age_seconds }} с). Продолжаем ingest; пометка inactive пропущена.',
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: true }],
+});
+
+const getSnapshot = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'GET ids-snapshot',
+    position: [1792, 96],
+    executeOnce: true,
+    alwaysOutputData: true,
+    parameters: {
+      method: 'GET',
+      url: 'http://api:8000/api/myhome/ids-snapshot',
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: 'X-API-Key', value: API_KEY }] },
+      options: { timeout: 10000 },
+    },
+  },
+  output: [{ ids: ['12345'], count: 1, ready: true }],
+});
+
+const idsNewInDb = node({
+  type: 'n8n-nodes-base.postgres',
+  version: 2.6,
+  config: {
+    name: 'IDs new в БД',
+    position: [2016, 192],
+    executeOnce: true,
+    alwaysOutputData: true,
+    parameters: {
+      operation: 'executeQuery',
+      query: "SELECT external_id FROM leads WHERE source='myhome' AND status='new'",
+      options: { connectionTimeout: 30 },
+    },
+    credentials: { postgres: newCredential('Postgres') },
+  },
+  output: [{ external_id: '1' }],
 });
 
 const dedupIds = node({
@@ -139,11 +256,11 @@ const dedupIds = node({
   version: 2,
   config: {
     name: 'Дедупликация IDs',
-    position: [1344, 96],
+    position: [2016, 96],
     executeOnce: true,
     parameters: {
       jsCode:
-        'const apiItems = $items("Fetch IDs myhome");\nconst apiIds = apiItems.map(i => String(i.json));\nreturn [{ json: { api_ids: apiIds, total_api: apiIds.length } }];',
+        'const snap = $("GET ids-snapshot").first().json;\nconst apiIds = (snap.ids || []).map(id => String(id));\nreturn [{ json: { api_ids: apiIds, total_api: apiIds.length } }];',
     },
   },
   output: [{ api_ids: ['1'], total_api: 1 }],
@@ -154,7 +271,7 @@ const existingIds = node({
   version: 2.6,
   config: {
     name: 'Существующие IDs в БД',
-    position: [1568, 96],
+    position: [2240, 96],
     executeOnce: true,
     alwaysOutputData: true,
     parameters: {
@@ -172,7 +289,7 @@ const filterNewIds = node({
   version: 2,
   config: {
     name: 'Фильтр новых IDs',
-    position: [1792, 96],
+    position: [2464, 96],
     executeOnce: true,
     parameters: {
       jsCode:
@@ -187,12 +304,12 @@ const tgFetch = node({
   version: 1.2,
   config: {
     name: 'TG: Результат fetch',
-    position: [2016, 96],
+    position: [2688, 96],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
       text: expr(
-        '=📊 <b>Fetch IDs</b>\n🔢 API вернул: {{ $json.total_api }}\n🗄 В базе: {{ $json.existing_count }}\n✨ Новых: {{ $json.new_count }}',
+        '=📊 <b>Snapshot IDs</b>\n🔢 В снапшоте: {{ $json.total_api }}\n🗄 В базе: {{ $json.existing_count }}\n✨ Новых: {{ $json.new_count }}',
       ),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
     },
@@ -205,7 +322,7 @@ const hasNewIds = ifElse({
   version: 2.3,
   config: {
     name: 'Есть новые IDs?',
-    position: [2240, 96],
+    position: [2912, 96],
     parameters: {
       conditions: {
         combinator: 'and',
@@ -597,9 +714,159 @@ const tgAllPhones = node({
   output: [{ ok: true }],
 });
 
-const ingestToQueue = tgIngest.to(queuePending);
+const buildDisappeared = node({
+  type: 'n8n-nodes-base.code',
+  version: 2,
+  config: {
+    name: 'Build disappeared',
+    position: [6496, 96],
+    executeOnce: true,
+    parameters: {
+      jsCode:
+        'const snap = $("GET ids-snapshot").first().json;\nconst apiSet = new Set((snap.ids || []).map(id => String(id)));\nconst status = $("GET ids-snapshot/status").first().json;\nconst age = status.age_seconds;\nconst stale = age != null && Number(age) > 86400;\nconst dbItems = $("IDs new в БД").all();\nconst disappeared = dbItems\n  .map(i => String(i.json.external_id))\n  .filter(id => id && !apiSet.has(id));\nconst safe = disappeared.filter(id => /^[0-9]+$/.test(id));\nlet update_sql = null;\nif (!stale && safe.length > 0) {\n  const inList = safe.map(id => "\'" + id + "\'").join(",");\n  update_sql =\n    "UPDATE leads SET status=\'inactive\', status_reason=\'disappeared_from_api\', updated_at=now() "\n    + "WHERE source=\'myhome\' AND status=\'new\' AND external_id IN (" + inList + ")";\n}\nreturn [{ json: {\n  disappeared_count: safe.length,\n  stale,\n  skip_mark: stale || safe.length === 0,\n  update_sql\n}}];',
+    },
+  },
+  output: [{ disappeared_count: 0, stale: false, skip_mark: true, update_sql: null }],
+});
 
-export default workflow('yG1JxQnR6kX0Vlgt', 'PropRadar — myhome v4')
+const hasMarkInactive = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Пометить inactive?',
+    position: [6720, 96],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 'm1',
+            leftValue: '={{ $json.skip_mark }}',
+            rightValue: false,
+            operator: { type: 'boolean', operation: 'equals' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const sqlMarkInactive = node({
+  type: 'n8n-nodes-base.postgres',
+  version: 2.6,
+  config: {
+    name: 'SQL mark inactive',
+    position: [6944, 0],
+    executeOnce: true,
+    parameters: {
+      operation: 'executeQuery',
+      query: '={{ $("Build disappeared").first().json.update_sql }}',
+      options: { connectionTimeout: 30 },
+    },
+    credentials: { postgres: newCredential('Postgres') },
+  },
+  output: [{ ok: true }],
+});
+
+const tgDisappeared = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Исчезнувшие',
+    position: [7168, 0],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr(
+        '=📤 <b>Исчезнувшие</b>\nПомечено inactive: {{ $("Build disappeared").first().json.disappeared_count }}',
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: true }],
+});
+
+const postRefreshSnapshot = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'POST refresh snapshot',
+    position: [7392, 96],
+    executeOnce: true,
+    onError: 'continueRegularOutput',
+    parameters: {
+      method: 'POST',
+      url: 'http://api:8000/api/myhome/ids-snapshot/refresh',
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: 'X-API-Key', value: API_KEY }] },
+      options: { timeout: 10000 },
+    },
+  },
+  output: [{ status: 'accepted' }],
+});
+
+const finalizeSync = buildDisappeared.to(
+  hasMarkInactive
+    .onTrue(sqlMarkInactive.to(tgDisappeared.to(postRefreshSnapshot)))
+    .onFalse(postRefreshSnapshot),
+);
+
+const enrichFromQueue = queuePending.to(
+  hasPendingPhone
+    .onTrue(
+      getProxyCheck.to(
+        proxyOk
+          .onTrue(
+            tgProxyOk.to(
+              postEnrichPhone.to(
+                tgEnrichStarted.to(
+                  waitEnrichInitial.to(
+                    waitPollStatus.to(
+                      getWorkerStatus.to(
+                        statusIdle
+                          .onTrue(sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)))
+                          .onFalse(
+                            enrichPollTimeout
+                              .onTrue(
+                                tgEnrichPollTimeout.to(
+                                  sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)),
+                                ),
+                              )
+                              .onFalse(waitPollStatus),
+                          ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          )
+          .onFalse(tgProxyFail.to(finalizeSync)),
+      ),
+    )
+    .onFalse(tgAllPhones.to(finalizeSync)),
+);
+
+const snapshotIngestChain = idsNewInDb.to(
+  dedupIds.to(
+    existingIds.to(
+      filterNewIds.to(
+        tgFetch.to(
+          hasNewIds
+            .onTrue(buildIngest.to(postIngest.to(tgIngest.to(queuePending))))
+            .onFalse(queuePending),
+        ),
+      ),
+    ),
+  ),
+);
+
+const snapshotReadyChain = snapshotStale
+  .onTrue(tgStaleWarning.to(getSnapshot.to(snapshotIngestChain)))
+  .onFalse(getSnapshot.to(snapshotIngestChain));
+
+export default workflow('yG1JxQnR6kX0Vlgt', 'PropRadar — myhome v6 ids-snapshot')
   .add(schedule0900)
   .to(tgStart)
   .add(manualStart)
@@ -610,54 +877,10 @@ export default workflow('yG1JxQnR6kX0Vlgt', 'PropRadar — myhome v4')
     workerOk
       .onTrue(
         tgWorkerOk.to(
-          fetchIds.to(
-            dedupIds.to(
-              existingIds.to(
-                filterNewIds.to(
-                  tgFetch.to(
-                    hasNewIds
-                      .onTrue(buildIngest.to(postIngest.to(ingestToQueue)))
-                      .onFalse(queuePending),
-                  ),
-                ),
-              ),
-            ),
+          getSnapshotStatus.to(
+            snapshotReady.onTrue(snapshotReadyChain).onFalse(tgColdStart),
           ),
         ),
       )
       .onFalse(tgWorkerFail),
-  )
-  .add(queuePending)
-  .to(
-    hasPendingPhone
-      .onTrue(
-        getProxyCheck.to(
-          proxyOk
-            .onTrue(
-              tgProxyOk.to(
-                postEnrichPhone.to(
-                  tgEnrichStarted.to(
-                    waitEnrichInitial.to(
-                      waitPollStatus.to(
-                        getWorkerStatus.to(
-                          statusIdle
-                            .onTrue(sqlEnrichStats.to(tgEnrichDone))
-                            .onFalse(
-                              enrichPollTimeout
-                                .onTrue(
-                                  tgEnrichPollTimeout.to(sqlEnrichStats.to(tgEnrichDone)),
-                                )
-                                .onFalse(waitPollStatus),
-                            ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            )
-            .onFalse(tgProxyFail),
-        ),
-      )
-      .onFalse(tgAllPhones),
   );
