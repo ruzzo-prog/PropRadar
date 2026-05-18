@@ -115,7 +115,7 @@ def cmd_mark(
     updated = repo.mark_leads_by_external_ids(
         SOURCE,
         ids,
-        status=LeadStatus.REJECTED,
+        status=LeadStatus.INACTIVE,
         status_reason=reason,
     )
     return {"updated": updated, "reason": reason}

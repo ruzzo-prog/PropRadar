@@ -3,7 +3,7 @@
   "dashboard_title_ru": "PropRadar — мониторинг лидов",
   "schema_reference": "migrations/008_recreate_leads_client_v2.sql + migrations/009_add_city_name_to_leads_client.sql + migrations/010_add_status_reason_to_leads.sql (PostgreSQL 15). Проекция leads_client (карточки 1–7): PK (source, external_id); 28 столбцов: source, external_id, synced_at, status, score, phone, address, city_name (myhome_statement_json->>'city_name'), owner_name (->>'owner_name'), district_name, area_m2, rooms, bedrooms, floor, total_floors, comment (из leads.description), is_owner, price_gel, price_usd, price_m2_usd, published_at, geo_lat, geo_lng, listing_views, pdf_url, dynamic_title, urban_name, images (JSONB). city_name/owner_name не из leads.city_name. Нет lead_id / source_listing_uuid / языковых *_lang. Даты для срезов — COALESCE(published_at, synced_at). Таблица leads (карточки 8–10): добавлено поле status_reason (VARCHAR, machine-readable причина статуса, напр. disappeared_from_api); нативный SQL идёт напрямую к leads, не к leads_client.",
   "timezone_note": "В SQL ниже даты нормализуются к дате в UTC. При необходимости смените на вашу таймзону в Metabase (Admin → Localization).",
-  "status_note_ru": "В БД хранятся литералы статуса: new, contacted, qualified, rejected, converted. Это не совпадает с абстрактной воронкой contact/sent/deal/lost без отдельной миграции домена.",
+  "status_note_ru": "В БД хранятся литералы статуса: new, inactive, contacted, qualified, rejected, converted. inactive = исчезло из API (ids-snapshot sync). rejected = ручной отказ менеджера.",
   "import_instructions_ru": "Стандартный OSS Metabase не импортирует этот файл одной кнопкой. Создайте Dashboard вручную и добавьте вопросы типа «Native query» по SQL из полей sql каждой карточки, либо используйте Metabase Serialization/API под вашу версию. Подробности: docs/METABASE_SETUP.md.",
   "cards": [
     {
@@ -11,7 +11,7 @@
       "title_ru": "Воронка лидов",
       "description_ru": "Количество лидов по фактическому полю status (вертикальная диаграмма), источник — проекция leads_client.",
       "display": "bar",
-      "sql": "SELECT status,\n       COUNT(*)::bigint AS cnt\nFROM leads_client\nGROUP BY status\nORDER BY CASE status\n           WHEN 'new' THEN 1\n           WHEN 'contacted' THEN 2\n           WHEN 'qualified' THEN 3\n           WHEN 'converted' THEN 4\n           WHEN 'rejected' THEN 5\n           ELSE 99\n         END,\n         status;"
+      "sql": "SELECT status,\n       COUNT(*)::bigint AS cnt\nFROM leads_client\nGROUP BY status\nORDER BY CASE status\n           WHEN 'new' THEN 1\n           WHEN 'contacted' THEN 2\n           WHEN 'qualified' THEN 3\n           WHEN 'converted' THEN 4\n           WHEN 'inactive' THEN 5\n           WHEN 'rejected' THEN 6\n           ELSE 99\n         END,\n         status;"
     },
     {
       "position": 2,
@@ -59,9 +59,9 @@
     {
       "position": 8,
       "title_ru": "Исчезнувшие объявления (неделя)",
-      "description_ru": "Число лидов myhome, переведённых в rejected с причиной disappeared_from_api за последние 7 суток по updated_at (таблица leads).",
+      "description_ru": "Число лидов myhome, переведённых в inactive (исчезли из API) за последние 7 суток по updated_at (таблица leads).",
       "display": "scalar",
-      "sql": "SELECT COUNT(*)::bigint\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected'\n  AND status_reason = 'disappeared_from_api'\n  AND updated_at >= (now() - interval '7 days');"
+      "sql": "SELECT COUNT(*)::bigint\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'inactive'\n  AND updated_at >= (now() - interval '7 days');"
     },
     {
       "position": 9,
@@ -73,9 +73,9 @@
     {
       "position": 10,
       "title_ru": "Последний запуск синхронизации",
-      "description_ru": "MAX(updated_at) по отклонённым лидам myhome (прокси «последней пометки rejected»); не журнал n8n. При отсутствии строк может быть пусто.",
+      "description_ru": "MAX(updated_at) по неактивным лидам myhome; не журнал n8n. При отсутствии строк может быть пусто.",
       "display": "scalar",
-      "sql": "SELECT MAX(updated_at) AS last_sync\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'rejected';"
+      "sql": "SELECT MAX(updated_at) AS last_sync\nFROM leads\nWHERE source = 'myhome'\n  AND status = 'inactive';"
     },
     {
       "position": 11,
