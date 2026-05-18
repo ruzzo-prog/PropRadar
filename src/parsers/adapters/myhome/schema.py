@@ -64,7 +64,7 @@ class MyHomeStatementPayload(BaseModel):
         description="Цены по валютам: ``1``=GEL, ``2``=USD (основная валюта — currency_id)",
     )
     images: list[Any] | None = Field(default=None, description="Галерея (сырой JSON)")
-    nearby_places: dict[str, Any] | None = Field(default=None, description="Инфраструктура рядом")
+    nearby_places: dict[str, Any] | list | None = Field(default=None, description="Инфраструктура рядом")
     parameters: list[Any] | None = Field(default=None, description="Доп. параметры карточки")
     user_phone_number: str | None = Field(
         default=None,
