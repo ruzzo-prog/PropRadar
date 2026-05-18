@@ -106,6 +106,7 @@ const getProxyCheck = node({
     name: 'GET /proxy/check',
     position: [896, 96],
     executeOnce: true,
+    onError: 'continueRegularOutput',
     parameters: {
       method: 'GET',
       url: 'http://playwright-worker:8001/proxy/check',
