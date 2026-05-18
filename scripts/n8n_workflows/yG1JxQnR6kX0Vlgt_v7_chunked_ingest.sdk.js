@@ -530,7 +530,7 @@ const postEnrichPhone = node({
       sendBody: true,
       specifyBody: 'json',
       jsonBody:
-        '={{ JSON.stringify({ adapter: "myhome", phase: "phone", limit: $("Очередь обогащения").first().json.pending }) }}',
+        '={{ JSON.stringify({ adapter: "myhome", phase: "phone", limit: 500 }) }}',
       options: { timeout: 10000 },
     },
   },
