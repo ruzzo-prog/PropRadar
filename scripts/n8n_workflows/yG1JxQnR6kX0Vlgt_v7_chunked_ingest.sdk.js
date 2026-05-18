@@ -813,6 +813,47 @@ const finalizeSync = buildDisappeared.to(
     .onFalse(postRefreshSnapshot),
 );
 
+const loginFailed = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Логин упал?',
+    position: [6272, 0],
+    parameters: {
+      conditions: {
+        combinator: 'and',
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose', version: 1 },
+        conditions: [
+          {
+            id: 'lf1',
+            leftValue: '={{ ($json.last_enrich?.phone_http_errors || []).some(e => String(e).startsWith("login_failed")) }}',
+            rightValue: true,
+            operator: { type: 'boolean', operation: 'equals' },
+          },
+        ],
+      },
+    },
+  },
+});
+
+const tgLoginFailed = node({
+  type: 'n8n-nodes-base.telegram',
+  version: 1.2,
+  config: {
+    name: 'TG: Логин myhome упал',
+    position: [6496, 0],
+    executeOnce: true,
+    parameters: {
+      chatId: CHAT,
+      text: expr(
+        '=❌ <b>Логин myhome не удался</b>\nОбогащение телефонов пропущено.\nОшибка: <code>{{ ($json.last_enrich?.phone_http_errors || []).join(", ") }}</code>\n⏳ Pending: {{ $("Очередь обогащения").first().json.pending }} лидов',
+      ),
+      additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
+    },
+    credentials: { telegramApi: newCredential('Telegram') },
+  },
+  output: [{ ok: false }],
+});
+
 const enrichFromQueue = queuePending.to(
   hasPendingPhone
     .onTrue(
@@ -822,7 +863,11 @@ const enrichFromQueue = queuePending.to(
             waitPollStatus.to(
               getWorkerStatus.to(
                 statusIdle
-                  .onTrue(sqlEnrichStats.to(tgEnrichDone.to(finalizeSync)))
+                  .onTrue(
+                    loginFailed
+                      .onTrue(tgLoginFailed.to(finalizeSync))
+                      .onFalse(sqlEnrichStats.to(tgEnrichDone.to(finalizeSync))),
+                  )
                   .onFalse(
                     enrichPollTimeout
                       .onTrue(

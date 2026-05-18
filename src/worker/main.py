@@ -55,6 +55,8 @@ _job_status: dict[str, str | float | None] = {
     "job": None,
     "started_monotonic": None,
 }
+_last_enrich_result: dict[str, object] | None = None
+_last_enrich_lock = Lock()
 _DEFAULT_SESSION_MIN_REMAINING_S = 40.0
 _PROXY_CHECK_URL = "https://api.ipify.org?format=json"
 _PROXY_CHECK_TIMEOUT_S = 15.0
@@ -235,7 +237,7 @@ def _run_myhome_enrich_phase(phase: str, *, override_limit: int | None = None) -
                         "phone_errors": [login_err],
                     },
                 )
-                logger.info("enrich done %s", json.dumps(summary, ensure_ascii=False))
+                _finish_enrich(summary)
                 return
             logger.info(
                 "myhome_login duration_s=%.1f",
@@ -279,7 +281,14 @@ def _run_myhome_enrich_phase(phase: str, *, override_limit: int | None = None) -
     else:  # pragma: no cover
         raise ValueError(f"unknown phase: {phase}")
 
+    _finish_enrich(summary)
+
+
+def _finish_enrich(summary: dict[str, object]) -> None:
+    global _last_enrich_result
     logger.info("enrich done %s", json.dumps(summary, ensure_ascii=False))
+    with _last_enrich_lock:
+        _last_enrich_result = summary
 
 
 def _run_myhome_login_subprocess() -> int:
@@ -372,10 +381,13 @@ def worker_status() -> dict[str, object]:
     elapsed: float | None = None
     if running and isinstance(started, (int, float)):
         elapsed = round(time.monotonic() - float(started), 3)
+    with _last_enrich_lock:
+        last_enrich = _last_enrich_result
     return {
         "status": "running" if running else "idle",
         "job": job if running else None,
         "elapsed_seconds": elapsed,
+        "last_enrich": last_enrich,
     }
 
 
