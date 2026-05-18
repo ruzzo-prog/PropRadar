@@ -560,9 +560,9 @@ const waitEnrichInitial = node({
   type: 'n8n-nodes-base.wait',
   version: 1.1,
   config: {
-    name: 'Wait enrich 480s',
+    name: 'Wait enrich 120s',
     position: [5376, 0],
-    parameters: { amount: 480 },
+    parameters: { amount: 120 },
   },
   output: [{}],
 });
@@ -672,7 +672,7 @@ const sqlEnrichStats = node({
     parameters: {
       operation: 'executeQuery',
       query:
-        "SELECT\n  COUNT(*)::bigint AS total,\n  COUNT(*) FILTER (WHERE phone IS NOT NULL AND phone != '') AS with_phone,\n  COUNT(*) FILTER (WHERE (phone IS NULL OR phone='') AND phone_retries >= 3) AS failed,\n  COUNT(*) FILTER (WHERE (phone IS NULL OR phone='') AND phone_retries < 3) AS pending\nFROM leads WHERE source='myhome'",
+        "SELECT\n  COUNT(*)::bigint AS total,\n  COUNT(*) FILTER (WHERE phone IS NOT NULL AND phone != '') AS with_phone,\n  COUNT(*) FILTER (WHERE status='new' AND (phone IS NULL OR phone='') AND phone_retries >= 3) AS failed,\n  COUNT(*) FILTER (WHERE status='new' AND (phone IS NULL OR phone='') AND phone_retries < 3) AS pending\nFROM leads WHERE source='myhome'",
       options: { connectionTimeout: 30 },
     },
     credentials: { postgres: newCredential('Postgres') },
@@ -690,7 +690,7 @@ const tgEnrichDone = node({
     parameters: {
       chatId: CHAT,
       text: expr(
-        '=📞 Обогащение завершено\n✅ Получили телефон: {{ $json.with_phone }}\n❌ Не удалось: {{ $json.failed }}\n⏳ Осталось без телефона: {{ $json.pending }}\n🗄 Всего лидов в базе: {{ $json.total }}',
+        '=📞 <b>Обогащение завершено</b>\n✅ Получили телефон: {{ $("GET /status").first().json.last_enrich?.phone_enriched ?? 0 }} из {{ $("Очередь обогащения").first().json.pending }} лидов\n❌ Не удалось: {{ $("GET /status").first().json.last_enrich?.phone_failed ?? 0 }}\n⏳ Ещё ждут телефона: {{ $json.pending }} лидов\n📊 Всего лидов: {{ $json.total }} — с телефоном: {{ $json.with_phone }}',
       ),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
     },
@@ -775,18 +775,36 @@ const tgDisappeared = node({
   version: 1.2,
   config: {
     name: 'TG: Исчезнувшие',
-    position: [7840, 0],
+    position: [8064, 0],
     executeOnce: true,
     parameters: {
       chatId: CHAT,
       text: expr(
-        '=📤 <b>Исчезнувшие</b>\nПомечено inactive: {{ $("Build disappeared").first().json.disappeared_count }}',
+        '=📤 <b>Исчезнувшие объявления</b>\nПомечено сегодня: {{ $("Build disappeared").first().json.disappeared_count }}\nВсего неактивных: {{ $json.total_inactive }}',
       ),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
     },
     credentials: { telegramApi: newCredential('Telegram') },
   },
   output: [{ ok: true }],
+});
+
+const sqlInactiveTotal = node({
+  type: 'n8n-nodes-base.postgres',
+  version: 2.6,
+  config: {
+    name: 'SQL inactive total',
+    position: [7840, 0],
+    executeOnce: true,
+    alwaysOutputData: true,
+    parameters: {
+      operation: 'executeQuery',
+      query: "SELECT COUNT(*)::int AS total_inactive FROM leads WHERE source='myhome' AND status='inactive'",
+      options: { connectionTimeout: 30 },
+    },
+    credentials: { postgres: newCredential('Postgres') },
+  },
+  output: [{ total_inactive: 81 }],
 });
 
 const postRefreshSnapshot = node({
@@ -810,7 +828,7 @@ const postRefreshSnapshot = node({
 
 const finalizeSync = buildDisappeared.to(
   hasMarkInactive
-    .onTrue(sqlMarkInactive.to(tgDisappeared.to(postRefreshSnapshot)))
+    .onTrue(sqlMarkInactive.to(sqlInactiveTotal.to(tgDisappeared.to(postRefreshSnapshot))))
     .onFalse(postRefreshSnapshot),
 );
 

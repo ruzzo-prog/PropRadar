@@ -65,6 +65,7 @@ _QUEUE_PENDING_SQL = text(
     SELECT COUNT(*)::int AS pending
     FROM leads
     WHERE source = 'myhome'
+      AND status = 'new'
       AND (phone IS NULL OR phone = '')
       AND phone_retries < 3
     """,
@@ -291,21 +292,28 @@ def _finish_enrich(summary: dict[str, object]) -> None:
         _last_enrich_result = summary
 
 
-def _run_myhome_login_subprocess() -> int:
+def _run_myhome_login_subprocess(*, max_attempts: int = 3, retry_delay_s: float = 15.0) -> int:
     root = _repo_root()
     script = root / "scripts" / "myhome_login.py"
     if not script.is_file():
         logger.error("myhome_login script not found: %s", script)
         return 1
     env = {**os.environ, "PYTHONPATH": str(root / "src")}
-    proc = subprocess.run(
-        [sys.executable, str(script)],
-        cwd=str(root),
-        env=env,
-        check=False,
-    )
-    logger.info("myhome_login exit_code=%s", proc.returncode)
-    return int(proc.returncode)
+    for attempt in range(1, max_attempts + 1):
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(root),
+            env=env,
+            check=False,
+        )
+        exit_code = int(proc.returncode)
+        logger.info("myhome_login exit_code=%s attempt=%d/%d", exit_code, attempt, max_attempts)
+        if exit_code == 0:
+            return 0
+        if attempt < max_attempts:
+            logger.info("myhome_login retry in %.0fs", retry_delay_s)
+            time.sleep(retry_delay_s)
+    return 1
 
 
 def _locked_background(sync_fn: Callable[[], None], *, job_name: str) -> None:
