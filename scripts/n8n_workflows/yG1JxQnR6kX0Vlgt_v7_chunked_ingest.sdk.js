@@ -780,7 +780,7 @@ const tgDisappeared = node({
     parameters: {
       chatId: CHAT,
       text: expr(
-        '=📤 <b>Исчезнувшие объявления</b>\nПомечено сегодня: {{ $("Build disappeared").first().json.disappeared_count }}\nВсего неактивных: {{ $json.total_inactive }}',
+        '=📤 <b>Исчезнувшие объявления</b>\nПомечено в этой выдаче: {{ $("Build disappeared").first().json.disappeared_count }}\nВсего неактивных: {{ $json.total_inactive }}',
       ),
       additionalFields: { appendAttribution: false, parse_mode: 'HTML' },
     },
